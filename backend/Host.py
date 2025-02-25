@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import socket
 import psutil
 
@@ -19,12 +20,12 @@ class Host():
     
     def get_drives():
         tape_drives = []
-        
-        # Prüft unter Linux nach Gerätenamen mit "st" oder "nst" (typische Bandlaufwerke)
+        pattern = re.compile(r'^(nst\d+|st\d+)$')  # Regex für "nstX" oder "stX"
+
         if os.name == "posix":
             dev_dir = "/dev"
             for device in os.listdir(dev_dir):
-                if "st" in device or "nst" in device:
+                if pattern.match(device):
                     tape_drives.append(os.path.join(dev_dir, device))
-        
+
         return json.dumps({"tape_drives": tape_drives}), 200, {'Content-Type': 'application/json'}
