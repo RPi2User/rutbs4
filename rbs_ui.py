@@ -15,7 +15,7 @@ class Server:
         self.version = None
 
     def get_version(self):
-        url = f'http://{self.ip}:{self.port}/version'
+        url = f'http://{self.ip}:{self.port}/host/status'
         response = requests.get(url)
         if response.status_code == 200:
             self.version = response.json()

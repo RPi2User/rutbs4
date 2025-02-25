@@ -10,9 +10,13 @@ VERSION = 4
 
 app = Flask(__name__)
 
-@app.route('/version', methods=['GET'])
-def get_version():
+@app.route('/host/version', methods=['GET'])
+def get_host_version():
     return app.response_class(response=json.dumps({"version": VERSION}), mimetype='application/json')
+
+@app.route('/host/status', methods=['GET'])
+def get_host_status():
+    return app.response_class(response=json.dumps({"YEET": "true!"}), mimetype='application/json')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")
