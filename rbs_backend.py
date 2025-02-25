@@ -6,6 +6,8 @@ from tbk.File import File
 from tbk.TableOfContent import TableOfContent
 from tbk.TapeDrive import TapeDrive
 
+from backend.Host import Host
+
 VERSION = 4
 
 app = Flask(__name__)
@@ -16,7 +18,7 @@ def get_host_version():
 
 @app.route('/host/status', methods=['GET'])
 def get_host_status():
-    return app.response_class(response=json.dumps({"YEET": "true!"}), mimetype='application/json')
+    return Host.get_host_status()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")
