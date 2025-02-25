@@ -39,9 +39,9 @@ def get_host_mounts():
 
 @app.route('/drive/<alias>', methods=['GET'])
 def get_drive(alias):
-    drives = Host.get_drives().get("tape_drives", [])
-    if any(drive["alias"] == alias for drive in drives):
-        return '', 200
+    drives = Host.get_drives()
+    if drives != None:
+        return drives, 200
     return '', 404
 
 # -----------------------------------------------------------------------------
