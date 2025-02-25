@@ -21,19 +21,29 @@ class Host():
     
     def get_drives():
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
-        drives = []
-        
+        drive_map = {}
+
         for dev in result.stdout.split("\n"):
             dev = dev.strip().split("/")[-1]  # Letzten Teil des Pfads extrahieren
             match = re.match(r"^(nst|st)(\d+)$", dev)
             if match:
-                drive_id = match.group(2)  # Nummer extrahieren
-                drives.append({
-                    "device": f"/dev/{dev}",
-                    "id": drive_id,
-                    "alias": dev
-                })
-        return json.dumps({"tape_drives": drives})
+                drive_type, drive_id = match.groups()
+                full_path = f"/dev/{dev}"
+
+                if drive_id not in drive_map:
+                    drive_map[drive_id] = {
+                        "device": full_path,
+                        "id": drive_id,
+                        "alias": dev,
+                        "alt_path": None
+                    }
+                else:
+                    if drive_type == "nst":
+                        drive_map[drive_id]["alt_path"] = full_path
+                    else:
+                        drive_map[drive_id]["device"] = full_path
+                        
+        return json.dumps({"tape_drives": list(drive_map.values())})
     
     def get_mounts():
         result = subprocess.run(
