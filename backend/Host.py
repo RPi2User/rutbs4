@@ -24,7 +24,7 @@ class Host():
         drive_map = {}
 
         for dev in result.stdout.split("\n"):
-            dev = dev.strip().split("/")[-1]  # Letzten Teil des Pfads extrahieren
+            dev = dev.strip().split("/")[-1] 
             match = re.match(r"^(nst|st)(\d+)$", dev)
             if match:
                 drive_type, drive_id = match.groups()
@@ -32,18 +32,21 @@ class Host():
 
                 if drive_id not in drive_map:
                     drive_map[drive_id] = {
-                        "device": full_path,
                         "id": drive_id,
-                        "alias": dev,
+                        "alias": f"st{drive_id}",
+                        "path": None,
                         "alt_path": None
                     }
+
+                if drive_type == "st":
+                    drive_map[drive_id]["path"] = full_path
                 else:
-                    if drive_type == "nst":
-                        drive_map[drive_id]["alt_path"] = full_path
-                    else:
-                        drive_map[drive_id]["device"] = full_path
-                        
-        return json.dumps({"tape_drives": list(drive_map.values())})
+                    drive_map[drive_id]["alt_path"] = full_path
+
+        # Entferne unvollständige Einträge
+        drives = [drive for drive in drive_map.values() if drive["path"]]
+
+        return json.dumps({"tape_drives": drives})
     
     def get_mounts():
         result = subprocess.run(
