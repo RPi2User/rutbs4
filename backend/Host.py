@@ -20,16 +20,20 @@ class Host():
         return json.dumps(status), 200, {'Content-Type': 'application/json'}
     
     def get_drives():
-        tape_drives = []
-        pattern = re.compile(r'^(nst\d+|st\d+)$')  # Regex für "nstX" oder "stX"
-
-        if os.name == "posix":
-            dev_dir = "/dev"
-            for device in os.listdir(dev_dir):
-                if pattern.match(device):
-                    tape_drives.append(os.path.join(dev_dir, device))
-
-        return json.dumps({"tape_drives": tape_drives}), 200, {'Content-Type': 'application/json'}
+        result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
+        drives = []
+        
+        for dev in result.stdout.split("\n"):
+            dev = dev.strip().split("/")[-1]  # Letzten Teil des Pfads extrahieren
+            match = re.match(r"^(nst|st)(\d+)$", dev)
+            if match:
+                drive_id = match.group(2)  # Nummer extrahieren
+                drives.append({
+                    "device": f"/dev/{dev}",
+                    "id": drive_id,
+                    "alias": dev
+                })
+        return json.dumps({"tape_drives": drives})
     
     def get_mounts():
         result = subprocess.run(
