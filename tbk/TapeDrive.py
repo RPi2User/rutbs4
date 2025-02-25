@@ -4,6 +4,8 @@ DEBUG: bool = False
 
 class TapeDrive:
     
+    status : int = 0
+    
     def __init__(self, path_to_tape_drive: str, blocksize: str) -> None:
         self.bs: str = blocksize
         self.drive_path: str = path_to_tape_drive
@@ -55,3 +57,20 @@ class TapeDrive:
             print("[DEBUG] debug@tbk:~ # mt -f " + self.drive_path + " eject")
         else:
             os.system("mt -f " + self.drive_path + " eject")
+            
+            
+    def getStatus(self) -> int:
+        
+        """_stati_
+        0   Error
+        1   No Tape
+        2   Tape RDY
+        3   Tape RDY + WP
+        4   Ejecting
+        5   Writing
+        6   Reading
+        
+        """
+        
+        
+        pass

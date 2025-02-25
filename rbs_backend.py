@@ -12,9 +12,16 @@ VERSION = 4
 
 app = Flask(__name__)
 
+# -----------------------------------------------------------------------------
+
+@app.route('/host', methods=['GET'])
+def get_host():
+    return '', 200
+
 @app.route('/host/version', methods=['GET'])
 def get_host_version():
-    return app.response_class(response=json.dumps({"version": VERSION}), mimetype='application/json')
+    return app.response_class(response=json.dumps({"version": VERSION}), 
+                              mimetype='application/json')
 
 @app.route('/host/status', methods=['GET'])
 def get_host_status():
@@ -28,8 +35,16 @@ def get_host_drives():
 def get_host_mounts():
     return Host.get_mounts()
 
+# -----------------------------------------------------------------------------
 
+@app.route('/drive/<alias>', methods=['GET'])
+def get_drive(alias):
+    drives = Host.get_drives().get("tape_drives", [])
+    if any(drive["alias"] == alias for drive in drives):
+        return '', 200
+    return '', 404
 
+# -----------------------------------------------------------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")
     parser.add_argument('--port', type=int, default=5533, help='Port number')
