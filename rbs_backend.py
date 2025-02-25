@@ -20,6 +20,10 @@ def get_host_version():
 def get_host_status():
     return Host.get_host_status()
 
+@app.route('/host/drives', methods=['GET'])
+def get_host_drives():
+    return Host.get_drives()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")
     parser.add_argument('--port', type=int, default=5533, help='Port number')
