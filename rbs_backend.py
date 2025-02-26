@@ -17,7 +17,7 @@ app = Flask(__name__)
 @app.route('/', methods=['GET'])
 def get_slash():
     return app.response_class(response="THIS IS A RUTBS-BACKEND", 
-                              mimetype='application/plain')
+                              mimetype='application/html')
 
 
 @app.route('/host', methods=['GET'])
