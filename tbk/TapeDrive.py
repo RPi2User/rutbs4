@@ -11,8 +11,8 @@ class TapeDrive:
     
     status : int = 0
     
-    def __init__(self, path_to_tape_drive: str, blocksize: str) -> None:
-        self.bs: str = blocksize
+    def __init__(self, path_to_tape_drive: str) -> None:
+        self.bs: str = "1M" # FIXME TODO
         self.drive_path: str = path_to_tape_drive
         
 # ----------------BASIC I/O----------------------------------------------------
