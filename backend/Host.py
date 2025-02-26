@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import subprocess
 import re
 import socket
@@ -9,15 +10,16 @@ class Host():
     def __init__(self):
         pass
 
-    def get_host_status():
+    def get_host_status() -> json:
         status = {
-            "Servername": socket.gethostname(),
-            "IP-Adresse": socket.gethostbyname(socket.gethostname()),
-            "CPUusageByCore": psutil.cpu_percent(percpu=True),
-            "RAM": psutil.virtual_memory()._asdict(),
-            "Load": psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
+            "hostname": socket.gethostname(),
+            "ip_addr": socket.gethostbyname(socket.gethostname()),
+            "uptime" : (int) (time.time() - psutil.boot_time()),
+            "CPUbyCore": psutil.cpu_percent(percpu=True),
+            "mem": psutil.virtual_memory()._asdict(),
+            "load": psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
         }
-        return json.dumps(status), 200, {'Content-Type': 'application/json'}
+        return status
     
     def get_drives() -> json:
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
