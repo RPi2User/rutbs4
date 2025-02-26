@@ -46,7 +46,7 @@ class Host():
         # Entferne unvollständige Einträge
         drives = [drive for drive in drive_map.values() if drive["path"]]
 
-        return json.dumps({"tape_drives": drives})
+        return {"tape_drives": drives}
     
     def get_mounts():
         result = subprocess.run(

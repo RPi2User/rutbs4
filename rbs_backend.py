@@ -16,7 +16,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
 def get_slash():
-    return app.response_class(response="THIS IS A RUTBS-BACKEND", 
+    return app.response_class(response="<html>THIS IS A RUTBS-BACKEND</html>", 
                               mimetype='application/html')
 
 
@@ -43,13 +43,23 @@ def get_host_mounts():
 
 # -----------------------------------------------------------------------------
 
+@app.route('/drive/', methods=['GET'])
+def get_drive_root():
+    drives = Host.get_drives()
+    if drives != None :
+        return drives, 200
+    return '', 400
+    
+
 @app.route('/drive/<alias>', methods=['GET'])
 def get_drive(alias):
     drives = Host.get_drives()
-    if drives != None:
-        return '', 200
-    return '', 404
-
+    for drive in drives["tape_drives"]:
+        drive_alias : str = drive["alias"]
+        if drive_alias == alias:
+            return drive, 200
+    return '', 400
+    
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")
