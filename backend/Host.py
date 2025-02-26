@@ -19,7 +19,7 @@ class Host():
         }
         return json.dumps(status), 200, {'Content-Type': 'application/json'}
     
-    def get_drives():
+    def get_drives() -> json:
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
         drive_map = {}
 

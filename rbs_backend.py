@@ -14,6 +14,12 @@ app = Flask(__name__)
 
 # -----------------------------------------------------------------------------
 
+@app.route('/', methods=['GET'])
+def get_slash():
+    return app.response_class(response="THIS IS A RUTBS-BACKEND", 
+                              mimetype='application/plain')
+
+
 @app.route('/host', methods=['GET'])
 def get_host():
     return '', 200
@@ -41,7 +47,7 @@ def get_host_mounts():
 def get_drive(alias):
     drives = Host.get_drives()
     if drives != None:
-        return drives, 200
+        return '', 200
     return '', 404
 
 # -----------------------------------------------------------------------------
