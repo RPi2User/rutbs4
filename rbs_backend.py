@@ -6,6 +6,8 @@ from tbk.File import File
 from tbk.TableOfContent import TableOfContent
 from tbk.TapeDrive import TapeDrive
 
+from tbk.TDv2 import TapeDrive as TD2
+
 from backend.Host import Host
 
 VERSION = 4
@@ -67,8 +69,10 @@ def get_drive_status(alias):
         drive_alias : str = drive["alias"]
         if drive_alias == alias:
             drive_altPath: str = drive["alt_path"]
-            tapeDrive: TapeDrive = TapeDrive(drive_altPath)
-            return  str(tapeDrive.getStatus()), 200
+            tapeDrive: TD2 = TD2(drive_altPath)
+            return app.response_class(response=json.dumps(
+                {"status": str(tapeDrive.getStatus())}),
+                mimetype='application/json')
     return '', 400
 
 @app.route('/drive/<alias>/toc', methods=['GET'])
