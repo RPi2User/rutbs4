@@ -1,5 +1,13 @@
 class File:
 
+    id: int
+    size : int
+    name : str
+    path : str
+    cksum : str
+    cksum_type : str
+    
+
     def __init__(self, id: int, size: int, name: str, path: str, cksum: str = "", cksum_type: str = "") -> None:
         self.id: int = id
         self.size: int = size

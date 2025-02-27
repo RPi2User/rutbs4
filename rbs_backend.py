@@ -60,6 +60,16 @@ def get_drive(alias):
             return drive, 200
     return '', 400
 
+@app.route('/drive/<alias>/status', methods=['GET'])
+def get_drive_status(alias):
+    drives = Host.get_drives()
+    for drive in drives["tape_drives"]:
+        drive_alias : str = drive["alias"]
+        if drive_alias == alias:
+            drive_altPath: str = drive["alt_path"]
+            tapeDrive: TapeDrive = TapeDrive(drive_altPath)
+            return  str(tapeDrive.getStatus()), 200
+    return '', 400
 
 @app.route('/drive/<alias>/toc', methods=['GET'])
 def get_drive_toc(alias):
