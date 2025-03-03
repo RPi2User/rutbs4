@@ -17,7 +17,12 @@ class TapeDrive:
         self.blockSize: str = blockSize
         self.path: str = path_to_tape_drive
         self.bsy = False
-        
+        self.status = self.getStatus()
+    
+    def eject(self) -> None:
+        if self.getStatus() in {2,3,4} :
+            os.system("mt -f " + self.path + " eject")
+            
         
     def write(self, file: File) -> None:
         
@@ -50,7 +55,7 @@ class TapeDrive:
                     if 'WR_PROT' in _out:
                         return 3        # Tape RDY + WP
                     return 2            # Tape RDY
-                return 7                # Not at BOT, needs rewinding
+                return 4                # Not at BOT, needs rewinding
             return 1                    # No Tape
         
         return self.status
@@ -60,9 +65,9 @@ class TapeDrive:
         1   No Tape
         2   Tape RDY
         3   Tape RDY + WP
-        4   Ejecting
+        4   Not at BOT
         5   Writing
-        6   Reading
+        6   Reading   
         
         255 notImplemented
         """

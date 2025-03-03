@@ -11,6 +11,7 @@ from tbk.TDv2 import TapeDrive as TD2
 from backend.Host import Host
 
 VERSION = 4
+DEBUG = True
 
 app = Flask(__name__)
 
@@ -25,6 +26,14 @@ def get_slash():
 @app.route('/host', methods=['GET'])
 def get_host():
     return '', 200
+
+@app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point
+def get_host_debug():
+    if DEBUG:
+        f: File = File(0, 100, "test.0", "/opt/test_files")
+        f.CreateChecksum()
+        print(f.cksum)
+    return '', 400
 
 @app.route('/host/version', methods=['GET'])
 def get_host_version():
@@ -75,7 +84,7 @@ def get_drive_status(alias):
                 mimetype='application/json')
     return '', 400
 
-@app.route('/drive/<alias>/toc', methods=['GET'])
+@app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc(alias):
     drives = Host.get_drives()
     for drive in drives["tape_drives"]:
@@ -95,7 +104,7 @@ def post_drive_eject(alias):
         drive_alias : str = drive["alias"]
         if drive_alias == alias:
             drive_altPath: str = drive["alt_path"]
-            tapeDrive: TapeDrive = TapeDrive(drive_altPath)
+            tapeDrive: TD2 = TD2(drive_altPath)
             tapeDrive.eject()
             return '', 200         
     return '', 400
