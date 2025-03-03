@@ -7,6 +7,19 @@ import xml.etree.ElementTree as ET
 DEBUG: bool = False
 VERSION = 4
 
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+#DEPRECATED!
+
 class TapeDrive:
     
     status : int = 0
