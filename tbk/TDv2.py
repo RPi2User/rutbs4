@@ -22,18 +22,13 @@ class TapeDrive:
     def eject(self) -> None:
         if self.getStatus() in {2,3,4} :
             os.system("mt -f " + self.path + " eject")
-            
-        
+
     def write(self, file: File) -> None:
         
         _ec = os.system("dd if='" + file.path + "' of="+ self.path + " bs=" + self.blockSize + " 2>/dev/null")
         _ec = os.system("dd if='" + file.path + "' of="+ self.path + " bs=" + self.blockSize + " status=progress")
     
-    
     def read(self, file: File) -> None:
-        pass
-    
-    def calcChecksum(self, file: File) -> None:
         pass
     
     def readTOC(self) -> TableOfContent:
@@ -42,7 +37,6 @@ class TapeDrive:
     def writeTOC(self, toc : TableOfContent) -> None:
         pass
 
-    
     def getStatus(self) -> int:
         if self.bsy == False:
             try:

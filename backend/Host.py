@@ -7,17 +7,35 @@ import socket
 import psutil
 
 class Host():
+    
+    hostname : str
+    ip_addr: str
+    uptime: int
+    CPUbyCore: dict
+    mem : dict
+    load : tuple
+    
+    
     def __init__(self):
-        pass
-
-    def get_host_status() -> json:
+        self.refresh_host_status()
+        
+    def refresh_host_status(self):
+        self.hostname = socket.gethostname(),
+        self.ip_addr = socket.gethostbyname(socket.gethostname())
+        self.uptime = (int) (time.time() - psutil.boot_time())
+        self.CPUbyCore = psutil.cpu_percent(percpu=True)
+        self.mem = psutil.virtual_memory()._asdict()
+        self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
+    
+    def get_host_status(self) -> json:        
+        
         status = {
-            "hostname": socket.gethostname(),
-            "ip_addr": socket.gethostbyname(socket.gethostname()),
-            "uptime" : (int) (time.time() - psutil.boot_time()),
-            "CPUbyCore": psutil.cpu_percent(percpu=True),
-            "mem": psutil.virtual_memory()._asdict(),
-            "load": psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
+            "hostname": self.hostname,
+            "ip_addr": self.ip_addr,
+            "uptime" : self.uptime,
+            "CPUbyCore": self.CPUbyCore,
+            "mem": self.mem,
+            "load": self.load
         }
         return status
     
