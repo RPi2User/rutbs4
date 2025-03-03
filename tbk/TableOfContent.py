@@ -1,7 +1,14 @@
 from tbk.File import File
 
 class TableOfContent:
-    
+
+    files: list[File]
+    ltoV : str
+    bs: str
+    tape_size : str
+    tbkV : str
+    last_mod : str
+
     def __init__(self, files: list[File], lto_version: str, optimal_blocksize: str, tape_sizeB: int, tbk_version: str, last_modified: str = "") -> None:
         self.files: list[File] = files      # List of all Files from TableOfContent
         self.ltoV: str = lto_version        # LTO-Version of Tape/Drive

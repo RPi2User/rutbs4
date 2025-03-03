@@ -76,7 +76,7 @@ class Host():
         )
         
         lines = result.stdout.strip().split("\n")[1:]  # Erste Zeile (Header) überspringen
-        mounts = []
+        mounts = [] #Whacky
         
         for line in lines:
             parts = line.split()

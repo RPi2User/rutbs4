@@ -1,7 +1,11 @@
 ```mermaid
 classDiagram
 
+
 Host <|-- TapeDrive
+Host <|-- TableOfContent
+TapeDrive <|-- TableOfContent
+TableOfContent <|-- File
 
 class Host{
     + hostname : str
@@ -29,6 +33,15 @@ class TapeDrive{
     + readToc()
     + writeToc()
     + getStatus()
+}
+
+class TableOfContent{
+    + files: list[File]
+    + ltoV : str
+    + bs: str
+    + tape_size : str
+    + tbkV : str
+    + last_mod : str
 }
 
 class File{
