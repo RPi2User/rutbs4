@@ -7,11 +7,11 @@ class File:
     name : str
     path : str
     cksum : str
-    cksum_type : str = "MD5"    # "Constant" (currently, SHA256 is waaay to slow)
+    cksum_type : str = "md5"    # "Constant" (currently, SHA256 is waaay to slow)
     
     
 
-    def __init__(self, id: int, size: int, name: str, path: str, cksum: str = "") -> None:
+    def __init__(self, id: int, name: str, path: str, size: int = 0, cksum: str = "00000000000000000000000000000000") -> None:
         self.id: int = id
         self.size: int = size
         self.name: str = name
@@ -23,6 +23,9 @@ class File:
         _out: str = str(subprocess.check_output("md5sum '" + self.path + "/" + self.name + "' | awk '{ print $1}'", shell=True))
         _out = _out.split("'", 2)[1].split("\\", 1)[0]
         self.cksum = _out
+    
+    def CheckFileIntegrety(self) -> bool:
+        return False
     
     def __str__(self) -> str:
         return "File(ID: " + str(self.id) + ", Size: " + str(self.size) + ", Name: " + self.name + ", Path: " + self.path + ", cksum: " + self.cksum + ", cksum_type: " + self.cksum_type + ")\n"

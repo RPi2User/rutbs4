@@ -17,6 +17,10 @@ class TableOfContent:
         self.tbkV: str = tbk_version        # Software-Version of Tape-Backup-Software from original TOC
         self.last_mod: str = last_modified  # Optional Timestamp (required for reading of tape)
         
+    def calcChecksums(self) -> None: # Need to implement parallel checksumming based on CPU-Core-Count.
+        pass
+    
+    
     def __str__(self) -> str:
         return "TableOfContent(Files: " + str(self.files.__str__) + " LTO-Version: " + self.ltoV + " optimal Blocksize: " + self.bs + " Tape-Size: " + str(self.tape_size) + " TBK-Version" + self.tbkV + ")"
     

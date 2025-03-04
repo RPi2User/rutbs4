@@ -32,10 +32,10 @@ def get_host():
 @app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point
 def get_host_debug():
     if DEBUG:
-        f: File = File(0, 100, "test.0", "/opt/test_files")
-        f.CreateChecksum()
-        print(f.cksum)
-    return '', 400
+        f: File = File(0, "toc.tmp", "/tmp")
+        td: TD2 = TD2("/dev/nst0")
+        td.read(f)
+    return '', 418
 
 @app.route('/host/version', methods=['GET'])
 def get_host_version():
@@ -61,7 +61,7 @@ def get_drive_root():
     drives = host.get_drives()
     if drives != None :
         return drives, 200
-    return '', 400
+    return '', 204
     
 
 @app.route('/drive/<alias>', methods=['GET'])
@@ -71,7 +71,7 @@ def get_drive(alias):
         drive_alias : str = drive["alias"]
         if drive_alias == alias:
             return drive, 200
-    return '', 400
+    return '', 404
 
 @app.route('/drive/<alias>/status', methods=['GET'])
 def get_drive_status(alias):
@@ -84,7 +84,7 @@ def get_drive_status(alias):
             return app.response_class(response=json.dumps(
                 {"status": str(tapeDrive.getStatus())}),
                 mimetype='application/json')
-    return '', 400
+    return '', 404
 
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc(alias):
@@ -93,11 +93,11 @@ def get_drive_toc(alias):
         drive_alias : str = drive["alias"]
         if drive_alias == alias:
             drive_altPath: str = drive["alt_path"]
-            tapeDrive: TapeDrive = TapeDrive(drive_altPath)
+            tapeDrive: TD2 = TD2(drive_altPath)
             return app.response_class(response=tapeDrive.readTOC(), 
                                       mimetype='application/xml')
         
-    return '', 400
+    return '', 404
 
 @app.route('/drive/<alias>/eject', methods=['POST'])
 def post_drive_eject(alias):
@@ -109,7 +109,7 @@ def post_drive_eject(alias):
             tapeDrive: TD2 = TD2(drive_altPath)
             tapeDrive.eject()
             return '', 200         
-    return '', 400
+    return '', 404
 
 @app.route('/drive/<alias>/rewind', methods=['POST'])
 def post_drive_rewind(alias):
@@ -121,7 +121,7 @@ def post_drive_rewind(alias):
             tapeDrive: TD2 = TD2(drive_altPath)
             tapeDrive.rewind()
             return '', 200         
-    return '', 400
+    return '', 404
 
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
