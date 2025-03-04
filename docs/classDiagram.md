@@ -35,6 +35,14 @@ class TapeDrive{
     + getStatus()
 }
 
+class Mount{
+    + filesystem: str
+    + fstype : str
+    + size : int
+    + used : int
+    + mountpoint : str
+}
+
 class TableOfContent{
     + files: list[File]
     + ltoV : str

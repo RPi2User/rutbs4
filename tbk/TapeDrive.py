@@ -5,7 +5,7 @@ import tbk.File as File
 import xml.etree.ElementTree as ET
 
 DEBUG: bool = False
-VERSION = 4
+VERSION = 3
 
 #DEPRECATED!
 #DEPRECATED!

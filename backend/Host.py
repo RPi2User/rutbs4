@@ -6,6 +6,9 @@ import re
 import socket
 import psutil
 
+from backend.Mount import Mount
+from tbk.TDv2 import TapeDrive
+
 class Host():
     
     hostname : str
@@ -15,6 +18,7 @@ class Host():
     mem : dict
     load : tuple
     
+    mounts : list[Mount] # type: ignore
     
     def __init__(self):
         self.refresh_host_status()
@@ -28,7 +32,7 @@ class Host():
         self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
     
     def get_host_status(self) -> json:        
-        
+        self.refresh_host_status()
         status = {
             "hostname": self.hostname,
             "ip_addr": self.ip_addr,
@@ -39,7 +43,7 @@ class Host():
         }
         return status
     
-    def get_drives() -> json:
+    def get_drives(self) -> json:
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
         drive_map = {}
 
@@ -63,30 +67,28 @@ class Host():
                 else:
                     drive_map[drive_id]["alt_path"] = full_path
 
-        # Entferne unvollständige Einträge
         drives = [drive for drive in drive_map.values() if drive["path"]]
-
         return {"tape_drives": drives}
     
-    def get_mounts():
+    def get_mounts(self):
         result = subprocess.run(
             ["df", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "--output=source,size,used,target,fstype"],
             capture_output=True,
             text=True
         )
         
-        lines = result.stdout.strip().split("\n")[1:]  # Erste Zeile (Header) überspringen
-        mounts = [] #Whacky
+        lines = result.stdout.strip().split("\n")[1:]  # Skip header, sadly "df" does not have a "--quiet | --no-head" option
+        mounts : list[Mount] = []
         
         for line in lines:
             parts = line.split()
             if len(parts) == 5:
-                mounts.append({
-                    "filesystem": parts[0],
-                    "size": parts[1],
-                    "used": parts[2],
-                    "mountpoint": parts[3],
-                    "fstype": parts[4]
-                })
-        
-        return json.dumps({"mounts": mounts})
+                mounts.append(Mount(
+                    filesystem=parts[0],
+                    size=int(parts[1]),
+                    used=int(parts[2]),
+                    mountpoint=parts[3],
+                    fstype=parts[4]
+                ))
+                
+        return json.dumps({"mounts": [mount.__dict__ for mount in mounts]})

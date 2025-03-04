@@ -13,6 +13,8 @@ from backend.Host import Host
 VERSION = 4
 DEBUG = True
 
+host: Host = Host()
+
 app = Flask(__name__)
 
 # -----------------------------------------------------------------------------
@@ -42,21 +44,21 @@ def get_host_version():
 
 @app.route('/host/status', methods=['GET'])
 def get_host_status():
-    return Host.get_host_status()
+    return host.get_host_status()
 
 @app.route('/host/drives', methods=['GET'])
 def get_host_drives():
-    return Host.get_drives()
+    return host.get_drives()
 
 @app.route('/host/mounts', methods=['GET'])
 def get_host_mounts():
-    return Host.get_mounts()
+    return host.get_mounts()
 
 # -----------------------------------------------------------------------------
 
 @app.route('/drive/', methods=['GET'])
 def get_drive_root():
-    drives = Host.get_drives()
+    drives = host.get_drives()
     if drives != None :
         return drives, 200
     return '', 400
@@ -64,7 +66,7 @@ def get_drive_root():
 
 @app.route('/drive/<alias>', methods=['GET'])
 def get_drive(alias):
-    drives = Host.get_drives()
+    drives = host.get_drives()
     for drive in drives["tape_drives"]:
         drive_alias : str = drive["alias"]
         if drive_alias == alias:
@@ -73,7 +75,7 @@ def get_drive(alias):
 
 @app.route('/drive/<alias>/status', methods=['GET'])
 def get_drive_status(alias):
-    drives = Host.get_drives()
+    drives = host.get_drives()
     for drive in drives["tape_drives"]:
         drive_alias : str = drive["alias"]
         if drive_alias == alias:
@@ -86,7 +88,7 @@ def get_drive_status(alias):
 
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc(alias):
-    drives = Host.get_drives()
+    drives = host.get_drives()
     for drive in drives["tape_drives"]:
         drive_alias : str = drive["alias"]
         if drive_alias == alias:
@@ -99,7 +101,7 @@ def get_drive_toc(alias):
 
 @app.route('/drive/<alias>/eject', methods=['POST'])
 def post_drive_eject(alias):
-    drives = Host.get_drives()
+    drives = host.get_drives()
     for drive in drives["tape_drives"]:
         drive_alias : str = drive["alias"]
         if drive_alias == alias:

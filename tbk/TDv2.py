@@ -4,6 +4,8 @@ import subprocess
 from tbk import TableOfContent
 import tbk.File as File
 
+VERSION: int = 4
+
 class TapeDrive:
     
     path : str
