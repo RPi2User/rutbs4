@@ -112,7 +112,7 @@ def post_drive_eject(alias):
     return '', 400
 
 @app.route('/drive/<alias>/rewind', methods=['POST'])
-def post_drive_eject(alias):
+def post_drive_rewind(alias):
     drives = host.get_drives()
     for drive in drives["tape_drives"]:
         drive_alias : str = drive["alias"]
