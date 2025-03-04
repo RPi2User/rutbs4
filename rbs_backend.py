@@ -110,6 +110,19 @@ def post_drive_eject(alias):
             tapeDrive.eject()
             return '', 200         
     return '', 400
+
+@app.route('/drive/<alias>/rewind', methods=['POST'])
+def post_drive_eject(alias):
+    drives = host.get_drives()
+    for drive in drives["tape_drives"]:
+        drive_alias : str = drive["alias"]
+        if drive_alias == alias:
+            drive_altPath: str = drive["alt_path"]
+            tapeDrive: TD2 = TD2(drive_altPath)
+            tapeDrive.rewind()
+            return '', 200         
+    return '', 400
+
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")

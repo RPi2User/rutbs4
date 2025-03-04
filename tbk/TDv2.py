@@ -33,6 +33,11 @@ class TapeDrive:
     def read(self, file: File) -> None:
         pass
     
+    def rewind(self) -> None:
+        self.getStatus()
+        if self.status in {2,3,4}:
+            os.system("mt -f " + self.path + " rewind")
+    
     def readTOC(self) -> TableOfContent:
         pass
     
