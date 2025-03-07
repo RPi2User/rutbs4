@@ -22,6 +22,11 @@ class Host():
     
     def __init__(self):
         self.refresh_host_status()
+        self.tape_drives = {}
+        for drive in self.get_drives()["tape_drives"]:
+            alias = drive["alias"]
+            alt_path = drive["alt_path"]
+            self.tape_drives[alias] = TapeDrive(alt_path)
         
     def refresh_host_status(self):
         self.hostname = socket.gethostname(),
@@ -69,6 +74,9 @@ class Host():
 
         drives = [drive for drive in drive_map.values() if drive["path"]]
         return {"tape_drives": drives}
+    
+    def get_tape_drive(self, alias):
+        return self.tape_drives.get(alias)
     
     def get_mounts(self):
         result = subprocess.run(

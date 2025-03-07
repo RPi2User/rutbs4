@@ -4,9 +4,8 @@ from flask import Flask
 
 from tbk.File import File
 from tbk.TableOfContent import TableOfContent
-from tbk.TapeDrive import TapeDrive
 
-from tbk.TDv2 import TapeDrive as TD2
+from tbk.TDv2 import TapeDrive
 
 from backend.Host import Host
 
@@ -32,10 +31,10 @@ def get_host():
 @app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point
 def get_host_debug():
     if DEBUG:
-        f: File = File(0, "toc.tmp", "/tmp")
-        td: TD2 = TD2("/dev/nst0")
-        td.read(f)
-    return '', 418
+        f: File = File(0, "Ä$Ö ÜP.tmp", "/tmp")
+        tapeDrive = host.get_tape_drive("st0")
+        tapeDrive.read(f)
+    return tapeDrive.getStatusJson(), 418
 
 @app.route('/host/version', methods=['GET'])
 def get_host_version():
@@ -75,52 +74,33 @@ def get_drive(alias):
 
 @app.route('/drive/<alias>/status', methods=['GET'])
 def get_drive_status(alias):
-    drives = host.get_drives()
-    for drive in drives["tape_drives"]:
-        drive_alias : str = drive["alias"]
-        if drive_alias == alias:
-            drive_altPath: str = drive["alt_path"]
-            tapeDrive: TD2 = TD2(drive_altPath)
-            return app.response_class(response=json.dumps(
-                {"status": str(tapeDrive.getStatus())}),
-                mimetype='application/json')
+    tape_drive = host.get_tape_drive(alias)
+    if tape_drive:
+        return tape_drive.getStatusJson(), 200
     return '', 404
 
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc(alias):
-    drives = host.get_drives()
-    for drive in drives["tape_drives"]:
-        drive_alias : str = drive["alias"]
-        if drive_alias == alias:
-            drive_altPath: str = drive["alt_path"]
-            tapeDrive: TD2 = TD2(drive_altPath)
-            return app.response_class(response=tapeDrive.readTOC(), 
-                                      mimetype='application/xml')
-        
+    tape_drive = host.get_tape_drive(alias)
+    if tape_drive:
+        return app.response_class(response=tape_drive.readTOC(), 
+                                  mimetype='application/xml')
     return '', 404
 
 @app.route('/drive/<alias>/eject', methods=['POST'])
 def post_drive_eject(alias):
-    drives = host.get_drives()
-    for drive in drives["tape_drives"]:
-        drive_alias : str = drive["alias"]
-        if drive_alias == alias:
-            drive_altPath: str = drive["alt_path"]
-            tapeDrive: TD2 = TD2(drive_altPath)
-            tapeDrive.eject()
-            return '', 200         
+    tape_drive = host.get_tape_drive(alias)
+    if tape_drive:
+        tape_drive.eject()
+        return '', 200
     return '', 404
 
 @app.route('/drive/<alias>/rewind', methods=['POST'])
 def post_drive_rewind(alias):
-    drives = host.get_drives()
-    for drive in drives["tape_drives"]:
-        drive_alias : str = drive["alias"]
-        if drive_alias == alias:
-            drive_altPath: str = drive["alt_path"]
-            tapeDrive: TD2 = TD2(drive_altPath)
-            tapeDrive.rewind()
-            return '', 200         
+    tape_drive = host.get_tape_drive(alias)
+    if tape_drive:
+        tape_drive.rewind()
+        return '', 200
     return '', 404
 
 # -----------------------------------------------------------------------------
