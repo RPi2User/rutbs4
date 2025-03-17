@@ -65,7 +65,7 @@ class TapeDrive:
         pass
 
     def getStatusCleanup(self) -> None:
-        """Cleans up the status message and resets the status message."""
+        """Cleans up the status message and resets the status message. Used when process finished unsuccessfull."""
         self.bsy = False
         self.status = self.getStatus()
         self.process = None
