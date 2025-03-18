@@ -46,11 +46,9 @@ class TapeDrive:
             self.status = 6  # Set status to "Reading"
             self.bsy = True
             self.process = subprocess.Popen(["dd", f"if={self.path}", f"of={file.path}/{file.name}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            self.process.wait()
-            print(self.process.stderr.read())
-        
-
-
+            # self.process.wait()
+            # Errors need to be processed!
+            print(self.process.stderr.read()) # FOR DEBUG PURPOSES ONLY
     
     def rewind(self) -> None:
         if self.getStatus() in {2,3,4}:
