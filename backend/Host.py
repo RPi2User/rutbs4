@@ -17,6 +17,7 @@ class Host():
     CPUbyCore: dict
     mem : dict
     load : tuple
+    tape_drives : dict
     
     mounts : list[Mount] # type: ignore
     
@@ -75,8 +76,12 @@ class Host():
         drives = [drive for drive in drive_map.values() if drive["path"]]
         return {"tape_drives": drives}
     
-    def get_tape_drive(self, alias):
-        return self.tape_drives.get(alias)
+    def get_tape_drive(self, alias) -> TapeDrive:
+        try:
+            return self.tape_drives.get(alias)
+        except:
+            return None
+        
     
     def get_mounts(self):
         result = subprocess.run(

@@ -25,7 +25,8 @@ class TapeDrive:
     CMD_DD_READ = "dd if='{path}' of='{file_path}' bs='{block_size}' status=progress"
     CMD_DD_WRITE = "dd if='{file_path}' of='{path}' bs='{block_size}' status=progress"
     
-    def __init__(self, path_to_tape_drive: str, blockSize: str = "1M") -> None:
+    def __init__(self, path_to_tape_drive: str, blockSize: str = "1M", ltoVersion: int = 0) -> None:
+        self.ltoVersion = ltoVersion
         self.blockSize: str = blockSize
         self.path: str = path_to_tape_drive
         self.bsy = False

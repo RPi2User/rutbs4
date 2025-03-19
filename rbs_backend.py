@@ -13,6 +13,7 @@ VERSION = 4
 DEBUG = True
 
 host: Host = Host()
+tapeDrive: TapeDrive = None # Host need to provide a TapeDrive with Host.getTapeDrive(alias)
 
 app = Flask(__name__)
 
@@ -65,11 +66,9 @@ def get_drive_root():
 
 @app.route('/drive/<alias>', methods=['GET'])
 def get_drive(alias):
-    drives = host.get_drives()
-    for drive in drives["tape_drives"]:
-        drive_alias : str = drive["alias"]
-        if drive_alias == alias:
-            return drive, 200
+    tapeDrive = host.get_tape_drive(alias)
+    if tapeDrive != None:
+        return str(tapeDrive), 200
     return '', 404
 
 @app.route('/drive/<alias>/status', methods=['GET'])
