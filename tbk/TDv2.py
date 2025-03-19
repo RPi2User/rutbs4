@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import time
+import threading
 from tbk import TableOfContent
 from tbk import File
 
@@ -19,6 +20,9 @@ class TapeDrive:
     status_msg: str = "NotInitialized"
     process: subprocess.Popen = None
     
+    readThread: threading.Thread = None
+    writeThread: threading.Thread = None
+    
     CMD_STATUS = "mt -f '{path}' status"
     CMD_EJECT = "mt -f '{path}' eject"
     CMD_REWIND = "mt -f '{path}' rewind"
@@ -26,6 +30,7 @@ class TapeDrive:
     CMD_DD_WRITE = "dd if='{file_path}' of='{path}' bs='{block_size}' status=progress"
     
     def __init__(self, path_to_tape_drive: str, blockSize: str = "1M", ltoVersion: int = 0) -> None:
+        if DEBUG: print("[INIT] TapeDrive.__init__() " + path_to_tape_drive + " " + blockSize + " " + str(ltoVersion)) 
         self.ltoVersion = ltoVersion
         self.blockSize: str = blockSize
         self.path: str = path_to_tape_drive
@@ -47,9 +52,14 @@ class TapeDrive:
             self.status = 6  # Set status to "Reading"
             self.bsy = True
             self.process = subprocess.Popen(["dd", f"if={self.path}", f"of={file.path}/{file.name}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            # self.process.wait()
-            # Errors need to be processed!
-            print(self.process.stderr.read()) # FOR DEBUG PURPOSES ONLY
+            
+            readThread = threading.Thread(target=read_thread, daemon=True)
+            readThread.start()
+            
+            def read_thread(self):
+                for line in iter(self.process.stderr.readline, ""):
+                    self.status_msg = line
+
     
     def rewind(self) -> None:
         if self.getStatus() in {2,3,4}:
@@ -64,12 +74,47 @@ class TapeDrive:
         pass
 
     def getStatusCleanup(self) -> None:
-        """Cleans up the status message and resets the status message. Used when process finished unsuccessfull."""
+        """Cleans up the status message and resets the status message. Used when process finished unsuccessful."""
         self.bsy = False
-        self.status = self.getStatus()
         self.process = None
+        self.status = self.getStatusFromMT()
 
-    def getStatus(self) -> int:     # Application must poll this fucker regularly!
+    def getStatusFromMT(self) -> int:
+        """Returns the current status of the tape drive based on the 'mt' command."""
+        try:
+            _out : str = subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout.split("\n")[-2].split(" ")
+        except:
+            self.status_msg = "[ERROR] status-request failed: `mt '" + self.path + "' status` OUT: " + subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout
+            return 0
+        self.status_msg = ""
+        if 'ONLINE' in _out:
+            if 'BOT' in _out:
+                if 'WR_PROT' in _out:
+                    return 3        # Tape RDY + WP
+                return 2            # Tape RDY
+            return 4                # Not at BOT, needs rewinding
+        return 1                    # No Tape
+
+    def getStatusWhenBsy(self) -> int: # When bsy then is EITHER process currently running OR finished
+        _out: int = self.status # memorize old status
+        # Process is terminated when self.process.poll() is None
+        if self.process.poll() is None:
+            # Process terminated
+            proc_exit_code = self.process.returncode
+            
+            if proc_exit_code != 0:
+                self.status_msg = "[ERROR] Operation at Status" + str(self.status) + " failed: " + self.process.stderr.read()
+            self.getStatusCleanup()
+        print("getStatusWhenBsy() returning " + str(_out) + " self.process.poll: " + str(self.process.poll()))
+        return _out
+
+    def getStatus(self) -> int: # Application must poll this fucker regularly!
+        if self.bsy:
+            return self.getStatusWhenBsy()
+        else:
+            return self.getStatusFromMT()
+
+    def getDeprecatedStatus(self) -> int:     # Application must poll this fucker regularly!
         """Returns the current status of the tape drive."""
         if DEBUG: print("bsy: " + str(self.bsy) + " status: " + str(self.status) + " process: " + str(self.process))
         if self.bsy:
@@ -105,7 +150,6 @@ class TapeDrive:
                 case 8: # Ejecting, analog to rewinding
                     if self.process.poll() is None: return 8
                     self.getStatusCleanup()    
-                    
         else: # bsy == False / default behavior
             try:
                 _out : str = subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout.split("\n")[-2].split(" ")
@@ -120,13 +164,13 @@ class TapeDrive:
                     return 2            # Tape RDY
                 return 4                # Not at BOT, needs rewinding
             return 1                    # No Tape
-        
+        print("GENERAL ERROR OCCURED!" + " bsy: " + str(self.bsy) + " status: " + str(self.status) + " process: " + str(self.process) + " returning 0")
         return 0                        # General Error
     
     def getStatusJson(self) -> json:
         """Returns the current status and status message as a JSON string."""
-        status = self.getStatus()
-        status_json = {
+        status: int = self.getStatus()
+        status_json: json = {
             "status": status,
             "statusMsg": self.status_msg
         }

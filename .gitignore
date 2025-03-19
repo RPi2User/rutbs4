@@ -1,3 +1,5 @@
 backend/scratchpad.py
 *.pdf
+launch.json
+.vscode
 __pycache__
