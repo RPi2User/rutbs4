@@ -1,8 +1,11 @@
 import json
 import os
 import subprocess
-import time
+import uuid
 import threading
+
+import xml.etree.ElementTree as ET
+
 from tbk import TableOfContent
 from tbk import File
 
@@ -52,13 +55,14 @@ class TapeDrive:
             self.status = 6  # Set status to "Reading"
             self.bsy = True
             self.process = subprocess.Popen(["dd", f"if={self.path}", f"of={file.path}/{file.name}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            
-            readThread = threading.Thread(target=read_thread, daemon=True)
-            readThread.start()
-            
+        
             def read_thread(self):
                 for line in iter(self.process.stderr.readline, ""):
                     self.status_msg = line
+            
+            readThread = threading.Thread(target=read_thread(self), daemon=True)
+            readThread.start()
+        
 
     
     def rewind(self) -> None:
@@ -68,7 +72,12 @@ class TapeDrive:
             self.process = subprocess.Popen(self.CMD_REWIND.format(path=self.path), shell=True)
     
     def readTOC(self) -> TableOfContent:
-        pass
+        if self.status in {2, 3}: # RDY or RDY + WP
+            toc_uuid : str = str(uuid.uuid4())
+            toc_filename : str = "TOC_" + toc_uuid + ".tmp"
+            file : File = File(0, toc_filename, "/tmp")
+        
+            pass
     
     def writeTOC(self, toc : TableOfContent) -> None:
         pass
@@ -87,7 +96,7 @@ class TapeDrive:
         except:
             self.status_msg = "[ERROR] status-request failed: `mt '" + self.path + "' status` OUT: " + subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout
             return 0
-        self.status_msg = ""
+        # self.status_msg = "" # Clear last status message
         if 'ONLINE' in _out:
             if 'BOT' in _out:
                 if 'WR_PROT' in _out:
@@ -104,69 +113,16 @@ class TapeDrive:
             self.getStatusCleanup() # Cleanup
             
             if proc_exit_code != 0: # Eval EC
-                self.status_msg = "[ERROR] Operation at Status" + str(self.status) + " failed: " + self.process.stderr.read()
+                self.status_msg = "[ERROR] Operation at Status" + str(self.status) + " failed with exitcode: " + str(proc_exit_code)
                 self.status = 0 # Set ERROR state
                 
         return self.status
 
-    def getStatus(self) -> int: # Application must poll this fucker regularly!
+    def getStatus(self) -> int: # Application must poll this fucker regularly :)
         if self.bsy:
             return self.getStatusWhenBsy()
         else:
             return self.getStatusFromMT()
-
-    def getDeprecatedStatus(self) -> int:     # Application must poll this fucker regularly!
-        """Returns the current status of the tape drive."""
-        if DEBUG: print("bsy: " + str(self.bsy) + " status: " + str(self.status) + " process: " + str(self.process))
-        if self.bsy:
-            match self.status:
-                case 5: # Writing
-                    if self.process.poll() is None:   # Check if process is still running
-                        for line in iter(self.process.stderr.readline, ""):
-                            self.status_msg = line
-                            break
-                        return 5
-                    elif self.process.returncode != 0:
-                        self.status_msg = "[ERROR] Write operation failed: " + self.process.stderr.read()
-                        self.getStatusCleanup()
-                        return 0
-                    self.getStatusCleanup()
-
-                case 6: # Reading
-                    if self.process.poll() is None:   # Check if process is still running
-                        for line in iter(self.process.stderr.readline, ""):
-                            self.status_msg = line
-                            break
-                        return 6
-                    elif self.process.returncode != 0:
-                        self.status_msg = "[ERROR] Read operation failed: " + self.process.stderr.read()
-                        self.getStatusCleanup()
-                        return 0
-                    self.getStatusCleanup()
-
-                case 7: # Rewinding, needs different kind of handling, 'cause mt is weird
-                    if self.process.poll() is None: return 7
-                    self.getStatusCleanup()
-
-                case 8: # Ejecting, analog to rewinding
-                    if self.process.poll() is None: return 8
-                    self.getStatusCleanup()    
-        else: # bsy == False / default behavior
-            try:
-                _out : str = subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout.split("\n")[-2].split(" ")
-            except:
-                self.status_msg = "[ERROR] status-request failed: `mt '" + self.path + "' status` OUT: " + subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout
-                return 0
-            self.status_msg = ""
-            if 'ONLINE' in _out:
-                if 'BOT' in _out:
-                    if 'WR_PROT' in _out:
-                        return 3        # Tape RDY + WP
-                    return 2            # Tape RDY
-                return 4                # Not at BOT, needs rewinding
-            return 1                    # No Tape
-        print("GENERAL ERROR OCCURED!" + " bsy: " + str(self.bsy) + " status: " + str(self.status) + " process: " + str(self.process) + " returning 0")
-        return 0                        # General Error
     
     def getStatusJson(self) -> json:
         """Returns the current status and status message as a JSON string."""
@@ -191,6 +147,44 @@ class TapeDrive:
     255 notImplemented
     """
     
+    def xml2toc(self, file: File) -> TableOfContent: # Imported from legacy TapeDrive.py 
+        self.rewind()
+        # Read XML from Tape
+        self.read(file)
+        # Try to parse File
+        try:
+            xml_root: ET.Element = ET.parse(source=file.fullPath).getroot()
+        except:
+            print("[ERROR] Could not parse Table of Contents: Invalid Format")
+            print("Try 'tbk --dump | tbk -d'")
+            exit(1)
+        files: list[File] = [] # type: ignore
+        for index in range(1, len(xml_root)):
+            try:                
+                files.append(File(id=int(str(xml_root[index][0].text)),
+                                name=str(xml_root[index][1].text),
+                                path=str(xml_root[index][2].text),
+                                size=int(str(xml_root[index][3].text)),
+                                cksum_type=str(xml_root[index][4].text),
+                                cksum=str(xml_root[index][5].text)
+                ))
+            except:
+                files.append(File(id=int(str(xml_root[index][0].text)),
+                                name=str(xml_root[index][1].text),
+                                path=str(xml_root[index][2].text),
+                                size=int(str(xml_root[index][3].text))
+                ))
+        _out: TableOfContent = TableOfContent(
+            files=files,
+            lto_version=str(xml_root[0][0].text),
+            optimal_blocksize=str(xml_root[0][1].text),
+            tape_sizeB=int(str(xml_root[0][2].text)),
+            tbk_version=str(xml_root[0][3].text),
+            last_modified=str(xml_root[0][4].text)
+        )
+        return _out
+    
+    # NEEDS REFACTOR!
     def cancelOperation(self) -> None:
         """Cancels the current operation if a process is running."""
         if self.process and self.process.poll() is None:  # Check if process is still running

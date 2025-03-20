@@ -102,6 +102,15 @@ def post_drive_rewind(alias):
         return '', 200
     return '', 404
 
+@app.route('/drive/<alias>/abort', methods=['POST'])
+def post_drive_abort(alias):
+    tape_drive = host.get_tape_drive(alias)
+    if tape_drive:
+        tape_drive.cancelOperation()
+        return '', 200
+    return '[ERROR] DURING JOB ABORT, RESTART APPLICATION', 400
+
+
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")

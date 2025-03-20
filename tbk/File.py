@@ -6,6 +6,7 @@ class File:
     size : int
     name : str
     path : str
+    fullPath : str
     cksum : str
     cksum_type : str = "md5"    # "Constant" (currently, SHA256 is waaay to slow)
     
@@ -17,6 +18,8 @@ class File:
         self.name: str = name
         self.path: str = path
         self.cksum: str = cksum
+        
+        self.fullPath: str = self.path + "/" + self.name
         
     def CreateChecksum(self) -> None:
         # Some bash/awk/string-Magic to get checksum from "md5sum" command
