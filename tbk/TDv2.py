@@ -6,12 +6,25 @@ import threading
 
 import xml.etree.ElementTree as ET
 
-from tbk import TableOfContent
-from tbk import File
+from tbk.TableOfContent import TableOfContent
+from tbk.File import File
 
 VERSION: int = 4
 DEBUG : bool = True
 
+"""_stati_
+    0   Error
+    1   No Tape
+    2   Tape RDY
+    3   Tape RDY + WP
+    4   Not at BOT
+    5   Writing
+    6   Reading
+    7   ejecting
+    8   rewinding   
+
+    255 notImplemented
+"""
 
 class TapeDrive:
     
@@ -74,8 +87,13 @@ class TapeDrive:
     def readTOC(self) -> TableOfContent:
         if self.status in {2, 3}: # RDY or RDY + WP
             toc_uuid : str = str(uuid.uuid4())
-            toc_filename : str = "TOC_" + toc_uuid + ".tmp"
+            toc_filename : str = "toc_" + toc_uuid + ".tmp"
             file : File = File(0, toc_filename, "/tmp")
+            
+            self.read(file)
+            toc : TableOfContent = self.xml2toc(file)
+            self.showTOC(toc)
+            #os.remove(file.fullPath)
         
             pass
     
@@ -133,20 +151,6 @@ class TapeDrive:
         }
         return status_json
     
-    """_stati_
-    0   Error
-    1   No Tape
-    2   Tape RDY
-    3   Tape RDY + WP
-    4   Not at BOT
-    5   Writing
-    6   Reading
-    7   ejecting
-    8   rewinding   
-    
-    255 notImplemented
-    """
-    
     def xml2toc(self, file: File) -> TableOfContent: # Imported from legacy TapeDrive.py 
         self.rewind()
         # Read XML from Tape
@@ -154,11 +158,10 @@ class TapeDrive:
         # Try to parse File
         try:
             xml_root: ET.Element = ET.parse(source=file.fullPath).getroot()
-        except:
+        except: #TODO add to self.status_msg
             print("[ERROR] Could not parse Table of Contents: Invalid Format")
             print("Try 'tbk --dump | tbk -d'")
-            exit(1)
-        files: list[File] = [] # type: ignore
+        files: list[File] = []
         for index in range(1, len(xml_root)):
             try:                
                 files.append(File(id=int(str(xml_root[index][0].text)),
@@ -184,7 +187,26 @@ class TapeDrive:
         )
         return _out
     
-    # NEEDS REFACTOR!
+    def showTOC(self, toc: TableOfContent) -> None:
+        # User-Readable listing from Contents of Tape
+        print("\n--- TAPE INFORMATION ---\n")
+        print("- TBK-Version:\t" + toc.tbkV)
+        print("- LTO-Version:\t" + toc.ltoV)
+        print("- Blocksize:\t" + toc.bs)
+        print("- Tape-Size:\t" + str(toc.tape_size))
+        print("\nLast Modified:\t" + toc.last_mod)
+        print("\n*")
+        _remaining: int = toc.tape_size
+        for file in toc.files:
+            print("├─┬ \x1b[96m" + file.name + "\x1b[0m")
+            print("│ ├── Size:\t" + str(file.size))
+            print("│ └── Checksum:\t" + file.cksum)
+            print("│")
+            _remaining -= file.size
+        print("│")
+        print("└ \x1b[93m" + str(_remaining) + "\x1b[0m Remaining")
+    
+    # NEEDS REFACTOR! -> Test ok by e18f99a74b1452e3a5b1ac2d7a23a43b13cce10a 
     def cancelOperation(self) -> None:
         """Cancels the current operation if a process is running."""
         if self.process and self.process.poll() is None:  # Check if process is still running
