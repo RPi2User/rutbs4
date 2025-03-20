@@ -46,7 +46,7 @@ class TapeDrive:
     CMD_DD_WRITE = "dd if='{file_path}' of='{path}' bs='{block_size}' status=progress"
     
     def __init__(self, path_to_tape_drive: str, blockSize: str = "1M", ltoVersion: int = 0) -> None:
-        if DEBUG: print("[INIT] TapeDrive.__init__() " + path_to_tape_drive + " " + blockSize + " " + str(ltoVersion)) 
+        self.status_msg = "Initializing..."
         self.ltoVersion = ltoVersion
         self.blockSize: str = blockSize
         self.path: str = path_to_tape_drive
@@ -57,9 +57,14 @@ class TapeDrive:
         if self.getStatus() in {2,3,4} :
             self.bsy = True
             self.status = 8
+            self.status_msg = "Ejecting..."
             self.process = subprocess.Popen(self.CMD_EJECT.format(path=self.path), shell=True)
 
     def write(self, file: File) -> None:
+        if self.getStatus() in {2,4}:
+            self.bsy = True
+            self.status = 5
+            self.status_msg = "Writing..."
         return # The following garbage is garbage        
     
     def read(self, file: File) -> None:
@@ -82,6 +87,7 @@ class TapeDrive:
         if self.getStatus() in {2,3,4}:
             self.bsy = True
             self.status = 7
+            self.status_msg = "Rewinding..."
             self.process = subprocess.Popen(self.CMD_REWIND.format(path=self.path), shell=True)
     
     def readTOC(self) -> TableOfContent:
@@ -101,9 +107,10 @@ class TapeDrive:
         pass
 
     def getStatusCleanup(self) -> None:
-        """Cleans up the status message and resets the status message. Used when process finished unsuccessful."""
+        """Used when process finished successful. Do some cleanup."""
         self.bsy = False
         self.process = None
+        self.status_msg = ""
         self.status = self.getStatusFromMT()
 
     def getStatusFromMT(self) -> int:
@@ -111,10 +118,10 @@ class TapeDrive:
         try:
             # This is very fucky string manipulation so it needs special treatment ^^
             _out : str = subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout.split("\n")[-2].split(" ")
+            self.status_msg = _out
         except:
             self.status_msg = "[ERROR] status-request failed: `mt '" + self.path + "' status` OUT: " + subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout
             return 0
-        # self.status_msg = "" # Clear last status message
         if 'ONLINE' in _out:
             if 'BOT' in _out:
                 if 'WR_PROT' in _out:
