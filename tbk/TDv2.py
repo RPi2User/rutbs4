@@ -82,6 +82,7 @@ class TapeDrive:
     def getStatusFromMT(self) -> int:
         """Returns the current status of the tape drive based on the 'mt' command."""
         try:
+            # This is very fucky string manipulation so it needs special treatment ^^
             _out : str = subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout.split("\n")[-2].split(" ")
         except:
             self.status_msg = "[ERROR] status-request failed: `mt '" + self.path + "' status` OUT: " + subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout
@@ -96,17 +97,17 @@ class TapeDrive:
         return 1                    # No Tape
 
     def getStatusWhenBsy(self) -> int: # When bsy then is EITHER process currently running OR finished
-        _out: int = self.status # memorize old status
-        # Process is terminated when self.process.poll() is None
-        if self.process.poll() is None:
-            # Process terminated
-            proc_exit_code = self.process.returncode
+        # Process is terminated when self.process.poll() is not None -> has Exitcode
+        
+        if self.process.poll() is not None:  # if Process is terminated
+            proc_exit_code = self.process.returncode # Keep Exit-Code
+            self.getStatusCleanup() # Cleanup
             
-            if proc_exit_code != 0:
+            if proc_exit_code != 0: # Eval EC
                 self.status_msg = "[ERROR] Operation at Status" + str(self.status) + " failed: " + self.process.stderr.read()
-            self.getStatusCleanup()
-        print("getStatusWhenBsy() returning " + str(_out) + " self.process.poll: " + str(self.process.poll()))
-        return _out
+                self.status = 0 # Set ERROR state
+                
+        return self.status
 
     def getStatus(self) -> int: # Application must poll this fucker regularly!
         if self.bsy:
