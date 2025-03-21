@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+
 import subprocess
 import uuid
 import threading
@@ -10,6 +11,8 @@ import xml.etree.ElementTree as ET
 from tbk.TableOfContent import TableOfContent
 from tbk.File import File
 from tbk.Status import Status
+
+from time import sleep
 
 VERSION: int = 4
 DEBUG : bool = True
@@ -56,14 +59,14 @@ class TapeDrive:
         self.status = self.getStatus()
     
     def eject(self) -> None:
-        if self.getStatus() in {Status.TAPE_RDY, Status.TAPE_RDY_WP, Status.NOT_AT_BOT}:
+        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
             self.bsy = True
             self.status = Status.EJECTING.value
             self.status_msg = "Ejecting..."
             self.process = subprocess.Popen(self.CMD_EJECT.format(path=self.path), shell=True)
 
     def write(self, file: File) -> None:
-        if self.getStatus() in {Status.TAPE_RDY, Status.NOT_AT_BOT}:
+        if self.getStatus() in {Status.TAPE_RDY.value, Status.NOT_AT_BOT.value}:
             self.bsy = True
             self.status = Status.WRITING.value
             self.status_msg = "Writing..."
@@ -71,7 +74,7 @@ class TapeDrive:
     
     def read(self, file: File) -> None:
         self.status = self.getStatus()
-        if self.status in {Status.TAPE_RDY, Status.TAPE_RDY_WP, Status.NOT_AT_BOT}:
+        if self.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
             self.status = Status.READING.value
             self.bsy = True
             self.process = subprocess.Popen(["dd", f"if={self.path}", f"of={file.path}/{file.name}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -86,7 +89,7 @@ class TapeDrive:
 
     
     def rewind(self) -> None:
-        if self.getStatus() in {Status.TAPE_RDY, Status.TAPE_RDY_WP, Status.NOT_AT_BOT}:
+        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
             self.bsy = True
             self.status = Status.REWINDING.value
             self.status_msg = "Rewinding..."
@@ -98,6 +101,8 @@ class TapeDrive:
         file : File = File(0, toc_filename, "/tmp")
         
         self.read(file)
+        while(self.bsy):
+            sleep(0.1)  # Await read process to finish
         toc : TableOfContent = self.xml2toc(file)
         self.showTOC(toc)
         os.remove(file.fullPath)
@@ -160,7 +165,6 @@ class TapeDrive:
         return status_json
     
     def xml2toc(self, file: File) -> TableOfContent: # Imported from legacy TapeDrive.py 
-        self.rewind()
         # Read XML from Tape
         self.read(file)
         # Try to parse File

@@ -111,14 +111,13 @@ def post_drive_abort(alias):
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc(alias):
     tape_drive = host.get_tape_drive(alias)
-    if tape_drive.status in {Status.TAPE_RDY, Status.TAPE_RDY_WP}:
+    if tape_drive.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
         _toc: TableOfContent = tape_drive.readTOC()
         return app.response_class(response=tape_drive.toc2xml(_toc), mimetype='application/xml')
     else:
         status_json = tape_drive.getStatusJson()
-        status_data = json.loads(status_json)
-        status_data["recommended_action"] = "Rewind tape and try again!"
-        return status_data, 409
+        status_json["recommended_action"] = "Rewind tape and try again!"
+        return status_json, 409
     
 
 
