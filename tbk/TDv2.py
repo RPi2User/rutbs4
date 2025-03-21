@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import subprocess
@@ -92,17 +93,16 @@ class TapeDrive:
             self.process = subprocess.Popen(self.CMD_REWIND.format(path=self.path), shell=True)
     
     def readTOC(self) -> TableOfContent:
-        if self.status in {Status.TAPE_RDY, Status.TAPE_RDY_WP}:
-            toc_uuid : str = str(uuid.uuid4())
-            toc_filename : str = "toc_" + toc_uuid + ".tmp"
-            file : File = File(0, toc_filename, "/tmp")
-            
-            self.read(file)
-            toc : TableOfContent = self.xml2toc(file)
-            self.showTOC(toc)
-            os.remove(file.fullPath)
+        toc_uuid : str = str(uuid.uuid4())
+        toc_filename : str = "toc_" + toc_uuid + ".tmp"
+        file : File = File(0, toc_filename, "/tmp")
         
-            pass
+        self.read(file)
+        toc : TableOfContent = self.xml2toc(file)
+        self.showTOC(toc)
+        os.remove(file.fullPath)
+        
+        return toc
     
     def writeTOC(self, toc : TableOfContent) -> None:
         pass
@@ -194,6 +194,31 @@ class TapeDrive:
             last_modified=str(xml_root[0][4].text)
         )
         return _out
+    
+    def toc2xml(self, toc: TableOfContent) -> ET.ElementTree: # Imported from legacy TapeDrive.py
+        # Create XML-Root
+        root = ET.Element("toc")
+        # Append Header
+        header: ET.Element = ET.SubElement(root, "header")
+        ET.SubElement(header, "lto-version").text = toc.ltoV
+        ET.SubElement(header, "optimal-blocksize").text = toc.bs
+        ET.SubElement(header, "tape-size").text = str(toc.tape_size)
+        ET.SubElement(header, "tbk-version").text = VERSION
+        ET.SubElement(header, "last-modified").text = str(datetime.datetime.now())
+        # Append Files
+        for entry in toc.files:
+            file: ET.Element = ET.SubElement(root, "file")
+            ET.SubElement(file, "id").text = str(entry.id)
+            ET.SubElement(file, "filename").text = entry.name
+            ET.SubElement(file, "complete-path").text = entry.path
+            ET.SubElement(file, "size").text = str(entry.size)
+            ET.SubElement(file, "type").text = entry.cksum_type
+            ET.SubElement(file, "value").text = entry.cksum
+        
+        xml_tree: ET.ElementTree = ET.ElementTree(element=root)
+        ET.indent(tree=xml_tree)
+        return xml_tree
+        
     
     def showTOC(self, toc: TableOfContent) -> None:
         # User-Readable listing from Contents of Tape

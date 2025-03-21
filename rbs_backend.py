@@ -16,8 +16,6 @@ DEBUG = True
 host: Host = Host()
 tapeDrive: TapeDrive = None # Host need to provide a TapeDrive with Host.getTapeDrive(alias)
 
-#TODO Magic Numbers to ENUM
-
 app = Flask(__name__)
 
 # -----------------------------------------------------------------------------
@@ -35,9 +33,11 @@ def get_host():
 @app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point
 def get_host_debug():
     if DEBUG:
+        
         f: File = File(0, "Ä$Ö ÜP.tmp", "/tmp")
         tapeDrive = host.get_tape_drive("st0")
         tapeDrive.read(f)
+        
     return tapeDrive.getStatusJson(), 418
 
 @app.route('/host/version', methods=['GET'])
@@ -57,41 +57,31 @@ def get_host_drives():
 def get_host_mounts():
     return host.get_mounts()
 
-# -----------------------------------------------------------------------------
+# -BASIC-DRIVE-OPERATIONS------------------------------------------------------
 
-@app.route('/drive/', methods=['GET'])
+@app.route('/drive/', methods=['GET'])  # Get all drives
 def get_drive_root():
     drives = host.get_drives()
     if drives != None :
         return drives, 200
     return '', 204
-    
 
-@app.route('/drive/<alias>', methods=['GET'])
+@app.route('/drive/<alias>', methods=['GET'])  # Get .toString() of a specific drive
 def get_drive(alias):
     tapeDrive = host.get_tape_drive(alias)
     if tapeDrive != None:
         return str(tapeDrive), 200
     return '', 404
 
-@app.route('/drive/<alias>/status', methods=['GET'])
+@app.route('/drive/<alias>/status', methods=['GET']) # Get status of a specific drive
 def get_drive_status(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
         return tape_drive.getStatusJson(), 200
     return '', 404
 
-@app.route('/drive/<alias>/toc/read', methods=['GET'])
-def get_drive_toc(alias):
-    tape_drive = host.get_tape_drive(alias)
-    if tape_drive:
-        if tape_drive.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
-            return app.response_class(response=tape_drive.readTOC(), mimetype='application/xml')
-        else:
-            return tape_drive.getStatusJson(), 409
-    return '', 404
 
-@app.route('/drive/<alias>/eject', methods=['POST'])
+@app.route('/drive/<alias>/eject', methods=['POST']) # Eject a specific drive
 def post_drive_eject(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
@@ -99,7 +89,7 @@ def post_drive_eject(alias):
         return '', 200
     return '', 404
 
-@app.route('/drive/<alias>/rewind', methods=['POST'])
+@app.route('/drive/<alias>/rewind', methods=['POST']) # Rewind a specific drive
 def post_drive_rewind(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
@@ -107,16 +97,32 @@ def post_drive_rewind(alias):
         return '', 200
     return '', 404
 
-@app.route('/drive/<alias>/abort', methods=['POST'])
+@app.route('/drive/<alias>/abort', methods=['POST']) # Abort current drive operation
 def post_drive_abort(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
         tape_drive.cancelOperation()
         return '', 200
-    return '[ERROR] DURING JOB ABORT, RESTART APPLICATION', 400
+    return '[ERROR] DURING JOB ABORT, RESTART APPLICATION IMMEDIATELY!', 500
+
+# -TOC-REQS--------------------------------------------------------------------
 
 
-# -----------------------------------------------------------------------------
+@app.route('/drive/<alias>/toc/read', methods=['GET'])
+def get_drive_toc(alias):
+    tape_drive = host.get_tape_drive(alias)
+    if tape_drive.status in {Status.TAPE_RDY, Status.TAPE_RDY_WP}:
+        _toc: TableOfContent = tape_drive.readTOC()
+        return app.response_class(response=tape_drive.toc2xml(_toc), mimetype='application/xml')
+    else:
+        status_json = tape_drive.getStatusJson()
+        status_data = json.loads(status_json)
+        status_data["recommended_action"] = "Rewind tape and try again!"
+        return status_data, 409
+    
+
+
+# -MAIN-ENTRYPOINT-------------------------------------------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")
     parser.add_argument('--port', type=int, default=5533, help='Port number')
