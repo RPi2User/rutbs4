@@ -8,12 +8,15 @@ from tbk.TableOfContent import TableOfContent
 from tbk.TDv2 import TapeDrive
 
 from backend.Host import Host
+from tbk.Status import Status
 
 VERSION = 4
 DEBUG = True
 
 host: Host = Host()
 tapeDrive: TapeDrive = None # Host need to provide a TapeDrive with Host.getTapeDrive(alias)
+
+#TODO Magic Numbers to ENUM
 
 app = Flask(__name__)
 
@@ -82,8 +85,10 @@ def get_drive_status(alias):
 def get_drive_toc(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
-        return app.response_class(response=tape_drive.readTOC(), 
-                                  mimetype='application/xml')
+        if tape_drive.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
+            return app.response_class(response=tape_drive.readTOC(), mimetype='application/xml')
+        else:
+            return tape_drive.getStatusJson(), 409
     return '', 404
 
 @app.route('/drive/<alias>/eject', methods=['POST'])

@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 
 from tbk.TableOfContent import TableOfContent
 from tbk.File import File
+from tbk.Status import Status
 
 VERSION: int = 4
 DEBUG : bool = True
@@ -54,23 +55,23 @@ class TapeDrive:
         self.status = self.getStatus()
     
     def eject(self) -> None:
-        if self.getStatus() in {2,3,4} :
+        if self.getStatus() in {Status.TAPE_RDY, Status.TAPE_RDY_WP, Status.NOT_AT_BOT}:
             self.bsy = True
-            self.status = 8
+            self.status = Status.EJECTING.value
             self.status_msg = "Ejecting..."
             self.process = subprocess.Popen(self.CMD_EJECT.format(path=self.path), shell=True)
 
     def write(self, file: File) -> None:
-        if self.getStatus() in {2,4}:
+        if self.getStatus() in {Status.TAPE_RDY, Status.NOT_AT_BOT}:
             self.bsy = True
-            self.status = 5
+            self.status = Status.WRITING.value
             self.status_msg = "Writing..."
-        return # The following garbage is garbage        
+        return # The following garbage is garbage
     
     def read(self, file: File) -> None:
         self.status = self.getStatus()
-        if self.status in {2, 3, 4}:
-            self.status = 6  # Set status to "Reading"
+        if self.status in {Status.TAPE_RDY, Status.TAPE_RDY_WP, Status.NOT_AT_BOT}:
+            self.status = Status.READING.value
             self.bsy = True
             self.process = subprocess.Popen(["dd", f"if={self.path}", f"of={file.path}/{file.name}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         
@@ -84,14 +85,14 @@ class TapeDrive:
 
     
     def rewind(self) -> None:
-        if self.getStatus() in {2,3,4}:
+        if self.getStatus() in {Status.TAPE_RDY, Status.TAPE_RDY_WP, Status.NOT_AT_BOT}:
             self.bsy = True
-            self.status = 7
+            self.status = Status.REWINDING.value
             self.status_msg = "Rewinding..."
             self.process = subprocess.Popen(self.CMD_REWIND.format(path=self.path), shell=True)
     
     def readTOC(self) -> TableOfContent:
-        if self.status in {2, 3}: # RDY or RDY + WP
+        if self.status in {Status.TAPE_RDY, Status.TAPE_RDY_WP}:
             toc_uuid : str = str(uuid.uuid4())
             toc_filename : str = "toc_" + toc_uuid + ".tmp"
             file : File = File(0, toc_filename, "/tmp")
@@ -99,7 +100,7 @@ class TapeDrive:
             self.read(file)
             toc : TableOfContent = self.xml2toc(file)
             self.showTOC(toc)
-            #os.remove(file.fullPath)
+            os.remove(file.fullPath)
         
             pass
     
