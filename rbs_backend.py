@@ -113,7 +113,7 @@ def get_drive_toc(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
         _toc: TableOfContent = tape_drive.readTOC()
-        return app.response_class(response=tape_drive.toc2xml(_toc), mimetype='application/xml')
+        return _toc.getAsJson(), 200
     else:
         status_json = tape_drive.getStatusJson()
         status_json["recommended_action"] = "Rewind tape and try again!"

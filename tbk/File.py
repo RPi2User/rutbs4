@@ -6,20 +6,18 @@ class File:
     size : int
     name : str
     path : str
-    fullPath : str
     cksum : str
     cksum_type : str = "md5"    # "Constant" (currently, SHA256 is waaay to slow)
     
     
 
-    def __init__(self, id: int, name: str, path: str, size: int = 0, cksum: str = "00000000000000000000000000000000") -> None:
+    def __init__(self, id: int, name: str, path: str, size: int = 0, cksum: str = "00000000000000000000000000000000", cksum_type: str = "") -> None:
         self.id: int = id
         self.size: int = size
         self.name: str = name
         self.path: str = path
         self.cksum: str = cksum
-        
-        self.fullPath: str = self.path + "/" + self.name
+        self.cksum_type: str = cksum_type
         
     def CreateChecksum(self) -> None:
         # Some bash/awk/string-Magic to get checksum from "md5sum" command

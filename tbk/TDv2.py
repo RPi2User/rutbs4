@@ -102,10 +102,12 @@ class TapeDrive:
         
         self.read(file)
         while(self.bsy):
-            sleep(0.1)  # Await read process to finish
-        toc : TableOfContent = self.xml2toc(file)
-        self.showTOC(toc)
-        os.remove(file.fullPath)
+            sleep(0.1)  # Wait for the read-process to finish
+            self.status = self.getStatus()
+        toc : TableOfContent = TableOfContent([], "", "", 0, "", "")
+        self.status_msg = toc.xml2toc(file)
+        if DEBUG: print(str(toc))
+        os.remove(str(file.path + "/" + file.name))
         
         return toc
     
@@ -164,40 +166,7 @@ class TapeDrive:
         }
         return status_json
     
-    def xml2toc(self, file: File) -> TableOfContent: # Imported from legacy TapeDrive.py 
-        # Read XML from Tape
-        self.read(file)
-        # Try to parse File
-        try:
-            xml_root: ET.Element = ET.parse(source=file.fullPath).getroot()
-        except: #TODO add to self.status_msg
-            print("[ERROR] Could not parse Table of Contents: Invalid Format")
-            print("Try 'tbk --dump | tbk -d'")
-        files: list[File] = []
-        for index in range(1, len(xml_root)):
-            try:                
-                files.append(File(id=int(str(xml_root[index][0].text)),
-                                name=str(xml_root[index][1].text),
-                                path=str(xml_root[index][2].text),
-                                size=int(str(xml_root[index][3].text)),
-                                cksum_type=str(xml_root[index][4].text),
-                                cksum=str(xml_root[index][5].text)
-                ))
-            except:
-                files.append(File(id=int(str(xml_root[index][0].text)),
-                                name=str(xml_root[index][1].text),
-                                path=str(xml_root[index][2].text),
-                                size=int(str(xml_root[index][3].text))
-                ))
-        _out: TableOfContent = TableOfContent(
-            files=files,
-            lto_version=str(xml_root[0][0].text),
-            optimal_blocksize=str(xml_root[0][1].text),
-            tape_sizeB=int(str(xml_root[0][2].text)),
-            tbk_version=str(xml_root[0][3].text),
-            last_modified=str(xml_root[0][4].text)
-        )
-        return _out
+    
     
     def toc2xml(self, toc: TableOfContent) -> ET.ElementTree: # Imported from legacy TapeDrive.py
         # Create XML-Root
@@ -224,24 +193,7 @@ class TapeDrive:
         return xml_tree
         
     
-    def showTOC(self, toc: TableOfContent) -> None:
-        # User-Readable listing from Contents of Tape
-        print("\n--- TAPE INFORMATION ---\n")
-        print("- TBK-Version:\t" + toc.tbkV)
-        print("- LTO-Version:\t" + toc.ltoV)
-        print("- Blocksize:\t" + toc.bs)
-        print("- Tape-Size:\t" + str(toc.tape_size))
-        print("\nLast Modified:\t" + toc.last_mod)
-        print("\n*")
-        _remaining: int = toc.tape_size
-        for file in toc.files:
-            print("├─┬ \x1b[96m" + file.name + "\x1b[0m")
-            print("│ ├── Size:\t" + str(file.size))
-            print("│ └── Checksum:\t" + file.cksum)
-            print("│")
-            _remaining -= file.size
-        print("│")
-        print("└ \x1b[93m" + str(_remaining) + "\x1b[0m Remaining")
+
     
     # NEEDS REFACTOR! -> Test ok by e18f99a74b1452e3a5b1ac2d7a23a43b13cce10a 
     def cancelOperation(self) -> None:
