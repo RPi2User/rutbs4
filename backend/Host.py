@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 import time
@@ -8,6 +9,8 @@ import psutil
 
 from backend.Mount import Mount
 from tbk.TDv2 import TapeDrive
+from tbk.TableOfContent import TableOfContent
+from tbk.File import File
 
 class Host():
     
@@ -19,7 +22,7 @@ class Host():
     load : tuple
     tape_drives : dict
     
-    mounts : list[Mount] # type: ignore
+    mounts : list[Mount]
     
     def __init__(self):
         self.refresh_host_status()
@@ -81,7 +84,22 @@ class Host():
             return self.tape_drives.get(alias)
         except:
             return None
-        
+    
+    def calcChecksums(self, toc: TableOfContent) -> None:
+        # Need to implement parallel checksumming based on CPU-Core-Count. (host.get_cpu_cores())
+        max_threads = len(self.CPUbyCore)  # get the number of CPU threads, always there because __init__() is called
+            
+        with ThreadPoolExecutor(max_threads) as executor:
+            # Mappt die CreateChecksum-Methode auf die Dateien im TOC
+            future_to_file = {executor.submit(file.CreateChecksum): file for file in toc.files}
+
+            for future in as_completed(future_to_file):
+                file : File = future_to_file[future]
+
+                future.result()  # Warten auf das Ergebnis
+                print(f"Prüfsumme für {file.path}: {file.cksum}")
+                
+
     
     def get_mounts(self):
         result = subprocess.run(

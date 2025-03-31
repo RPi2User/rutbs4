@@ -36,11 +36,12 @@ def get_host_debug():
         
         tapeDrive = host.get_tape_drive("st0")
         current_toc: TableOfContent = tapeDrive.readTOC()
-        
-        for file in current_toc.files:
-            file.path = "/tmp/readtest" # Changed! user-defined destiation "entrypoint"
-            print("Reading file: " + str(file))
-            tapeDrive.read(file)
+        host.calcChecksums(current_toc)
+
+        # for file in current_toc.files:
+        #     file.path = "/tmp/readtest" # Changed! user-defined destiation "entrypoint"
+        #     tapeDrive.read(file)
+        print("DEBUG Done")
         
     return tapeDrive.getStatusJson(), 418
 

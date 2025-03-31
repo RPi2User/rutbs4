@@ -1,11 +1,13 @@
 import subprocess
 
+DEBUG: bool = True
+
 class File:
 
     id: int
     size : int
-    name : str
-    path : str
+    name : str                  # Just name with extension
+    path : str                  # Complete-path including filename!
     cksum : str
     cksum_type : str = "md5"    # "Constant" (currently, SHA256 is waaay to slow)
     
@@ -21,7 +23,8 @@ class File:
         
     def CreateChecksum(self) -> None:
         # Some bash/awk/string-Magic to get checksum from "md5sum" command
-        _out: str = str(subprocess.check_output("md5sum '" + self.path + "/" + self.name + "' | awk '{ print $1}'", shell=True))
+        if DEBUG: print("Creating checksum for " + str(self))
+        _out: str = str(subprocess.check_output("md5sum '" + self.path +  "' | awk '{ print $1}'", shell=True))
         _out = _out.split("'", 2)[1].split("\\", 1)[0]
         self.cksum = _out
     
