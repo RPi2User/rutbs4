@@ -74,10 +74,11 @@ class TapeDrive:
     
     def read(self, file: File) -> None:
         self.status = self.getStatus()
+        if DEBUG: print("Reading: " + str(file))
         if self.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
             self.status = Status.READING.value
             self.bsy = True
-            self.process = subprocess.Popen(["dd", f"if={self.path}", f"of={file.path}/{file.name}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.process = subprocess.Popen(["dd", f"if={self.path}", f"of={file.path}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         
             def read_thread(self):
                 for line in iter(self.process.stderr.readline, ""):
@@ -86,19 +87,11 @@ class TapeDrive:
             readThread = threading.Thread(target=read_thread(self), daemon=True)
             readThread.start()
         
-
-    
-    def rewind(self) -> None:
-        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
-            self.bsy = True
-            self.status = Status.REWINDING.value
-            self.status_msg = "Rewinding..."
-            self.process = subprocess.Popen(self.CMD_REWIND.format(path=self.path), shell=True)
     
     def readTOC(self) -> TableOfContent:
         toc_uuid : str = str(uuid.uuid4())
         toc_filename : str = "toc_" + toc_uuid + ".tmp"
-        file : File = File(0, toc_filename, "/tmp")
+        file : File = File(0, toc_filename, str("/tmp/" + toc_filename))
         
         self.read(file)
         while(self.bsy):
@@ -107,12 +100,25 @@ class TapeDrive:
         toc : TableOfContent = TableOfContent([], "", "", 0, "", "")
         self.status_msg = toc.xml2toc(file)
         if DEBUG: print(str(toc))
-        os.remove(str(file.path + "/" + file.name))
+        os.remove(file.path)
         
         return toc
     
+    def readTape(self, toc: TableOfContent, dest_path: str) -> None:
+        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
+            pass
+        #read entire tape to dest_path
+    
     def writeTOC(self, toc : TableOfContent) -> None:
         pass
+
+    
+    def rewind(self) -> None:
+        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
+            self.bsy = True
+            self.status = Status.REWINDING.value
+            self.status_msg = "Rewinding..."
+            self.process = subprocess.Popen(self.CMD_REWIND.format(path=self.path), shell=True)
 
     def getStatusCleanup(self) -> None:
         """Used when process finished successful. Do some cleanup."""
