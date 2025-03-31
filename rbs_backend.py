@@ -34,9 +34,13 @@ def get_host():
 def get_host_debug():
     if DEBUG:
         
-        f: File = File(0, "Ä$Ö ÜP.tmp", "/tmp")
         tapeDrive = host.get_tape_drive("st0")
-        tapeDrive.read(f)
+        current_toc: TableOfContent = tapeDrive.readTOC()
+        
+        for file in current_toc.files:
+            file.path = "/tmp/readtest" # Changed! user-defined destiation "entrypoint"
+            print("Reading file: " + str(file))
+            tapeDrive.read(file)
         
     return tapeDrive.getStatusJson(), 418
 
