@@ -7,7 +7,7 @@ class TableOfContent:
     files: list[File]
     ltoV : str
     bs: str
-    tape_size : str
+    tape_size : int
     tbkV : str
     last_mod : str
 
@@ -44,13 +44,21 @@ class TableOfContent:
                                 size=int(str(xml_root[index][3].text))
                 ))
         
-        self.lto_version=str(xml_root[0][0].text),
-        self.optimal_blocksize=str(xml_root[0][1].text),
-        self.tape_sizeB=int(str(xml_root[0][2].text)),
-        self.tbk_version=str(xml_root[0][3].text),
-        self.last_modified=str(xml_root[0][4].text)
+        self.ltoV = str(xml_root[0][0].text)
+        self.bs = str(xml_root[0][1].text)
+        self.tape_size = self.get_tape_size_from_json()
+        self.tbkV = str(xml_root[0][3].text)
+        self.last_mod = str(xml_root[0][4].text)
     
         return "Success"
+
+    def get_tape_size_from_json(self) -> int:
+        with open('/opt/rutbs4/tbk/rbs_ltoV.json', 'r') as f:
+            lto_data = json.load(f)
+            for lto in lto_data["LTO_Standards"]:
+                if str(lto["Generation"]) in self.ltoV:
+                    return lto["capacityInBytes"]
+        return 0  # Default value if not found
     
     def showTOC(self) -> str:
         # User-Readable listing from Contents of Tape

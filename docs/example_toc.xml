@@ -1,0 +1,33 @@
+<toc>
+  <header>
+    <lto-version>3</lto-version>
+    <optimal-blocksize>1M</optimal-blocksize>
+    <tape-size>400000000000</tape-size>
+    <tbk-version>3.0</tbk-version>
+    <last-modified>2025-02-19 18:33:41.372913</last-modified>
+  </header>
+  <file>
+    <id>0</id>
+    <filename>master_crypt.key.crypt</filename>
+    <complete-path>/mnt/storage/to_tape/1/master_crypt.key.crypt</complete-path>
+    <size>4128</size>
+    <type>md5</type>
+    <value>eb66bfbe24936a72a7807d579ad1354e</value>
+  </file>
+  <file>
+    <id>1</id>
+    <filename>home.tar.pigz.crypt</filename>
+    <complete-path>/mnt/storage/to_tape/1/home.tar.pigz.crypt</complete-path>
+    <size>361642751645</size>
+    <type>md5</type>
+    <value>c21642eb3f4c5d914e524f6d280ae35e</value>
+  </file>
+  <file>
+    <id>2</id>
+    <filename>Handy.tar.pigz.crypt</filename>
+    <complete-path>/mnt/storage/to_tape/1/Handy.tar.pigz.crypt</complete-path>
+    <size>31874112100</size>
+    <type>md5</type>
+    <value>1d3e7dd05e2b9078fedd8e7847f50245</value>
+  </file>
+</toc>
