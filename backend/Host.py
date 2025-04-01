@@ -85,20 +85,30 @@ class Host():
         except:
             return None
     
-    def calcChecksums(self, toc: TableOfContent) -> None:
-        # Need to implement parallel checksumming based on CPU-Core-Count. (host.get_cpu_cores())
+    def calcChecksums(self, toc: TableOfContent) -> bool:
+        # We need to eval the calculated Checksums! RETURNTYPE!
         max_threads = len(self.CPUbyCore)  # get the number of CPU threads, always there because __init__() is called
-            
+        oldFiles = toc.files.copy()  # Copy the list of files to avoid modifying it while iterating
+        
         with ThreadPoolExecutor(max_threads) as executor:
-            # Mappt die CreateChecksum-Methode auf die Dateien im TOC
             future_to_file = {executor.submit(file.CreateChecksum): file for file in toc.files}
-
+            
             for future in as_completed(future_to_file):
                 file : File = future_to_file[future]
+                future.result()  # Wait for the checksum calculation to finish
 
-                future.result()  # Warten auf das Ergebnis
-                print(f"Prüfsumme für {file.path}: {file.cksum}")
                 
+        # Check if all checksums are valid
+        for file in toc.files:
+            for oldFile in oldFiles:
+                if file.id == oldFile.id:
+                    if file.cksum != oldFile.cksum:
+                        print(f"Checksum MISMATCH for {str(file)}: {file.cksum} != {oldFile.cksum}")
+                        return False
+                    else:
+                        print(f"Checksum match for {str(file)}: {file.cksum} == {oldFile.cksum}")
+                        break
+        return True
 
     
     def get_mounts(self):

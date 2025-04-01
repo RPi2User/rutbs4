@@ -28,8 +28,6 @@ class File:
         _out = _out.split("'", 2)[1].split("\\", 1)[0]
         self.cksum = _out
     
-    def CheckFileIntegrety(self) -> bool:
-        return False
     
     def __str__(self) -> str:
         return "File(ID: " + str(self.id) + ", Size: " + str(self.size) + ", Name: " + self.name + ", Path: " + self.path + ", cksum: " + self.cksum + ", cksum_type: " + self.cksum_type + ")"

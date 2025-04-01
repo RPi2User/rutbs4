@@ -7,7 +7,6 @@ import uuid
 import threading
 
 import xml.etree.ElementTree as ET
-
 from tbk.TableOfContent import TableOfContent
 from tbk.File import File
 from tbk.Status import Status
@@ -88,10 +87,10 @@ class TapeDrive:
             readThread.start()
         
     
-    def readTOC(self) -> TableOfContent:
+    def readTOC(self, destPath="/tmp") -> TableOfContent:
         toc_uuid : str = str(uuid.uuid4())
         toc_filename : str = "toc_" + toc_uuid + ".tmp"
-        file : File = File(0, toc_filename, str("/tmp/" + toc_filename))
+        file : File = File(0, toc_filename, destPath + "/" + toc_filename)
         
         self.read(file)
         while(self.bsy):
@@ -103,15 +102,34 @@ class TapeDrive:
             self.status = Status.ERROR.value
             return None
         if DEBUG: print(str(toc))
-        os.remove(file.path)
+        if destPath == "/tmp":  # Backend should/can not delete file in foreign directory
+            os.remove(file.path)
         
         return toc
     
-    def readTape(self, toc: TableOfContent, dest_path: str) -> None:
+    
+    def readTape(self, toc: TableOfContent, dest_path: str) -> TableOfContent:
         # read entire tape to dest_path
+        if self.getStatus() in {Status.REWINDING.value}:
+            while self.status == Status.REWINDING.value:
+                sleep(0.1) # Wait for the rewind-process to finish
+                self.status = self.getStatus()
         if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
-            pass
-        
+            self.readTOC(destPath=dest_path)
+            if self.status == Status.ERROR.value:
+                self.status_msg = "[ERROR] Read failed, could not write to {dest_path}!"
+                return
+            try:
+                for file in toc.files:
+                    file.path = dest_path + "/" + file.name # Set the destination path
+                    self.read(file)
+                    while(self.bsy):
+                        sleep(0.1)
+                        self.status = self.getStatus()
+            except:
+                self.status_msg = "[ERROR] Read failed!"
+                return
+        return toc
     
     def writeTOC(self, toc : TableOfContent) -> None:
         pass

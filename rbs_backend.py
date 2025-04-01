@@ -115,20 +115,25 @@ def post_drive_read(alias):
 
     tape_drive = host.get_tape_drive(alias)
     if not tape_drive:
-        return '', 404
+        return 'Drive not found', 404
 
     # Extract the destination path from the request JSON
     request_data = request.get_json()
     if not request_data or 'destPath' not in request_data:
-         'Bad Request: "destPath" is required in the request body', 400
+        return 'Bad Request: "destPath" is required in the request body', 400
 
     dest_path = request_data['destPath']
-    print(f"Read process started for drive {alias} with destination path: {dest_path}")
+    toc: TableOfContent = tape_drive.readTOC()
+    tape_drive.rewind()
+    toc: TableOfContent = tape_drive.readTape(toc, dest_path)
+    if toc.files[0].cksum_type == "md5":
+        if host.calcChecksums(toc):
+            return '[READ] Completed, checksums ok', 200
+        else:
+            return '[READ] Failed, checksums mismatch', 500
+    else:
+        return '[READ] Completed', 200
 
-    # Placeholder for actual read logic
-    # tape_drive.read(dest_path)  # Uncomment and implement if needed
-
-    return f'Read process initiated for destination path: {dest_path}', 200
 
 # -TOC-REQS--------------------------------------------------------------------
 
