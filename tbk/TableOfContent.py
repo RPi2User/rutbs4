@@ -2,6 +2,8 @@ import json
 import xml.etree.ElementTree as ET
 from tbk.File import File
 
+DEBUG: bool = True
+
 class TableOfContent:
 
     files: list[File]
@@ -26,7 +28,8 @@ class TableOfContent:
         try:    # Try to parse File
             xml_root: ET.Element = ET.parse(source=str(file.path)).getroot()
         except:
-            print("[ERROR] Could not parse Table of Contents: Invalid Format")
+            if DEBUG: print("[ERROR] Could not parse Table of Contents: Invalid Format")
+            return "[ERROR] Could not parse Table of Contents: Invalid Format"
         self.files: list[File] = []
         for index in range(1, len(xml_root)):
             try:                

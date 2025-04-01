@@ -99,15 +99,19 @@ class TapeDrive:
             self.status = self.getStatus()
         toc : TableOfContent = TableOfContent([], "", "", 0, "", "")
         self.status_msg = toc.xml2toc(file)
+        if self.status_msg != "Success":
+            self.status = Status.ERROR.value
+            return None
         if DEBUG: print(str(toc))
         os.remove(file.path)
         
         return toc
     
     def readTape(self, toc: TableOfContent, dest_path: str) -> None:
-        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
+        # read entire tape to dest_path
+        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
             pass
-        #read entire tape to dest_path
+        
     
     def writeTOC(self, toc : TableOfContent) -> None:
         pass
@@ -130,7 +134,7 @@ class TapeDrive:
     def getStatusFromMT(self) -> int:
         """Returns the current status of the tape drive based on the 'mt' command."""
         try:
-            # This is very fucky string manipulation so it needs special treatment ^^
+            # This is very fucky string manipulation so it needs special treatment ^^ (exception handling)
             _out : str = subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout.split("\n")[-2].split(" ")
             self.status_msg = _out
         except:

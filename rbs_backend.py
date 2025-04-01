@@ -1,6 +1,6 @@
 import argparse
 import json
-from flask import Flask
+from flask import Flask, request
 
 from tbk.File import File
 from tbk.TableOfContent import TableOfContent
@@ -110,6 +110,26 @@ def post_drive_abort(alias):
         return '', 200
     return '[ERROR] DURING JOB ABORT, RESTART APPLICATION IMMEDIATELY!', 500
 
+@app.route('/drive/<alias>/read', methods=['POST'])  # Start read process for a specific drive
+def post_drive_read(alias):
+
+    tape_drive = host.get_tape_drive(alias)
+    if not tape_drive:
+        return '', 404
+
+    # Extract the destination path from the request JSON
+    request_data = request.get_json()
+    if not request_data or 'destPath' not in request_data:
+         'Bad Request: "destPath" is required in the request body', 400
+
+    dest_path = request_data['destPath']
+    print(f"Read process started for drive {alias} with destination path: {dest_path}")
+
+    # Placeholder for actual read logic
+    # tape_drive.read(dest_path)  # Uncomment and implement if needed
+
+    return f'Read process initiated for destination path: {dest_path}', 200
+
 # -TOC-REQS--------------------------------------------------------------------
 
 
@@ -117,8 +137,13 @@ def post_drive_abort(alias):
 def get_drive_toc(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
-        _toc: TableOfContent = tape_drive.readTOC()
-        return _toc.getAsJson(), 200
+        _toc = tape_drive.readTOC() # This returns None-Type when the TOC is not readable
+        if type(_toc) is TableOfContent:
+            return _toc.getAsJson(), 200
+        else:
+            status_json = tape_drive.getStatusJson()
+            status_json["recommended_action"] = "Remount tape!"
+            return status_json, 500
     else:
         status_json = tape_drive.getStatusJson()
         status_json["recommended_action"] = "Rewind tape and try again!"
