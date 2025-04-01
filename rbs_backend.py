@@ -1,7 +1,7 @@
 import argparse
 import json
 from flask import Flask, request
-from flasgger import Swagger
+from flasgger import Swagger # type: ignore
 
 from tbk.File import File
 from tbk.TableOfContent import TableOfContent
@@ -24,16 +24,43 @@ swagger = Swagger(app)
 
 @app.route('/', methods=['GET'])
 def get_slash():
+    """
+    Root endpoint
+    ---
+    tags:
+      - General
+    responses:
+      200:
+        description: Returns a simple HTML response
+    """
     return app.response_class(response="<html>THIS IS A RUTBS-BACKEND</html>", 
                               mimetype='application/html')
 
 
 @app.route('/host', methods=['GET'])
 def get_host():
+    """
+    Get host information
+    ---
+    tags:
+      - Host
+    responses:
+      200:
+        description: Host is reachable
+    """
     return '', 200
 
 @app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point
 def get_host_debug():
+    """
+    Debugging endpoint, only available if DEBUG is True
+    ---
+    tags:
+      - Host
+    responses:
+      418:
+        description: Debugging completed
+    """
     if DEBUG:
         
         tapeDrive = host.get_tape_drive("st0")
@@ -49,25 +76,72 @@ def get_host_debug():
 
 @app.route('/host/version', methods=['GET'])
 def get_host_version():
+    """
+    Get backend version
+    ---
+    tags:
+      - Host
+    responses:
+      200:
+        description: Returns the backend version in JSON format
+    """
     return app.response_class(response=json.dumps({"version": VERSION}), 
                               mimetype='application/json')
 
 @app.route('/host/status', methods=['GET'])
 def get_host_status():
+    """
+    Get host status
+    ---
+    tags:
+      - Host
+    responses:
+      200:
+        description: Returns the host status
+    """
     return host.get_host_status()
 
 @app.route('/host/drives', methods=['GET'])
 def get_host_drives():
+    """
+    Get all drives of Host
+    ---
+    tags:
+      - Host
+    responses:
+      200:
+        description: Returns a list of all drives
+    """
     return host.get_drives()
 
 @app.route('/host/mounts', methods=['GET'])
 def get_host_mounts():
+    """
+    Get all mounts of Host
+    ---
+    tags:
+      - Host
+    responses:
+      200:
+        description: Returns a list of all mounts
+    """
     return host.get_mounts()
 
 # -BASIC-DRIVE-OPERATIONS------------------------------------------------------
 
 @app.route('/drive/', methods=['GET'])  # Get all drives
 def get_drive_root():
+    """
+    Get all drives managed by this backend
+    ---
+    tags:
+      - Drive Operations
+    responses:
+      200:
+        description: Returns a list of all drives
+      204:
+        description: No drives found
+    """
     drives = host.get_drives()
     if drives != None :
         return drives, 200
@@ -75,6 +149,23 @@ def get_drive_root():
 
 @app.route('/drive/<alias>', methods=['GET'])  # Get .toString() of a specific drive
 def get_drive(alias):
+    """
+    Get details of a specific drive
+    ---
+    tags:
+      - Drive Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+    responses:
+      200:
+        description: Returns details of the specified drive
+      404:
+        description: Drive not found
+    """
     tapeDrive = host.get_tape_drive(alias)
     if tapeDrive != None:
         return str(tapeDrive), 200
@@ -82,6 +173,23 @@ def get_drive(alias):
 
 @app.route('/drive/<alias>/status', methods=['GET']) # Get status of a specific drive
 def get_drive_status(alias):
+    """
+    Get status of a specific drive
+    ---
+    tags:
+      - Drive Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+    responses:
+      200:
+        description: Returns the status of the specified drive
+      404:
+        description: Drive not found
+    """
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
         return tape_drive.getStatusJson(), 200
@@ -90,6 +198,23 @@ def get_drive_status(alias):
 
 @app.route('/drive/<alias>/eject', methods=['POST']) # Eject a specific drive
 def post_drive_eject(alias):
+    """
+    Eject a specific drive
+    ---
+    tags:
+      - Drive Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+    responses:
+      200:
+        description: Drive ejected successfully
+      404:
+        description: Drive not found
+    """
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
         tape_drive.eject()
@@ -98,6 +223,23 @@ def post_drive_eject(alias):
 
 @app.route('/drive/<alias>/rewind', methods=['POST']) # Rewind a specific drive
 def post_drive_rewind(alias):
+    """
+    Rewind a specific drive
+    ---
+    tags:
+      - Drive Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+    responses:
+      200:
+        description: Drive rewound successfully
+      404:
+        description: Drive not found
+    """
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
         tape_drive.rewind()
@@ -106,6 +248,23 @@ def post_drive_rewind(alias):
 
 @app.route('/drive/<alias>/abort', methods=['POST']) # Abort current drive operation
 def post_drive_abort(alias):
+    """
+    Abort current drive operation
+    ---
+    tags:
+      - Drive Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+    responses:
+      200:
+        description: Operation aborted successfully
+      500:
+        description: Error during job abort, restart application immediately
+    """
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
         tape_drive.cancelOperation()
