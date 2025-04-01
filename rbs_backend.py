@@ -1,6 +1,7 @@
 import argparse
 import json
 from flask import Flask, request
+from flasgger import Swagger
 
 from tbk.File import File
 from tbk.TableOfContent import TableOfContent
@@ -17,6 +18,7 @@ host: Host = Host()
 tapeDrive: TapeDrive = None # Host need to provide a TapeDrive with Host.getTapeDrive(alias)
 
 app = Flask(__name__)
+swagger = Swagger(app)
 
 # -----------------------------------------------------------------------------
 
@@ -112,7 +114,36 @@ def post_drive_abort(alias):
 
 @app.route('/drive/<alias>/read', methods=['POST'])  # Start read process for a specific drive
 def post_drive_read(alias):
-
+    """
+    Start read process for a specific drive
+    ---
+    tags:
+      - Drive Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            destPath:
+              type: string
+              description: Destination path for the read files
+    responses:
+      200:
+        description: Read completed successfully
+      400:
+        description: Bad request (missing destPath)
+      404:
+        description: Drive not found
+      500:
+        description: Checksum mismatch or other error
+    """
     tape_drive = host.get_tape_drive(alias)
     if not tape_drive:
         return 'Drive not found', 404
