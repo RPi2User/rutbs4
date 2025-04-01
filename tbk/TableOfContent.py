@@ -24,9 +24,9 @@ class TableOfContent:
     
     def xml2toc(self, file: File) -> str:
         try:    # Try to parse File
-            xml_root: ET.Element = ET.parse(source=str(file.path + "/" + file.name)).getroot()
+            xml_root: ET.Element = ET.parse(source=str(file.path)).getroot()
         except:
-            return("[ERROR] Could not parse Table of Contents: Invalid Format")
+            print("[ERROR] Could not parse Table of Contents: Invalid Format")
         self.files: list[File] = []
         for index in range(1, len(xml_root)):
             try:                
