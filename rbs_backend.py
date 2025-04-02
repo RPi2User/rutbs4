@@ -329,7 +329,7 @@ def post_drive_read(alias):
 
 
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
-def get_drive_toc(alias):
+def get_drive_toc_read(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
         _toc = tape_drive.readTOC() # This returns None-Type when the TOC is not readable
@@ -345,6 +345,26 @@ def get_drive_toc(alias):
         return status_json, 409
     
 
+@app.route('/drive/<alias>/toc/write', methods=['POST'])
+def get_drive_toc_write(alias):
+    # BACKEND SHOULD GENERATE TOC not USER!
+    tape_drive = host.get_tape_drive(alias)
+    if not tape_drive:
+        return '[ERROR] Drive not found', 404
+
+    # Extract the TOC from the request JSON
+    request_data = request.get_json()
+    if not request_data or 'toc' not in request_data:              # Added extra field for system_data
+        return '[ERROR] Bad Request: "toc" is required in the request body', 400    
+
+    toc = TableOfContent([], "", "", 0, "")
+    if toc.from_json(request_data['toc']):
+        # Placeholder for writing TOC to the tape drive
+        # tape_drive.writeTOC(toc)  # Uncomment when implemented
+        if DEBUG: print(str(toc))
+        return 'Success!', 200
+    else:
+        return '[ERROR] Invalid TOC format', 400
 
 # -MAIN-ENTRYPOINT-------------------------------------------------------------
 if __name__ == '__main__':

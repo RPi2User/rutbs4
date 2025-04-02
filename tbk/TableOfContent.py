@@ -84,15 +84,55 @@ class TableOfContent:
         return toc_str
     
     def getAsJson(self) -> json:
+        """
+        Gibt die Daten des TableOfContent-Objekts als JSON-String zurück.
+        """
         toc_dict = {
-            "files": [file.__dict__ for file in self.files],
-            "ltoV": self.ltoV,
-            "bs": self.bs,
-            "tape_size": self.tape_size,
-            "tbkV": self.tbkV,
-            "last_mod": self.last_mod
+            "toc": {
+                "files": [
+                    {
+                        "id": file.id,
+                        "name": file.name,
+                        "path": file.path,
+                        "size": file.size,
+                        "cksum": file.cksum,
+                        "cksum_type": file.cksum_type
+                    }
+                    for file in self.files
+                ],
+                "ltoV": self.ltoV,
+                "bs": self.bs,
+                "tape_size": self.tape_size,
+                "tbkV": self.tbkV,
+                "last_mod": self.last_mod
+            }
         }
         return toc_dict
+    
+    def from_json(self, json_data: dict) -> bool:
+        try:
+            # Parse files, ignoring optional checksum fields
+            self.files = [
+                File(
+                    id=file["id"],
+                    name=file["name"],
+                    path=file["path"],
+                    size=file["size"]
+                )
+                for file in json_data["files"]
+            ]
+            self.ltoV = json_data["ltoV"]
+            self.bs = json_data["bs"]
+            self.tape_size = json_data["tape_size"]
+            self.tbkV = json_data["tbkV"]
+            self.last_mod = json_data["last_mod"]
+            return True
+        except KeyError as e:
+            if DEBUG: print(f"[ERROR] Missing required field in JSON: {e}")
+            return False
+        except Exception as e:
+            if DEBUG: print(f"[ERROR] Could not parse Table of Contents: {e}")
+            return False
     
     def __str__(self) -> str:
         return self.showTOC()
