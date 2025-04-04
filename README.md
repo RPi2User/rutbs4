@@ -1,1 +1,3 @@
 # rutbs4
+
+THIS PROJEKT IS VERY WIP!

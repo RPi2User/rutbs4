@@ -33,7 +33,7 @@ def get_slash():
       200:
         description: Returns a simple HTML response
     """
-    return app.response_class(response="<html>THIS IS A RUTBS-BACKEND</html>", 
+    return app.response_class(response="<html><body>THIS IS A RUTBS-BACKEND</body></html>", 
                               mimetype='application/html')
 
 
