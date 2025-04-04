@@ -40,6 +40,8 @@ class TapeDrive:
     status_msg: str = "NotInitialized"
     process: subprocess.Popen = None
     
+    checksumming: bool = False
+    
     readThread: threading.Thread = None
     writeThread: threading.Thread = None
     

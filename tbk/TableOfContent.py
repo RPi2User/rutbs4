@@ -1,4 +1,5 @@
 import json
+import os
 import xml.etree.ElementTree as ET
 from tbk.File import File
 
@@ -16,8 +17,8 @@ class TableOfContent:
     def __init__(self, files: list[File], lto_version: str, optimal_blocksize: str, tape_sizeB: int, tbk_version: str, last_modified: str = "") -> None:
         self.files: list[File] = files      # List of all Files from TableOfContent
         self.ltoV: str = lto_version        # LTO-Version of Tape/Drive
-        self.bs: str = optimal_blocksize    # Optimal Blocksize (only relevant for "dd")
-        self.tape_size: int = tape_sizeB    # Constant, depends on LTO-Version
+        self.bs: str = optimal_blocksize    # Optimal Blocksize
+        self.tape_size: int = tape_sizeB    # Constant, depends on LTO-Version TODO!
         self.tbkV: str = tbk_version        # Software-Version of Tape-Backup-Software from original TOC
         self.last_mod: str = last_modified  # Optional Timestamp (required for reading of tape)
         
@@ -109,9 +110,16 @@ class TableOfContent:
         }
         return toc_dict
     
+    def from_createJob(self, blockSize: str, directory: str, ltoV: int) -> json:
+        
+        self.bs = blockSize
+        self.ltoV = str(ltoV)
+        
+        
+        return self.getAsJson(self)
+    
     def from_json(self, json_data: dict) -> bool:
         try:
-            # Parse files, ignoring optional checksum fields
             self.files = [
                 File(
                     id=file["id"],
@@ -132,6 +140,20 @@ class TableOfContent:
             return False
         except Exception as e:
             if DEBUG: print(f"[ERROR] Could not parse Table of Contents: {e}")
+            return False
+    
+    def getFilesFromDir(self, directory: str) -> bool: 
+        # does modify self.files, so it'll return success or failure
+        try:
+            for index, path in enumerate(os.listdir(path=directory)):
+                full_path: str = directory + "/" + path
+                self.files.append(File(id=index,
+                            size=os.path.getsize(full_path),
+                            name=path,
+                            path=full_path
+                            ))
+            return True
+        except:
             return False
     
     def __str__(self) -> str:

@@ -344,6 +344,65 @@ def get_drive_toc_read(alias):
         status_json["recommended_action"] = "Rewind tape and try again!"
         return status_json, 409
     
+@app.route('/drive/<alias>/toc/create', methods=['POST'])
+def post_drive_toc_create(alias):
+    """
+    Create a Table of Content (TOC) for a specific drive
+    ---
+    tags:
+      - TOC Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            create:
+              type: object
+              properties:
+                dir:
+                  type: string
+                  description: Directory to scan for files
+                bs:
+                  type: string
+                  description: Block size for the operation
+                cksum:
+                  type: string
+                  description: Whether to calculate checksums ("true" or "false")
+                ltoV:
+                  type: integer
+                  description: LTO version of the tape
+    responses:
+      200:
+        description: Returns the created TOC as JSON
+      400:
+        description: Bad request (missing or invalid parameters)
+      404:
+        description: Drive not found
+    """
+    # Get the tape drive
+    tape_drive = host.get_tape_drive(alias)
+    if not tape_drive:
+        return '[ERROR] Drive not found', 404
+
+    # Parse the request data
+    request_data = request.get_json()
+    if not request_data or 'create' not in request_data:
+        return '[ERROR] Bad Request: "create" is required in the request body', 400
+
+    create_data = request_data['create']
+    required_fields = ['dir', 'bs', 'cksum', 'ltoV']
+    if not all(field in create_data for field in required_fields):
+        return '[ERROR] Bad Request: Missing required fields in "create"', 400
+    
+    return 'Accepted', 200
+
 
 @app.route('/drive/<alias>/toc/write', methods=['POST'])
 def get_drive_toc_write(alias):
