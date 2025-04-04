@@ -15,6 +15,10 @@ class TableOfContent:
     last_mod : str
 
     def __init__(self, files: list[File], lto_version: str, optimal_blocksize: str, tape_sizeB: int, tbk_version: str, last_modified: str = "") -> None:
+        
+        if files is files.empty:
+            
+            return
         self.files: list[File] = files      # List of all Files from TableOfContent
         self.ltoV: str = lto_version        # LTO-Version of Tape/Drive
         self.bs: str = optimal_blocksize    # Optimal Blocksize
