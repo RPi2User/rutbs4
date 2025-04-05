@@ -98,7 +98,9 @@ class TapeDrive:
         while(self.bsy):
             sleep(0.1)  # Wait for the read-process to finish
             self.status = self.getStatus()
-        toc : TableOfContent
+        file_list: list[File] = [file]
+
+        toc : TableOfContent = TableOfContent(file_list, "", "")
         self.status_msg = toc.xml2toc(file)
         if self.status_msg != "Success":
             self.status = Status.ERROR.value

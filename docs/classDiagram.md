@@ -45,7 +45,7 @@ class Mount{
 
 class TableOfContent{
     + files: list[File]
-    + ltoV : str
+    + ltoV : int
     + bs: str
     + tape_size : str
     + tbkV : str

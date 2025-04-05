@@ -4,27 +4,27 @@ import xml.etree.ElementTree as ET
 from tbk.File import File
 
 DEBUG: bool = True
+VERSION: str = "4.0.0"
 
 class TableOfContent:
 
     files: list[File]
-    ltoV : str
+    ltoV : int
     bs: str
     tape_size : int
     tbkV : str
     last_mod : str
 
-    def __init__(self, files: list[File], lto_version: str, optimal_blocksize: str, tape_sizeB: int, tbk_version: str, last_modified: str = "") -> None:
+    def __init__(self, files: list[File], lto_version: str, optimal_blocksize: str, tbk_version: str = VERSION, last_modified: str = "") -> None:
         
-        if files is files.empty:
-            
-            return
+        if files is []: return
         self.files: list[File] = files      # List of all Files from TableOfContent
-        self.ltoV: str = lto_version        # LTO-Version of Tape/Drive
+        self.ltoV: int = lto_version  # LTO-Version of Tape/Drive
         self.bs: str = optimal_blocksize    # Optimal Blocksize
-        self.tape_size: int = tape_sizeB    # Constant, depends on LTO-Version TODO!
+        self.tape_size: int = self.get_tape_size_from_json()    # Constant, depends on LTO-Version TODO!
         self.tbkV: str = tbk_version        # Software-Version of Tape-Backup-Software from original TOC
         self.last_mod: str = last_modified  # Optional Timestamp (required for reading of tape)
+        
         
     def calcChecksums(self) -> None: # Need to implement parallel checksumming based on CPU-Core-Count. (host.get_cpu_cores())
         pass
@@ -52,7 +52,7 @@ class TableOfContent:
                                 size=int(str(xml_root[index][3].text))
                 ))
         
-        self.ltoV = str(xml_root[0][0].text)
+        self.ltoV = int(xml_root[0][0].text)
         self.bs = str(xml_root[0][1].text)
         self.tape_size = self.get_tape_size_from_json()
         self.tbkV = str(xml_root[0][3].text)
@@ -61,10 +61,12 @@ class TableOfContent:
         return "Success"
 
     def get_tape_size_from_json(self) -> int:
-        with open('/opt/rutbs4/tbk/rbs_ltoV.json', 'r') as f:
+        script_dir = os.path.dirname(__file__)  # Get the directory of the current script
+        json_path = os.path.join(script_dir, 'rbs_ltoV.json')  # Construct the relative path
+        with open(json_path, 'r') as f:
             lto_data = json.load(f)
             for lto in lto_data["LTO_Standards"]:
-                if str(lto["Generation"]) in self.ltoV:
+                if lto["Generation"] == self.ltoV:
                     return lto["capacityInBytes"]
         return 0  # Default value if not found
     
@@ -72,7 +74,7 @@ class TableOfContent:
         # User-Readable listing from Contents of Tape
         toc_str = "\n--- TAPE INFORMATION ---\n"
         toc_str += "- TBK-Version:\t" + self.tbkV + "\n"
-        toc_str += "- LTO-Version:\t" + self.ltoV + "\n"
+        toc_str += "- LTO-Version:\t" + str(self.ltoV) + "\n"
         toc_str += "- Blocksize:\t" + self.bs + "\n"
         toc_str += "- Tape-Size:\t" + str(self.tape_size) + "\n"
         toc_str += "\nLast Modified:\t" + self.last_mod + "\n"
@@ -117,7 +119,7 @@ class TableOfContent:
     def from_createJob(self, blockSize: str, directory: str, ltoV: int) -> json:
         
         self.bs = blockSize
-        self.ltoV = str(ltoV)
+        self.ltoV = ltoV
         
         
         return self.getAsJson(self)
