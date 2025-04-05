@@ -1,9 +1,9 @@
-class checksum:
+class Checksum:
     
     type: str
     value: str
 
-    def __init__(self, value: str, type: str = "md5"):
+    def __init__(self, value: str = "00000000000000000000000000000000", type: str = "md5"):
         self.type = type
         self.value = value
 

@@ -2,6 +2,7 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from tbk.File import File
+from tbk.Checksum import Checksum
 
 DEBUG: bool = True
 VERSION: str = "4.0.0"
@@ -17,11 +18,11 @@ class TableOfContent:
 
     def __init__(self, files: list[File], lto_version: str, optimal_blocksize: str, tbk_version: str = VERSION, last_modified: str = "") -> None:
         
-        if files is []: return
+        if files is []: return None         # Return None if no files are given
         self.files: list[File] = files      # List of all Files from TableOfContent
-        self.ltoV: int = lto_version  # LTO-Version of Tape/Drive
+        self.ltoV: int = lto_version        # LTO-Version of Tape/Drive
         self.bs: str = optimal_blocksize    # Optimal Blocksize
-        self.tape_size: int = self.get_tape_size_from_json()    # Constant, depends on LTO-Version TODO!
+        self.tape_size: int = self.get_tape_size_from_json()    # Constant, depends on LTO-Version
         self.tbkV: str = tbk_version        # Software-Version of Tape-Backup-Software from original TOC
         self.last_mod: str = last_modified  # Optional Timestamp (required for reading of tape)
         
@@ -41,9 +42,9 @@ class TableOfContent:
                 self.files.append(File(id=int(str(xml_root[index][0].text)),
                                 name=str(xml_root[index][1].text),
                                 path=str(xml_root[index][2].text),
-                                size=int(str(xml_root[index][3].text)),
-                                cksum_type=str(xml_root[index][4].text),
-                                cksum=str(xml_root[index][5].text)
+                                cksum = Checksum(value=str(xml_root[index][5].text),
+                                         type=str(xml_root[index][4].text)),
+                                size=int(str(xml_root[index][3].text))
                 ))
             except:
                 self.files.append(File(id=int(str(xml_root[index][0].text)),
@@ -83,7 +84,7 @@ class TableOfContent:
         for file in self.files:
             toc_str += "\n├─┬ \x1b[96m" + file.name + "\x1b[0m"
             toc_str += "\n│ ├── Size:\t" + str(file.size)
-            toc_str += "\n│ └── Checksum:\t" + file.cksum
+            toc_str += "\n│ └── Checksum:\t" + file.cksum.value
             toc_str += "\n│"
             _remaining -= file.size
         toc_str += "\n│"
@@ -102,8 +103,8 @@ class TableOfContent:
                         "name": file.name,
                         "path": file.path,
                         "size": file.size,
-                        "cksum": file.cksum,
-                        "cksum_type": file.cksum_type
+                        "cksum": file.cksum.value,
+                        "cksum_type": file.cksum.type
                     }
                     for file in self.files
                 ],
@@ -116,7 +117,7 @@ class TableOfContent:
         }
         return toc_dict
     
-    def from_createJob(self, blockSize: str, directory: str, ltoV: int) -> json:
+    def from_createJob(self, blockSize: str, directory: str, ltoV: int) -> json: #TODO
         
         self.bs = blockSize
         self.ltoV = ltoV

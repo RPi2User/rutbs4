@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from tbk.TableOfContent import TableOfContent
 from tbk.File import File
 from tbk.Status import Status
+from tbk.Checksum import Checksum
 
 from time import sleep
 
@@ -92,7 +93,7 @@ class TapeDrive:
     def readTOC(self, destPath="/tmp") -> TableOfContent:
         toc_uuid : str = str(uuid.uuid4())
         toc_filename : str = "toc_" + toc_uuid + ".tmp"
-        file : File = File(0, toc_filename, destPath + "/" + toc_filename)
+        file : File = File(0, toc_filename, destPath + "/" + toc_filename, Checksum())
         
         self.read(file)
         while(self.bsy):

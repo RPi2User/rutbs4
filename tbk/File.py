@@ -1,5 +1,7 @@
 import subprocess
 
+from tbk.Checksum import Checksum
+
 DEBUG: bool = True
 
 class File:
@@ -8,18 +10,16 @@ class File:
     size : int
     name : str                  # Just name with extension
     path : str                  # Complete-path including filename!
-    cksum : str
-    cksum_type : str = "md5"    # "Constant" (currently, SHA256 is waaay to slow)
+    cksum : Checksum
     
     
 
-    def __init__(self, id: int, name: str, path: str, size: int = 0, cksum: str = "00000000000000000000000000000000", cksum_type: str = "") -> None:
+    def __init__(self, id: int, name: str, path: str, cksum: Checksum = Checksum(), size: int = 0) -> None:
         self.id: int = id
         self.size: int = size
         self.name: str = name
         self.path: str = path
-        self.cksum: str = cksum
-        self.cksum_type: str = cksum_type
+        self.cksum: Checksum = Checksum(cksum.value, cksum.type)
         
     def CreateChecksum(self) -> None:
         # Some bash/awk/string-Magic to get checksum from "md5sum" command
@@ -30,5 +30,5 @@ class File:
     
     
     def __str__(self) -> str:
-        return "File(ID: " + str(self.id) + ", Size: " + str(self.size) + ", Name: " + self.name + ", Path: " + self.path + ", cksum: " + self.cksum + ", cksum_type: " + self.cksum_type + ")"
+        return "File(ID: " + str(self.id) + ", Size: " + str(self.size) + ", Name: " + self.name + ", Path: " + self.path + ", cksum: " + str(self.cksum) + ")"
     
