@@ -8,4 +8,4 @@ class Checksum:
         self.value = value
 
     def __str__(self):
-        return f"{self.type}: {self.value}"
+        return f"{self.type}, {self.value}"

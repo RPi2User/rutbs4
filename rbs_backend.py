@@ -1,5 +1,7 @@
 import argparse
 import json
+import os
+import time
 from flask import Flask, request
 from flasgger import Swagger # type: ignore
 
@@ -268,7 +270,7 @@ def post_drive_abort(alias):
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
         tape_drive.cancelOperation()
-        return '', 200
+        return 'Success, Remount Tape and clean your Filestorage! ', 200
     return '[ERROR] DURING JOB ABORT, RESTART APPLICATION IMMEDIATELY!', 500
 
 @app.route('/drive/<alias>/read', methods=['POST'])  # Start read process for a specific drive
@@ -306,7 +308,13 @@ def post_drive_read(alias):
     tape_drive = host.get_tape_drive(alias)
     if not tape_drive:
         return 'Drive not found', 404
-
+    
+    if tape_drive.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
+        # Check if the tape is 'there'
+        status_json = tape_drive.getStatusJson()
+        status_json["recommended_action"] = "Remount Tape!"
+        return status_json, 409
+	
     # Extract the destination path from the request JSON
     request_data = request.get_json()
     if not request_data or 'destPath' not in request_data:
@@ -314,9 +322,13 @@ def post_drive_read(alias):
 
     dest_path = request_data['destPath']
     toc: TableOfContent = tape_drive.readTOC()
+    if toc == None:
+        return '[READ] Failed, TOC not readable', 500
     tape_drive.rewind()
     toc: TableOfContent = tape_drive.readTape(toc, dest_path)
-    if toc.files[0].cksum_type == "md5":
+    if toc == None:
+        return '[READ] Failed, TOC after Rewinding not readable', 500
+    if toc.files[0].cksum.type == "md5":
         if host.calcChecksums(toc):
             return '[READ] Completed, checksums ok', 200
         else:

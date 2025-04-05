@@ -39,6 +39,7 @@ class TapeDrive:
     blockSize : str
     bsy : bool          # Only true when: R/W
     status_msg: str = "NotInitialized"
+    currentID: int = -1
     process: subprocess.Popen = None
     
     checksumming: bool = False
@@ -84,6 +85,7 @@ class TapeDrive:
         
             def read_thread(self):
                 for line in iter(self.process.stderr.readline, ""):
+                    self.currentID = file.id
                     self.status_msg = line
             
             readThread = threading.Thread(target=read_thread(self), daemon=True)
@@ -91,8 +93,21 @@ class TapeDrive:
         
     
     def readTOC(self, destPath="/tmp") -> TableOfContent:
+        self.rewind()
+        while self.status == Status.REWINDING.value:
+            sleep(0.1)
+            self.status = self.getStatus()
         toc_uuid : str = str(uuid.uuid4())
         toc_filename : str = "toc_" + toc_uuid + ".tmp"
+        
+        if destPath != "/tmp":
+            try:
+                os.makedirs(destPath, exist_ok=True)
+            except Exception as e:
+                self.status = Status.ERROR.value
+                self.status_msg = "[ERROR] Could not create directory: " + str(e)
+                return None
+        
         file : File = File(0, toc_filename, destPath + "/" + toc_filename, Checksum())
         
         self.read(file)
@@ -122,8 +137,9 @@ class TapeDrive:
         if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
             self.readTOC(destPath=dest_path)
             if self.status == Status.ERROR.value:
+                self.currentID = -1
                 self.status_msg = "[ERROR] Read failed, could not write to {dest_path}!"
-                return
+                return None
             try:
                 for file in toc.files:
                     file.path = dest_path + "/" + file.name # Set the destination path
@@ -132,8 +148,10 @@ class TapeDrive:
                         sleep(0.1)
                         self.status = self.getStatus()
             except:
+                self.currentID = -1
                 self.status_msg = "[ERROR] Read failed!"
-                return
+                return None
+        self.currentID = -1
         return toc
     
     def writeTOC(self, toc : TableOfContent) -> None:
@@ -195,7 +213,8 @@ class TapeDrive:
         status: int = self.getStatus()
         status_json: json = {
             "status": status,
-            "statusMsg": self.status_msg
+            "statusMsg": self.status_msg,
+            "currentFileID": self.currentID,
         }
         return status_json
     
@@ -231,7 +250,7 @@ class TapeDrive:
     # NEEDS REFACTOR! -> Test ok by e18f99a74b1452e3a5b1ac2d7a23a43b13cce10a 
     def cancelOperation(self) -> None:
         """Cancels the current operation if a process is running."""
-        if self.process and self.process.poll() is None:  # Check if process is still running
+        while self.process and self.process.poll() is None:  # Check if process is still running
             self.process.terminate()  # Terminate the process
             try:
                 self.process.wait(timeout=10)  # Wait for the process to terminate, with a timeout of 10 seconds
@@ -246,6 +265,6 @@ class TapeDrive:
             self.bsy = False
             self.status = self.getStatus()  # Update status
             self.process = None  # Reset the process
-    
+            sleep(0.5)
     def __str__(self) -> str:
         return "TapeDrive(Path: " + self.path + ", ltoVersion: " + str(self.ltoVersion) + ", Status: " + str(self.status) + ", BlockSize: " + self.blockSize + ", Busy?: " + str(self.bsy) + "\n"

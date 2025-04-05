@@ -55,7 +55,6 @@ class TableOfContent:
         
         self.ltoV = int(xml_root[0][0].text)
         self.bs = str(xml_root[0][1].text)
-        self.tape_size = self.get_tape_size_from_json()
         self.tbkV = str(xml_root[0][3].text)
         self.last_mod = str(xml_root[0][4].text)
     
