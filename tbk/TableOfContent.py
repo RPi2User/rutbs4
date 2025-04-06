@@ -16,7 +16,7 @@ class TableOfContent:
     tbkV : str
     last_mod : str
 
-    def __init__(self, files: list[File], lto_version: str, optimal_blocksize: str, tbk_version: str = VERSION, last_modified: str = "") -> None:
+    def __init__(self, files: list[File], lto_version: int, optimal_blocksize: str, tbk_version: str = VERSION, last_modified: str = "") -> None:
         
         if files is []: return None         # Return None if no files are given
         self.files: list[File] = files      # List of all Files from TableOfContent
@@ -54,6 +54,7 @@ class TableOfContent:
                 ))
         
         self.ltoV = int(xml_root[0][0].text)
+        self.tape_size = self.get_tape_size_from_json()
         self.bs = str(xml_root[0][1].text)
         self.tbkV = str(xml_root[0][3].text)
         self.last_mod = str(xml_root[0][4].text)
@@ -64,10 +65,11 @@ class TableOfContent:
         script_dir = os.path.dirname(__file__)  # Get the directory of the current script
         json_path = os.path.join(script_dir, 'rbs_ltoV.json')  # Construct the relative path
         with open(json_path, 'r') as f:
-            lto_data = json.load(f)
-            for lto in lto_data["LTO_Standards"]:
-                if lto["Generation"] == self.ltoV:
-                    return lto["capacityInBytes"]
+            
+            lto_db = json.load(f)
+            for standard in lto_db["LTO_Standards"]:
+                if standard["Generation"] == self.ltoV:
+                    return standard["capacityInBytes"]
         return 0  # Default value if not found
     
     def showTOC(self) -> str:

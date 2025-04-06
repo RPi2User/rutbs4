@@ -343,7 +343,7 @@ def post_drive_read(alias):
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc_read(alias):
     tape_drive = host.get_tape_drive(alias)
-    if tape_drive.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
+    if tape_drive.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
         _toc = tape_drive.readTOC() # This returns None-Type when the TOC is not readable
         if type(_toc) is TableOfContent:
             return _toc.getAsJson(), 200
