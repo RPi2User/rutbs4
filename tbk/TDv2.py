@@ -77,7 +77,7 @@ class TapeDrive:
     
     def read(self, file: File) -> None:
         self.status = self.getStatus()
-        if DEBUG: print("Reading: " + str(file))
+        if DEBUG: print("[READ] " + str(file))
         if self.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
             self.status = Status.READING.value
             self.bsy = True
@@ -152,6 +152,10 @@ class TapeDrive:
                 self.status_msg = "[ERROR] Read failed!"
                 return None
         self.currentID = -1
+        self.rewind()
+        while self.status == Status.REWINDING.value:
+            sleep(0.1) # Wait for the rewind-process to finish
+            self.status = self.getStatus()
         return toc
     
     def writeTOC(self, toc : TableOfContent) -> None:

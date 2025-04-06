@@ -67,6 +67,8 @@ def get_host_debug():
         
         tapeDrive = host.get_tape_drive("st0")
         current_toc: TableOfContent = tapeDrive.readTOC()
+        for file in current_toc.files:
+            file.path = "/opt/read_test/" + file.name
         host.calcChecksums(current_toc)
 
         # for file in current_toc.files:
@@ -332,7 +334,7 @@ def post_drive_read(alias):
         if host.calcChecksums(toc):
             return '[READ] Completed, checksums ok', 200
         else:
-            return '[READ] Failed, checksums mismatch', 500
+            return '[READ] Failed, checksums mismatch see backend Logs!', 500
     else:
         return '[READ] Completed', 200
 

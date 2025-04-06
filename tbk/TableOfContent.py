@@ -62,6 +62,13 @@ class TableOfContent:
         return "Success"
 
     def get_tape_size_from_json(self) -> int:
+        """_summary_
+            rbs_ltoV.json is a JSON file that contains the LTO-Standards and their respective capacities.
+            The function reads the JSON file and returns the capacity in bytes for the given LTO version.
+            The JSON file is located in the same directory as this script.
+        Returns:
+            int: Capacity in bytes for the given LTO version.
+        """
         script_dir = os.path.dirname(__file__)  # Get the directory of the current script
         json_path = os.path.join(script_dir, 'rbs_ltoV.json')  # Construct the relative path
         with open(json_path, 'r') as f:
