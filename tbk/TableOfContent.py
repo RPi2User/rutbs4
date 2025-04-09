@@ -94,7 +94,7 @@ class TableOfContent:
         _remaining: int = self.tape_size
         for file in self.files:
             toc_str += "\n├─┬ \x1b[96m" + file.name + "\x1b[0m"
-            if file.cksum.value is not "00000000000000000000000000000000":
+            if file.cksum.value != "00000000000000000000000000000000":
                 toc_str += "\n│ ├── Size:\t" + str(file.size)
                 toc_str += "\n│ └── Checksum:\t" + file.cksum.value
                 
@@ -110,26 +110,49 @@ class TableOfContent:
         """
         Returns the data of the TableOfContent object as a JSON string.
         """
-        toc_dict = {
-            "toc": {
-                "files": [
-                    {
-                        "id": file.id,
-                        "name": file.name,
-                        "path": file.path,
-                        "size": file.size,
-                        "cksum": file.cksum.value,
-                        "cksum_type": file.cksum.type
-                    }
-                    for file in self.files
-                ],
-                "ltoV": self.ltoV,
-                "bs": self.bs,
-                "tape_size": self.tape_size,
-                "tbkV": self.tbkV,
-                "last_mod": self.last_mod
+        if (self.files[0].cksum.value != "00000000000000000000000000000000"):
+            # If Checksum…
+            toc_dict = {
+                "toc": {
+                    "files": [
+                        {
+                            "id": file.id,
+                            "name": file.name,
+                            "path": file.path,
+                            "size": file.size,
+                            "cksum": {
+                                "type": file.cksum.type,
+                                "value": file.cksum.value
+                            }
+                        }
+                        for file in self.files
+                    ],
+                    "ltoV": self.ltoV,
+                    "bs": self.bs,
+                    "tape_size": self.tape_size,
+                    "tbkV": self.tbkV,
+                    "last_mod": self.last_mod
+                }
             }
-        }
+        else:
+            toc_dict = {
+                "toc": {
+                    "files": [
+                        {
+                            "id": file.id,
+                            "name": file.name,
+                            "path": file.path,
+                            "size": file.size,
+                        }
+                        for file in self.files
+                    ],
+                    "ltoV": self.ltoV,
+                    "bs": self.bs,
+                    "tape_size": self.tape_size,
+                    "tbkV": self.tbkV,
+                    "last_mod": self.last_mod
+                }
+            }
         return toc_dict
     
     def from_createJob(self, blockSize: str, directory: str, ltoV: int) -> json: #TODO

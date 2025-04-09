@@ -310,6 +310,8 @@ def post_drive_read(alias):
     tape_drive = host.get_tape_drive(alias)
     if not tape_drive:
         return 'Drive not found', 404
+      
+    # TODO: Check wether target-fs is mounted and writable!
     
     if tape_drive.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
         # Check if the tape exists
@@ -338,6 +340,93 @@ def post_drive_read(alias):
     else:
         return '[READ] Completed', 200
 
+@app.route('/drive/<alias>/write', methods=['POST'])  # Start write process for a specific drive
+def post_drive_write(alias):
+    """
+    Start write process for a specific drive
+    ---
+    tags:
+      - Drive Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            create:
+              type: object
+              properties:
+                dir:
+                  type: string
+                  description: Directory to scan for files
+                bs:
+                  type: string
+                  description: Block size for the operation
+                ltoV:
+                  type: integer
+                  description: LTO version of the tape
+            system:
+              type: object
+              properties:
+                cksum:
+                  type: string
+                  description: Whether to calculate checksums ("true" or "false")
+                ejectAfterSuccess:
+                  type: string
+                  description: Whether to eject the tape after a successful write ("true" or "false")
+    responses:
+      200:
+        description: Write operation completed successfully
+      400:
+        description: Bad request (missing or invalid parameters)
+      404:
+        description: Drive not found
+    """
+    # Get the tape drive
+    tape_drive = host.get_tape_drive(alias)
+    if not tape_drive:
+        return '[ERROR] Drive not found', 404
+
+    # Parse the request data
+    request_data = request.get_json()
+    if not request_data or 'create' not in request_data or 'system' not in request_data:
+        return '[ERROR] Bad Request: "create" and "system" are required in the request body', 400
+
+    create_data = request_data['create']
+    system_data = request_data['system']
+    required_create_fields = ['dir', 'bs', 'ltoV']
+    required_system_fields = ['cksum', 'ejectAfterSuccess']
+
+    if not all(field in create_data for field in required_create_fields):
+        return '[ERROR] Bad Request: Missing required fields in "create"', 400
+    if not all(field in system_data for field in required_system_fields):
+        return '[ERROR] Bad Request: Missing required fields in "system"', 400
+
+    # Create the TOC
+    toc: TableOfContent = TableOfContent([], "", "", 0, "")
+    toc = toc.create(
+        target_dir=create_data['dir'],
+        blocksize=create_data['bs'],
+        ltoVersion=create_data['ltoV'],
+        cksum=system_data['cksum'].lower() == 'true'
+    )
+    if toc is None:
+        return '[ERROR] Failed to create TOC', 500
+
+    # Write the TOC to the tape
+    tape_drive.writeTOC(toc)
+
+    # Eject the tape if requested
+    if system_data['ejectAfterSuccess'].lower() == 'true':
+        tape_drive.eject()
+
+    return '[WRITE] Completed successfully', 200
 
 # -TOC-REQS--------------------------------------------------------------------
 
@@ -386,12 +475,15 @@ def post_drive_toc_create(alias):
                 bs:
                   type: string
                   description: Block size for the operation
-                cksum:
-                  type: string
-                  description: Whether to calculate checksums ("true" or "false")
                 ltoV:
                   type: integer
                   description: LTO version of the tape
+            system:
+              type: object
+              properties:
+                cksum:
+                  type: string
+                  description: Whether to calculate checksums ("true" or "false")
     responses:
       200:
         description: Returns the created TOC as JSON
@@ -407,25 +499,31 @@ def post_drive_toc_create(alias):
 
     # Parse the request data
     request_data = request.get_json()
-    if not request_data or 'create' not in request_data:
-        return '[ERROR] Bad Request: "create" is required in the request body', 400
+    if not request_data or 'create' not in request_data or 'system' not in request_data:
+        return '[ERROR] Bad Request: "create" and "system" are required in the request body', 400
 
     create_data = request_data['create']
-    required_fields = ['dir', 'bs', 'cksum', 'ltoV']
-    if not all(field in create_data for field in required_fields):
+    system_data = request_data['system']
+    required_create_fields = ['dir', 'bs', 'ltoV']
+    required_system_fields = ['cksum']
+
+    if not all(field in create_data for field in required_create_fields):
         return '[ERROR] Bad Request: Missing required fields in "create"', 400
-    
+    if not all(field in system_data for field in required_system_fields):
+        return '[ERROR] Bad Request: Missing required fields in "system"', 400
+
+    # Create the TOC
     toc: TableOfContent = TableOfContent([], "", "", 0, "")
     toc = toc.create(
         target_dir=create_data['dir'],
         blocksize=create_data['bs'],
         ltoVersion=create_data['ltoV'],
-        cksum=create_data['cksum'].lower() == 'true'
+        cksum=system_data['cksum'].lower() == 'true'
     )
-    if toc == None:
+    if toc is None:
         return '[ERROR] Failed to create TOC', 500
-    
-    return str(toc), 200
+
+    return toc.getAsJson(), 200
 
 
 @app.route('/drive/<alias>/toc/write', methods=['POST'])
