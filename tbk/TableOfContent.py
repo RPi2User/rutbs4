@@ -106,7 +106,7 @@ class TableOfContent:
     
     def getAsJson(self) -> json:
         """
-        Gibt die Daten des TableOfContent-Objekts als JSON-String zurück.
+        Returns the data of the TableOfContent object as a JSON string.
         """
         toc_dict = {
             "toc": {
