@@ -3,6 +3,7 @@ import os
 import xml.etree.ElementTree as ET
 from tbk.File import File
 from tbk.Checksum import Checksum
+from datetime import datetime
 
 DEBUG: bool = True
 VERSION: str = "4.0.0"
@@ -91,8 +92,12 @@ class TableOfContent:
         _remaining: int = self.tape_size
         for file in self.files:
             toc_str += "\n├─┬ \x1b[96m" + file.name + "\x1b[0m"
-            toc_str += "\n│ ├── Size:\t" + str(file.size)
-            toc_str += "\n│ └── Checksum:\t" + file.cksum.value
+            if file.cksum.value is not "00000000000000000000000000000000":
+                toc_str += "\n│ ├── Size:\t" + str(file.size)
+                toc_str += "\n│ └── Checksum:\t" + file.cksum.value
+                
+            else :
+                toc_str += "\n│ └── Size:\t" + str(file.size)           # Uses suitable Border-Chars when Checksum is not available
             toc_str += "\n│"
             _remaining -= file.size
         toc_str += "\n│"
@@ -157,6 +162,17 @@ class TableOfContent:
             if DEBUG: print(f"[ERROR] Could not parse Table of Contents: {e}")
             return False
     
+    def create(self, target_dir: str, blocksize: str, ltoVersion: int , cksum: bool = True) -> None:
+        if not self.getFilesFromDir(directory=target_dir):
+            return None
+        self.ltoV = ltoVersion
+        self.bs = blocksize
+        self.tape_size = self.get_tape_size_from_json()
+        self.tbkV = VERSION
+        self.last_mod = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        
+        return self
+    
     def getFilesFromDir(self, directory: str) -> bool: 
         # does modify self.files, so it'll return success or failure
         try:
@@ -172,4 +188,4 @@ class TableOfContent:
             return False
     
     def __str__(self) -> str:
-        return self.showTOC()
+        return str(self.showTOC()  + "\n")

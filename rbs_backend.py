@@ -361,7 +361,7 @@ def get_drive_toc_read(alias):
 @app.route('/drive/<alias>/toc/create', methods=['POST'])
 def post_drive_toc_create(alias):
     """
-    Create a Table of Content (TOC) for a specific drive
+    Create a Table of Content (TOC) Object for <drive>
     ---
     tags:
       - TOC Operations
@@ -415,7 +415,17 @@ def post_drive_toc_create(alias):
     if not all(field in create_data for field in required_fields):
         return '[ERROR] Bad Request: Missing required fields in "create"', 400
     
-    return 'Accepted', 200
+    toc: TableOfContent = TableOfContent([], "", "", 0, "")
+    toc = toc.create(
+        target_dir=create_data['dir'],
+        blocksize=create_data['bs'],
+        ltoVersion=create_data['ltoV'],
+        cksum=create_data['cksum'].lower() == 'true'
+    )
+    if toc == None:
+        return '[ERROR] Failed to create TOC', 500
+    
+    return str(toc), 200
 
 
 @app.route('/drive/<alias>/toc/write', methods=['POST'])
