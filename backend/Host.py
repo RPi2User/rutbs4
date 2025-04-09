@@ -84,7 +84,7 @@ class Host():
             return self.tape_drives.get(alias)
         except:
             return None
-    
+    THIS IS WRONG!
     def calcChecksums(self, toc: TableOfContent) -> bool:
         # We need to eval the calculated Checksums! RETURNTYPE!
         max_threads = len(self.CPUbyCore)  # get the number of CPU threads, always there because __init__() is called

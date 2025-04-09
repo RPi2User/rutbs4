@@ -78,13 +78,16 @@ class TapeDrive:
             self.status_msg = "Writing..."
         return # The following garbage is garbage
     
-    def writeTape(self, toc: TableOfContent, eject: bool = False) -> int:
+    def writeTape(self, host: backend.Host, toc: TableOfContent, eject: bool = False) -> int:
+        from backend.Host import Host
         # Check whether tape is large enough for toc.files[] -> 423
         # Generate Checksums        -> 500
         # Write TOC to tape         -> 500
         # Write files to tape       -> 500
         # Rewind tape
         # Eject tape if requested   -> 200
+        
+        # Init of TapeDrive to prepare for writing
         if self.status is Status.TAPE_RDY_WP.value:
             self.status = Status.ERROR.value
             self.status_msg = "[ERROR] Tape is write-protected!"
@@ -95,6 +98,16 @@ class TapeDrive:
             while self.status == Status.REWINDING.value:
                 sleep(0.1)
                 self.status = self.getStatus()
+                
+        if self.status is Status.TAPE_RDY.value: pass
+        # Drive should be ready now
+            if toc.create_cksum:
+                for file in toc.files:
+                    file.CreateChecksum()
+        else: 
+            self.status = Status.ERROR.value
+            self.status_msg = "[ERROR] System could not prepare Drive for write process!"
+            return 500
                 
         
         return 200

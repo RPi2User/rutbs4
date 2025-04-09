@@ -419,7 +419,7 @@ def post_drive_write(alias):
     if toc is None:
         return '[ERROR] Failed to create TOC', 500
 
-    statuscode: int = tape_drive.writeTape(toc, eject=system_data['ejectAfterSuccess'].lower() == 'true')
+    statuscode: int = tape_drive.writeTape(toc, host, eject=system_data['ejectAfterSuccess'].lower() == 'true')
 
     return tape_drive.getStatusJson, statuscode
 
