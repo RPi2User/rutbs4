@@ -68,12 +68,36 @@ class TapeDrive:
             self.status_msg = "Ejecting..."
             self.process = subprocess.Popen(self.CMD_EJECT.format(path=self.path), shell=True)
 
-    def write(self, file: File) -> None:
+    def write(self, file: File) -> bool:
+        self.status = self.getStatus()
+
+        if DEBUG: print("[WRITE] " + str(file))
         if self.getStatus() in {Status.TAPE_RDY.value, Status.NOT_AT_BOT.value}:
             self.bsy = True
             self.status = Status.WRITING.value
             self.status_msg = "Writing..."
         return # The following garbage is garbage
+    
+    def writeTape(self, toc: TableOfContent, eject: bool = False) -> int:
+        # Check whether tape is large enough for toc.files[] -> 423
+        # Generate Checksums        -> 500
+        # Write TOC to tape         -> 500
+        # Write files to tape       -> 500
+        # Rewind tape
+        # Eject tape if requested   -> 200
+        if self.status is Status.TAPE_RDY_WP.value:
+            self.status = Status.ERROR.value
+            self.status_msg = "[ERROR] Tape is write-protected!"
+            return 409
+        
+        if self.status is Status.NOT_AT_BOT.value:
+            self.rewind()
+            while self.status == Status.REWINDING.value:
+                sleep(0.1)
+                self.status = self.getStatus()
+                
+        
+        return 200
     
     def read(self, file: File) -> None:
         self.status = self.getStatus()
@@ -147,9 +171,10 @@ class TapeDrive:
                     while(self.bsy):
                         sleep(0.1)
                         self.status = self.getStatus()
-            except:
+            except Exception as e:
+                self.status = Status.ERROR.value
                 self.currentID = -1
-                self.status_msg = "[ERROR] Read failed!"
+                self.status_msg = "[ERROR] Read failed! Exception: " + str(e)
                 return None
         self.currentID = -1
         self.rewind()
