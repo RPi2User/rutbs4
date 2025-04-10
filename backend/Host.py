@@ -84,20 +84,6 @@ class Host():
             return self.tape_drives.get(alias)
         except:
             return None
-    THIS IS WRONG!
-    def calcChecksums(self, toc: TableOfContent) -> bool:
-        # We need to eval the calculated Checksums! RETURNTYPE!
-        max_threads = len(self.CPUbyCore)  # get the number of CPU threads, always there because __init__() is called
-        _out : bool = True
-        with ThreadPoolExecutor(max_threads) as executor:
-            future_to_file = {executor.submit(file.CreateChecksum): file for file in toc.files}
-            
-            for future in as_completed(future_to_file):
-                file: File = future_to_file[future]
-                success = future.result()  # Wait for the checksum calculation to finish and get the result
-                if not success: 
-                    _out = False
-        return _out
 
     
     def get_mounts(self):

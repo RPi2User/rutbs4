@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import datetime
 import json
 import os
@@ -41,8 +42,9 @@ class TapeDrive:
     status_msg: str = "NotInitialized"
     currentID: int = -1
     process: subprocess.Popen = None
+    coreCount: int = os.cpu_count()
     
-    checksumming: bool = False
+    checksumming: bool = True
     
     readThread: threading.Thread = None
     writeThread: threading.Thread = None
@@ -78,7 +80,7 @@ class TapeDrive:
             self.status_msg = "Writing..."
         return # The following garbage is garbage
     
-    def writeTape(self, host: backend.Host, toc: TableOfContent, eject: bool = False) -> int:
+    def writeTape(self, toc: TableOfContent, eject: bool = False) -> int:
         from backend.Host import Host
         # Check whether tape is large enough for toc.files[] -> 423
         # Generate Checksums        -> 500
@@ -101,9 +103,9 @@ class TapeDrive:
                 
         if self.status is Status.TAPE_RDY.value: pass
         # Drive should be ready now
-            if toc.create_cksum:
-                for file in toc.files:
-                    file.CreateChecksum()
+        if toc.create_cksum:
+            for file in toc.files:
+                file.CreateChecksum()
         else: 
             self.status = Status.ERROR.value
             self.status_msg = "[ERROR] System could not prepare Drive for write process!"
@@ -142,7 +144,8 @@ class TapeDrive:
                 os.makedirs(destPath, exist_ok=True)
             except Exception as e:
                 self.status = Status.ERROR.value
-                self.status_msg = "[ERROR] Could not create directory: " + str(e)
+                self.currentID = -1
+                self.status_msg = "[ERROR] Insufficient Permissions on directory: " + destPath + "\nException: " + str(e)
                 return None
         
         file : File = File(0, toc_filename, destPath + "/" + toc_filename, Checksum())
@@ -166,17 +169,19 @@ class TapeDrive:
     
     
     def readTape(self, toc: TableOfContent, dest_path: str) -> TableOfContent:
+        
+        if toc.files[0].cksum.value == "00000000000000000000000000000000": self.checksumming = False
+        
         # read entire tape to dest_path
+        self.rewind()
         if self.getStatus() in {Status.REWINDING.value}:
             while self.status == Status.REWINDING.value:
                 sleep(0.1) # Wait for the rewind-process to finish
                 self.status = self.getStatus()
-        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
-            self.readTOC(destPath=dest_path)
-            if self.status == Status.ERROR.value:
-                self.currentID = -1
-                self.status_msg = "[ERROR] Read failed, could not write to {dest_path}!"
-                return None
+                
+        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}: # All conditions met
+            self.readTOC(destPath=dest_path) # Put TOC in dest_path
+            if self.status == Status.ERROR.value: return None # TOC-Read is failed
             try:
                 for file in toc.files:
                     file.path = dest_path + "/" + file.name # Set the destination path
@@ -186,14 +191,22 @@ class TapeDrive:
                         self.status = self.getStatus()
             except Exception as e:
                 self.status = Status.ERROR.value
+                self.status_msg = "[ERROR] Read operation failed: " + str(e) # Maybe this goes wrong, at least it is catched…
                 self.currentID = -1
-                self.status_msg = "[ERROR] Read failed! Exception: " + str(e)
                 return None
+            
+        # Read completed
         self.currentID = -1
+        if self.checksumming:
+            # Check on demand
+            if not self.calcChecksums(toc): return None
+            
         self.rewind()
         while self.status == Status.REWINDING.value:
             sleep(0.1) # Wait for the rewind-process to finish
             self.status = self.getStatus()
+            
+        # When all is done, we can return a toc
         return toc
     
     def writeTOC(self, toc : TableOfContent) -> None:
@@ -287,7 +300,21 @@ class TapeDrive:
         return xml_tree
         
     
-
+    def calcChecksums(self, toc: TableOfContent) -> bool:
+        # We need to eval the calculated Checksums! RETURNTYPE!
+        max_threads = self.coreCount  # get the number of CPU threads
+        _out : bool = True
+        with ThreadPoolExecutor(max_threads) as executor:
+            future_to_file = {executor.submit(file.CreateChecksum): file for file in toc.files}
+            
+            for future in as_completed(future_to_file):
+                file: File = future_to_file[future]
+                success = future.result()  # Wait for the checksum calculation to finish and get the result
+                if not success: 
+                    self.status_msg = "[ERROR] Checksum MISMATCH for " + str(file)
+                    self.status = Status.ERROR.value
+                    _out = False
+        return _out
     
     # NEEDS REFACTOR! -> Test ok by e18f99a74b1452e3a5b1ac2d7a23a43b13cce10a 
     def cancelOperation(self) -> None:

@@ -328,17 +328,10 @@ def post_drive_read(alias):
     toc: TableOfContent = tape_drive.readTOC()
     if toc == None:
         return '[READ] Failed, TOC not readable', 500
-    tape_drive.rewind()
-    toc: TableOfContent = tape_drive.readTape(toc, dest_path)
+    toc = tape_drive.readTape(toc, dest_path)
     if toc == None:
-        return '[READ] Failed, TOC after Rewinding not readable', 500
-    if toc.files[0].cksum.type == "md5":
-        if host.calcChecksums(toc):
-            return '[READ] Completed, checksums ok', 200
-        else:
-            return '[READ] Failed, checksums mismatch see backend Logs!', 500
-    else:
-        return '[READ] Completed', 200
+        return tape_drive.getStatusJson(), 500
+    return '[READ] Completed', 200
 
 @app.route('/drive/<alias>/write', methods=['POST'])  # Start write process for a specific drive
 def post_drive_write(alias):
@@ -424,7 +417,6 @@ def post_drive_write(alias):
     return tape_drive.getStatusJson, statuscode
 
 # -TOC-REQS--------------------------------------------------------------------
-
 
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc_read(alias):
@@ -519,7 +511,6 @@ def post_drive_toc_create(alias):
         return '[ERROR] Failed to create TOC', 500
 
     return toc.getAsJson(), 200
-
 
 @app.route('/drive/<alias>/toc/write', methods=['POST'])
 def get_drive_toc_write(alias):
