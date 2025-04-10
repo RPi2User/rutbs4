@@ -66,10 +66,11 @@ def get_host_debug():
     if DEBUG:
         
         tapeDrive = host.get_tape_drive("st0")
-        current_toc: TableOfContent = tapeDrive.readTOC()
-        for file in current_toc.files:
-            file.path = "/opt/read_test/" + file.name
-        host.calcChecksums(current_toc)
+        tapeDrive.write(File(0,"test.3", "/opt/test_files/test.3"))
+        #current_toc: TableOfContent = tapeDrive.readTOC()
+        #for file in current_toc.files:
+        #    file.path = "/opt/read_test/" + file.name
+        #host.calcChecksums(current_toc)
 
         # for file in current_toc.files:
         #     file.path = "/tmp/readtest" # Changed! user-defined destiation "entrypoint"

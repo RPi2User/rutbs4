@@ -71,15 +71,21 @@ class TapeDrive:
             self.status_msg = "Ejecting..."
             self.process = subprocess.Popen(self.CMD_EJECT.format(path=self.path), shell=True)
 
-    def write(self, file: File) -> bool:
+    def write(self, file: File) -> None:
         self.status = self.getStatus()
-
         if DEBUG: print("[WRITE] " + str(file))
-        if self.getStatus() in {Status.TAPE_RDY.value, Status.NOT_AT_BOT.value}:
-            self.bsy = True
+        if self.status in {Status.TAPE_RDY.value, Status.NOT_AT_BOT.value}:
             self.status = Status.WRITING.value
-            self.status_msg = "Writing..."
-        return # The following garbage is garbage
+            self.bsy = True
+            self.process = subprocess.Popen(["dd", f"if={file.path}", f"of={self.path}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+            def write_thread(self):
+                for line in iter(self.process.stderr.readline, ""):
+                    self.currentID = file.id
+                    self.status_msg = line
+            
+            writeThread = threading.Thread(target=write_thread(self), daemon=True)
+            writeThread.start()
     
     def writeTape(self, toc: TableOfContent, eject: bool = False) -> int:
         # Check whether tape is large enough for toc.files[] -> 423
