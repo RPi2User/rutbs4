@@ -31,7 +31,6 @@ class File:
             return False
         else:
             self.cksum.value = _out
-            self.cksum.type = "md5"
             return True
     
     def __str__(self) -> str:
