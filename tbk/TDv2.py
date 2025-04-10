@@ -104,12 +104,14 @@ class TapeDrive:
         if self.status is Status.TAPE_RDY.value: pass
         # Drive should be ready now
         if self.checksumming: 
-            if not self.calcChecksums(toc, readWrite=False): # Create checksums
-                return '[ERROR] Checksum could not be created, Check backend Logs!', 500
+            _out: bool = self.calcChecksums(toc, readWrite=False) # Create checksums
+                
         else: 
             self.status = Status.ERROR.value
             self.status_msg = "[ERROR] System could not prepare Drive for write process!"
             return 500
+        
+        print(str(toc))
         return 200
     
     def read(self, file: File) -> None:

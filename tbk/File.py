@@ -30,6 +30,8 @@ class File:
             print("[ERROR] Checksum MISMATCH for " + str(self) + " IS LOCAL " + _out)
             return False
         else:
+            self.cksum.value = _out
+            self.cksum.type = "md5"
             return True
     
     def __str__(self) -> str:
