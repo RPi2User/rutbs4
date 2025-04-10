@@ -197,6 +197,7 @@ def get_drive_status(alias):
     """
     tape_drive = host.get_tape_drive(alias)
     if tape_drive:
+        tape_drive.status = tape_drive.getStatus()
         return tape_drive.getStatusJson(), 200
     return '', 404
 
@@ -551,7 +552,7 @@ def post_drive_toc_create(alias):
         cksum=system_data['cksum'].lower() == 'true'
     )
     if toc is None:
-        return '[ERROR] Failed to create TOC', 500
+        return '[ERROR] Can not read source directory! Failed to create TableOfContent!', 500
 
     return toc.getAsJson(), 200
 

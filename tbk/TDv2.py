@@ -74,9 +74,16 @@ class TapeDrive:
     def write(self, file: File) -> None:
         self.status = self.getStatus()
         if DEBUG: print("[WRITE] " + str(file))
+        
+        
+        while self.status is Status.WRITING.value:
+            sleep(0.1)  # Wait for the write-process to finish
+            self.status = self.getStatus()
+            
         if self.status in {Status.TAPE_RDY.value, Status.NOT_AT_BOT.value}:
             self.status = Status.WRITING.value
             self.bsy = True
+            #if DEBUG: print("DD-CMD: dd if='" + file.path + "' of='" + self.path + "' bs='" + self.blockSize + "' status=progress")
             self.process = subprocess.Popen(["dd", f"if={file.path}", f"of={self.path}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
             def write_thread(self):
@@ -86,6 +93,8 @@ class TapeDrive:
             
             writeThread = threading.Thread(target=write_thread(self), daemon=True)
             writeThread.start()
+        else:
+            print("[ERROR] Write operation failed, Tape in incorrect state! " + str(self.status))
     
     def writeTape(self, toc: TableOfContent, eject: bool = False) -> int:
         # Check whether tape is large enough for toc.files[] -> 423
@@ -117,7 +126,22 @@ class TapeDrive:
             self.status_msg = "[ERROR] System could not prepare Drive for write process!"
             return 500
         
-        print(str(toc))
+        self.writeTOC(toc) # Write TOC to tape
+        
+        for file in toc.files:
+            self.write(file)
+            
+        self.rewind()
+        while self.status == Status.REWINDING.value:
+            sleep(0.1)
+            self.status = self.getStatus()
+        
+        if eject:
+            self.eject()
+            while self.status == Status.EJECTING.value:
+                sleep(0.1)
+                self.status = self.getStatus()
+
         return 200
     
     def read(self, file: File) -> None:
@@ -136,7 +160,6 @@ class TapeDrive:
             readThread = threading.Thread(target=read_thread(self), daemon=True)
             readThread.start()
         
-    
     def readTOC(self, destPath="/tmp") -> TableOfContent:
         self.rewind()
         while self.status == Status.REWINDING.value:
@@ -216,8 +239,20 @@ class TapeDrive:
         return toc
     
     def writeTOC(self, toc : TableOfContent) -> None:
-        pass
+        self.rewind()
+        while self.status == Status.REWINDING.value:
+            sleep(0.1)
+            self.status = self.getStatus()
+        toc_uuid : str = str(uuid.uuid4())
+        toc_filename : str = "toc_" + toc_uuid + ".tmp"
+        toc_path: str = "/tmp/" + toc_filename
+        tocfile: File = File(0, toc_filename, toc_path, Checksum())
+        current_xml: ET.ElementTree = self.toc2xml(toc)
+        current_xml.write(tocfile.path, encoding="utf-8", xml_declaration=True)
 
+        self.write(tocfile)
+        
+        os.remove(tocfile.path)
     
     def rewind(self) -> None:
         if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
@@ -231,6 +266,7 @@ class TapeDrive:
         self.bsy = False
         self.process = None
         self.status_msg = ""
+        self.currentID = -1
         self.status = self.getStatusFromMT()
 
     def getStatusFromMT(self) -> int:
@@ -286,10 +322,10 @@ class TapeDrive:
         root = ET.Element("toc")
         # Append Header
         header: ET.Element = ET.SubElement(root, "header")
-        ET.SubElement(header, "lto-version").text = toc.ltoV
+        ET.SubElement(header, "lto-version").text = str(toc.ltoV)
         ET.SubElement(header, "optimal-blocksize").text = toc.bs
         ET.SubElement(header, "tape-size").text = str(toc.tape_size)
-        ET.SubElement(header, "tbk-version").text = VERSION
+        ET.SubElement(header, "tbk-version").text = str(VERSION)
         ET.SubElement(header, "last-modified").text = str(datetime.datetime.now())
         # Append Files
         for entry in toc.files:
@@ -298,8 +334,8 @@ class TapeDrive:
             ET.SubElement(file, "filename").text = entry.name
             ET.SubElement(file, "complete-path").text = entry.path
             ET.SubElement(file, "size").text = str(entry.size)
-            ET.SubElement(file, "type").text = entry.cksum_type
-            ET.SubElement(file, "value").text = entry.cksum
+            ET.SubElement(file, "type").text = entry.cksum.type
+            ET.SubElement(file, "value").text = entry.cksum.value
         
         xml_tree: ET.ElementTree = ET.ElementTree(element=root)
         ET.indent(tree=xml_tree)
