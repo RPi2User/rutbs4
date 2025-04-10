@@ -297,40 +297,64 @@ def post_drive_read(alias):
             destPath:
               type: string
               description: Destination path for the read files
+            checksumming:
+              type: string
+              description: Enable or disable checksumming ("true" or "false")
+            ejectAfterSuccess:
+              type: string
+              description: Whether to eject the tape after a successful read ("true" or "false")
     responses:
       200:
         description: Read completed successfully
       400:
-        description: Bad request (missing destPath)
+        description: Bad request (missing destPath, checksumming, or ejectAfterSuccess)
       404:
         description: Drive not found
+      409:
+        description: Tape not ready, remount required
       500:
         description: Checksum mismatch or other error
     """
     tape_drive = host.get_tape_drive(alias)
     if not tape_drive:
         return 'Drive not found', 404
-      
-    # TODO: Check wether target-fs is mounted and writable!
     
     if tape_drive.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
         # Check if the tape exists
         status_json = tape_drive.getStatusJson()
         status_json["recommended_action"] = "Remount Tape!"
         return status_json, 409
-	
-    # Extract the destination path from the request JSON
+    
+    # Extract the destination path and other fields from the request JSON
     request_data = request.get_json()
-    if not request_data or 'destPath' not in request_data:
-        return 'Bad Request: "destPath" is required in the request body', 400
+    if not request_data or 'destPath' not in request_data or 'checksumming' not in request_data or 'ejectAfterSuccess' not in request_data:
+        return 'Bad Request: "destPath", "checksumming", and "ejectAfterSuccess" are required in the request body', 400
 
+    # Parse JSON Data
+    
     dest_path = request_data['destPath']
+    checksumming = request_data['checksumming']
+    eject_after_success = request_data['ejectAfterSuccess'].lower() == 'true'
+    tape_drive.checksumming = checksumming.lower() != 'false'
+    
+    # Get fresh TOC
     toc: TableOfContent = tape_drive.readTOC()
-    if toc == None:
+    if toc is None:
         return '[READ] Failed, TOC not readable', 500
+    # READ entire Tape
     toc = tape_drive.readTape(toc, dest_path)
-    if toc == None:
+    
+    # Check whether the read was successful
+    if toc is None:
         return tape_drive.getStatusJson(), 500
+
+    # Eject the tape if requested
+    if eject_after_success:
+        tape_drive.eject()
+        
+        while tape_drive.getStatus() == Status.EJECTING.value:
+            time.sleep(0.1)
+
     return '[READ] Completed', 200
 
 @app.route('/drive/<alias>/write', methods=['POST'])  # Start write process for a specific drive
