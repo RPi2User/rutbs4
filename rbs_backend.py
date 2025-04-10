@@ -436,17 +436,36 @@ def post_drive_write(alias):
     if toc is None:
         return '[ERROR] Failed to create TOC', 500
 
-    statuscode: int = tape_drive.writeTape(toc, host, eject=system_data['ejectAfterSuccess'].lower() == 'true')
+    statuscode: int = tape_drive.writeTape(toc, eject=system_data['ejectAfterSuccess'].lower() == 'true')
 
-    return tape_drive.getStatusJson, statuscode
+    return tape_drive.getStatusJson(), statuscode
 
 # -TOC-REQS--------------------------------------------------------------------
 
 @app.route('/drive/<alias>/toc/read', methods=['GET'])
 def get_drive_toc_read(alias):
+    """
+    Read the Table of Content (TOC) from a specific drive
+    ---
+    tags:
+      - TOC Operations
+    parameters:
+      - name: alias
+        in: path
+        type: string
+        required: true
+        description: Alias of the tape drive
+    responses:
+      200:
+        description: Returns the TOC as JSON
+      409:
+        description: Tape not ready, rewind required
+      500:
+        description: TOC not readable, remount required
+    """
     tape_drive = host.get_tape_drive(alias)
     if tape_drive.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
-        _toc = tape_drive.readTOC() # This returns None-Type when the TOC is not readable
+        _toc = tape_drive.readTOC()  # This returns None-Type when the TOC is not readable
         if type(_toc) is TableOfContent:
             return _toc.getAsJson(), 200
         else:
@@ -457,7 +476,6 @@ def get_drive_toc_read(alias):
         status_json = tape_drive.getStatusJson()
         status_json["recommended_action"] = "Rewind tape and try again!"
         return status_json, 409
-    
 @app.route('/drive/<alias>/toc/create', methods=['POST'])
 def post_drive_toc_create(alias):
     """
@@ -536,6 +554,9 @@ def post_drive_toc_create(alias):
 
     return toc.getAsJson(), 200
 
+# THIS ONE WILL LEAVE. At this stage there is no reason to implement a Path
+# that just writes a TOC. A tape should be written as a whole!
+# There are no implementations to fast forward or rewind the tape.
 @app.route('/drive/<alias>/toc/write', methods=['POST'])
 def get_drive_toc_write(alias):
     # BACKEND SHOULD GENERATE TOC not USER!

@@ -21,12 +21,12 @@ class File:
         self.path: str = path
         self.cksum: Checksum = Checksum(cksum.value, cksum.type)
         
-    def CreateChecksum(self) -> bool:
+    def CreateChecksum(self, readWrite: bool) -> bool: # rw: true READ, false WRITE
         # Some bash/awk/string-Magic to get checksum from "md5sum" command
         _out: str = str(subprocess.check_output("md5sum '" + self.path +  "' | awk '{ print $1}'", shell=True))
         _out = _out.split("'", 2)[1].split("\\", 1)[0]
         if DEBUG: print("[INFO] Checksum for " + str(self) + ": " + _out)
-        if self.cksum.value != _out:
+        if self.cksum.value != _out and readWrite:
             print("[ERROR] Checksum MISMATCH for " + str(self) + " IS LOCAL " + _out)
             return False
         else:

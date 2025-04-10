@@ -14,6 +14,7 @@ from tbk.Status import Status
 from tbk.Checksum import Checksum
 
 from time import sleep
+from functools import partial
 
 VERSION: int = 4
 DEBUG : bool = True
@@ -81,7 +82,6 @@ class TapeDrive:
         return # The following garbage is garbage
     
     def writeTape(self, toc: TableOfContent, eject: bool = False) -> int:
-        from backend.Host import Host
         # Check whether tape is large enough for toc.files[] -> 423
         # Generate Checksums        -> 500
         # Write TOC to tape         -> 500
@@ -103,15 +103,13 @@ class TapeDrive:
                 
         if self.status is Status.TAPE_RDY.value: pass
         # Drive should be ready now
-        if toc.create_cksum:
-            for file in toc.files:
-                file.CreateChecksum()
+        if self.checksumming: 
+            if not self.calcChecksums(toc, readWrite=False): # Create checksums
+                return '[ERROR] Checksum could not be created, Check backend Logs!', 500
         else: 
             self.status = Status.ERROR.value
             self.status_msg = "[ERROR] System could not prepare Drive for write process!"
             return 500
-                
-        
         return 200
     
     def read(self, file: File) -> None:
@@ -199,7 +197,7 @@ class TapeDrive:
         self.currentID = -1
         if self.checksumming:
             # Check on demand
-            if not self.calcChecksums(toc): return None
+            if not self.calcChecksums(toc, readWrite=True): return None
             
         self.rewind()
         while self.status == Status.REWINDING.value:
@@ -265,9 +263,9 @@ class TapeDrive:
     
     def getStatusJson(self) -> json:
         """Returns the current status and status message as a JSON string."""
-        status: int = self.getStatus()
+        #status: int = self.getStatus() #BUG Some code relies on this being called
         status_json: json = {
-            "status": status,
+            "status": self.status,
             "statusMsg": self.status_msg,
             "currentFileID": self.currentID,
         }
@@ -300,18 +298,23 @@ class TapeDrive:
         return xml_tree
         
     
-    def calcChecksums(self, toc: TableOfContent) -> bool:
+    def calcChecksums(self, toc: TableOfContent, readWrite: bool) -> bool:
         # We need to eval the calculated Checksums! RETURNTYPE!
         max_threads = self.coreCount  # get the number of CPU threads
-        _out : bool = True
+        _out: bool = True
         with ThreadPoolExecutor(max_threads) as executor:
-            future_to_file = {executor.submit(file.CreateChecksum): file for file in toc.files}
+            future_to_file = {executor.submit(partial(file.CreateChecksum, readWrite)): file for file in toc.files}
             
             for future in as_completed(future_to_file):
                 file: File = future_to_file[future]
-                success = future.result()  # Wait for the checksum calculation to finish and get the result
-                if not success: 
-                    self.status_msg = "[ERROR] Checksum MISMATCH for " + str(file)
+                try:
+                    success = future.result()  # Wait for the checksum calculation to finish and get the result
+                    if not success: 
+                        self.status_msg = "[ERROR] Checksum MISMATCH for " + str(file)
+                        self.status = Status.ERROR.value
+                        _out = False
+                except Exception as e:
+                    self.status_msg = f"[ERROR] Exception during checksum calculation for {file}: {e}"
                     self.status = Status.ERROR.value
                     _out = False
         return _out
