@@ -24,7 +24,7 @@ swagger = Swagger(app)
 
 # -----------------------------------------------------------------------------
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET'])  # doucmented
 def get_slash():
     """
     Root endpoint
@@ -39,7 +39,7 @@ def get_slash():
                               mimetype='application/html')
 
 
-@app.route('/host', methods=['GET'])
+@app.route('/host', methods=['GET']) # doucmented
 def get_host():
     """
     Get host information
@@ -52,7 +52,7 @@ def get_host():
     """
     return '', 200
 
-@app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point
+@app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point, documented
 def get_host_debug():
     """
     Debugging endpoint, only available if DEBUG is True
@@ -79,7 +79,7 @@ def get_host_debug():
         
     return tapeDrive.getStatusJson(), 418
 
-@app.route('/host/version', methods=['GET'])
+@app.route('/host/version', methods=['GET'])  # doucmented
 def get_host_version():
     """
     Get backend version
@@ -93,7 +93,7 @@ def get_host_version():
     return app.response_class(response=json.dumps({"version": VERSION}), 
                               mimetype='application/json')
 
-@app.route('/host/status', methods=['GET'])
+@app.route('/host/status', methods=['GET']) # documented
 def get_host_status():
     """
     Get host status

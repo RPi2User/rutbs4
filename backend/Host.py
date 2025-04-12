@@ -25,14 +25,14 @@ class Host():
     mounts : list[Mount]
     
     def __init__(self):
-        self.refresh_host_status()
+        self.refresh_status()
         self.tape_drives = {}
         for drive in self.get_drives()["tape_drives"]:
             alias = drive["alias"]
             alt_path = drive["alt_path"]
             self.tape_drives[alias] = TapeDrive(alt_path)
         
-    def refresh_host_status(self):
+    def refresh_status(self):
         self.hostname = socket.gethostname(),
         self.ip_addr = socket.gethostbyname(socket.gethostname())
         self.uptime = (int) (time.time() - psutil.boot_time())
@@ -41,7 +41,7 @@ class Host():
         self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
     
     def get_host_status(self) -> json:        
-        self.refresh_host_status()
+        self.refresh_status()
         status = {
             "hostname": self.hostname,
             "ip_addr": self.ip_addr,
