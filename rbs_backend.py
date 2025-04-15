@@ -35,8 +35,8 @@ def get_slash():
       200:
         description: Returns a simple HTML response
     """
-    return app.response_class(response="<html><body>THIS IS A RUTBS-BACKEND</body></html>", 
-                              mimetype='application/html')
+    return app.response_class(response="THIS IS A RUTBS-BACKEND", 
+                              mimetype='text/plain')
 
 
 @app.route('/host', methods=['GET']) # doucmented

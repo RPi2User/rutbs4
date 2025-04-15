@@ -19,6 +19,19 @@ from functools import partial
 VERSION: int = 4
 DEBUG : bool = True
 
+"""__TODOs__
+
+Features:
+
+- Add method waitUntilFinished(Status) -> None;
+    This will reduce recurring Code
+    
+Bugs:
+
+- Check after every operation if current status is Status.ERROR and cancel current operation
+
+"""
+
 """_stati_
     0   Error
     1   No Tape
