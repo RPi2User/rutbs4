@@ -77,7 +77,8 @@ def get_host_debug():
         #     tapeDrive.read(file)
         print("DEBUG Done")
         
-    return tapeDrive.getStatusJson(), 418
+        return tapeDrive.getStatusJson(), 418
+    return 'DEBUG is not enabled', 403
 
 @app.route('/host/version', methods=['GET'])  # doucmented
 def get_host_version():

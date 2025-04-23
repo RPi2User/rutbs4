@@ -167,7 +167,7 @@ note over Caller,System: Fetches all drives of Node
             Host ->> Backend: JSON{"tape_drives": "…"}
             deactivate Host
         end
-        Backend -->> Caller: 200: [ø] | 500: ServerError
+        Backend -->> Caller: 200: {} | 500: ServerError
         Backend ->> Caller: 200: JSON{…}
         deactivate Backend
         
@@ -175,6 +175,32 @@ note over Caller,System: Fetches all drives of Node
 deactivate Caller
 
 end
+
+Note over Caller,System: Fetches all Mounts of Node
+rect rgba(128,128,128,0.1)
+    activate Caller
+    Caller ->> Backend: GET: {/host/mounts}
+        activate Backend
+        rect rgba(255, 255, 153, 0.75)
+            Backend ->> Host: getMounts()
+            activate Host
+                Host ->> Host: subprocess.run()
+                    rect rgba(144, 238, 144, 0.75)
+                    Host ->> System: $ df -x tmpfs,devtmpfs,efivarfs --output=source,size,used,target,fstype
+                    activate System
+                        System ->> Host: {directory}
+                    deactivate System
+                    end
+                Host ->> Host: Analyzes Output
+                Host ->> Backend: JSON{"mounts": "…"}
+            deactivate Host
+        end
+        Backend -->> Caller: 200: {} | 500: ServerError
+        Backend ->> Caller: 200: JSON{…}
+        deactivate Backend
+        
+    end
+    deactivate Caller
 
 
 ```
