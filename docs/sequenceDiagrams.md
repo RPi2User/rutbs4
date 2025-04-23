@@ -107,9 +107,9 @@ activate Caller
             deactivate System
     end
     rect rgba(144, 238, 144, 0.75)
-                Host ->> System: IPv4-Adress?
+                Host ->> System: IPv4-Address?
             activate System
-                System ->> Host: {IPv4-Adress}
+                System ->> Host: {IPv4-Address}
             deactivate System
     end
     rect rgba(144, 238, 144, 0.75)
