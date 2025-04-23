@@ -166,7 +166,7 @@ note over Caller,System: Fetches all drives of Node
             Host ->> Backend: JSON{"tape_drives": "…"}
             deactivate Host
         end
-        Backend -->> Caller: 200: {} | 500: ServerError
+        Backend -->> Caller: 204: {}
         Backend ->> Caller: 200: JSON{…}
         deactivate Backend
         
@@ -224,8 +224,9 @@ activate Caller
     Caller ->> Backend: GET {/drive}
     activate Backend
     rect rgba(255, 255, 153, 0.75)
-        Note over Backend,System: Same Process as:  GET {/host/drives}
+        Note over Backend,System: Same Process as: GET {/host/drives}
     end
+        Backend -->> Caller: 204: {}
         Backend ->> Caller : 200: JSON{…}
      deactivate Backend
 deactivate Caller
@@ -236,9 +237,22 @@ rect rgba(128,128,128,0.1)
 note over Caller,td: Get details of a (specific) tape drive
 rect rgba(255, 182, 193, 0.75)
 activate Caller
-     Caller ->> Backend: GET {/}
+     Caller ->> Backend: GET {/drive/{alias}}
      activate Backend
-        Backend ->> Caller : 200: JSON{…}
+        rect rgba(255, 255, 153, 0.75)
+        Backend ->> td: __init__({alias})
+        activate td
+            rect rgba(144, 238, 144, 0.75) 
+            td ->> System: $ mt -f /dev/{alias} status
+            activate System
+                System ->> td: {status}
+            deactivate System
+            end
+            Backend ->> td: __str__()
+            td ->> Backend: TapeDrive(…)
+        deactivate td
+        end
+        Backend ->> Caller : 200: TapeDrive(…)
      deactivate Backend
 deactivate Caller
 end
