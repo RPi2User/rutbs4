@@ -20,14 +20,14 @@ class TableOfContent:
 
     def __init__(self, files: list[File], lto_version: int, optimal_blocksize: str, tbk_version: str = VERSION, last_modified: str = "", createChecksum = True) -> None:
         
-        if files is []: return None         # Return None if no files are given
-        self.files: list[File] = files      # List of all Files from TableOfContent
-        self.ltoV: int = lto_version        # LTO-Version of Tape/Drive
-        self.bs: str = optimal_blocksize    # Optimal Blocksize
-        self.tape_size: int = self.get_tape_size_from_json()    # Constant, depends on LTO-Version
-        self.tbkV: str = tbk_version        # Software-Version of Tape-Backup-Software from original TOC
-        self.last_mod: str = last_modified  # Optional Timestamp (required for reading of tape)
-        self.create_cksum: bool = createChecksum # Optional Checksum-Flag (required for writing to tape)
+        if files is not []:                     # Do nothing if no files are given
+            self.files: list[File] = files      # List of all Files from TableOfContent
+            self.ltoV: int = lto_version        # LTO-Version of Tape/Drive
+            self.bs: str = optimal_blocksize    # Optimal Blocksize
+            self.tape_size: int = self.get_tape_size_from_json()    # Constant, depends on LTO-Version
+            self.tbkV: str = tbk_version        # Software-Version of Tape-Backup-Software from original TOC
+            self.last_mod: str = last_modified  # Optional Timestamp (required for reading of tape)
+            self.create_cksum: bool = createChecksum # Optional Checksum-Flag (required for writing to tape)
         
         
     def calcChecksums(self) -> None: # Need to implement parallel checksumming based on CPU-Core-Count. (host.get_cpu_cores())

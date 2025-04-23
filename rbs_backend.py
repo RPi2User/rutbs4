@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import time
 from flask import Flask, request
 from flasgger import Swagger # type: ignore
@@ -13,11 +12,10 @@ from tbk.TDv2 import TapeDrive
 from backend.Host import Host
 from tbk.Status import Status
 
-VERSION = 4
-DEBUG = True
+VERSION = "4.0.0"
+DEBUG = False
 
-host: Host = Host()
-tapeDrive: TapeDrive = None # Host need to provide a TapeDrive with Host.getTapeDrive(alias)
+host: Host = Host() # only global variable
 
 app = Flask(__name__)
 swagger = Swagger(app)
@@ -39,10 +37,10 @@ def get_slash():
                               mimetype='text/plain')
 
 
-@app.route('/host', methods=['GET']) # doucmented
+@app.route('/host', methods=['GET']) # documented
 def get_host():
     """
-    Get host information
+    Get heartbeat
     ---
     tags:
       - Host
@@ -64,8 +62,7 @@ def get_host_debug():
         description: Debugging completed
     """
     if DEBUG:
-        
-        tapeDrive = host.get_tape_drive("st0")
+        tapeDrive: TapeDrive = host.get_tape_drive("st0")
         tapeDrive.write(File(0,"test.3", "/opt/test_files/test.3"))
         #current_toc: TableOfContent = tapeDrive.readTOC()
         #for file in current_toc.files:
@@ -176,7 +173,7 @@ def get_drive(alias):
         description: Drive not found
     """
     tapeDrive = host.get_tape_drive(alias)
-    if tapeDrive != None:
+    if tapeDrive is not None:
         return str(tapeDrive), 200
     return '', 404
 
@@ -432,8 +429,8 @@ def post_drive_write(alias):
         return '[ERROR] Bad Request: Missing required fields in "system"', 400
 
     # Create the TOC
-    toc: TableOfContent = TableOfContent([], "", "", 0, "")
-    toc = toc.create(
+    toc: TableOfContent = TableOfContent([], -1, "", "0", "")
+    toc.create(
         target_dir=create_data['dir'],
         blocksize=create_data['bs'],
         ltoVersion=create_data['ltoV'],
@@ -542,14 +539,12 @@ def post_drive_toc_create(alias):
     required_create_fields = ['dir', 'bs', 'ltoV']
     required_system_fields = ['cksum']
 
-    if not all(field in create_data for field in required_create_fields):
-        return '[ERROR] Bad Request: Missing required fields in "create"', 400
     if not all(field in system_data for field in required_system_fields):
         return '[ERROR] Bad Request: Missing required fields in "system"', 400
 
     # Create the TOC
-    toc: TableOfContent = TableOfContent([], "", "", 0, "")
-    toc = toc.create(
+    toc: TableOfContent = TableOfContent([], -1, "", "0", "")
+    toc.create(
         target_dir=create_data['dir'],
         blocksize=create_data['bs'],
         ltoVersion=create_data['ltoV'],
@@ -562,7 +557,7 @@ def post_drive_toc_create(alias):
 
 # THIS ONE WILL LEAVE. At this stage there is no reason to implement a Path
 # that just writes a TOC. A tape should be written as a whole!
-# There are no implementations to fast forward or rewind the tape.
+# There are no implementations to fast-forward or rewind the tape.
 @app.route('/drive/<alias>/toc/write', methods=['POST'])
 def get_drive_toc_write(alias):
     # BACKEND SHOULD GENERATE TOC not USER!
@@ -575,7 +570,7 @@ def get_drive_toc_write(alias):
     if not request_data or 'toc' not in request_data:              # Added extra field for system_data
         return '[ERROR] Bad Request: "toc" is required in the request body', 400    
 
-    toc = TableOfContent([], "", "", 0, "")
+    toc = TableOfContent([], -1, "", "0", "")
     if toc.from_json(request_data['toc']):
         # Placeholder for writing TOC to the tape drive
         # tape_drive.writeTOC(toc)  # Uncomment when implemented
