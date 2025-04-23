@@ -13,7 +13,6 @@ sequenceDiagram
 
 actor Caller
 participant Backend
-participant td as TapeDrive
 participant Host
 participant toc as TableOfContent
 participant System
@@ -210,19 +209,112 @@ end
 ```mermaid
 sequenceDiagram
 
+actor Caller
+participant Backend
+
+participant Host
+participant toc as TableOfContent
+participant System
+participant td as TapeDrive
 
 rect rgba(128,128,128,0.1)
-note over Caller,System: Rewinds the tape drive to the beginning
-
+note over Caller,System: Get all drives of the system
+rect rgba(255, 182, 193, 0.75)
 activate Caller
-Caller ->> Backend: "POST /drive/<alias>/rewind"
+    Caller ->> Backend: GET {/drive}
     activate Backend
-        Backend ->> td: tapeDrive.rewind()
-    deactivate Backend
+    rect rgba(255, 255, 153, 0.75)
+        Note over Backend,System: Same Process as:  GET {/host/drives}
+    end
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
 deactivate Caller
 end
+end
 
-note over Caller,System: Ejecting
+rect rgba(128,128,128,0.1)
+note over Caller,td: Get details of a (specific) tape drive
+rect rgba(255, 182, 193, 0.75)
+activate Caller
+     Caller ->> Backend: GET {/}
+     activate Backend
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
+deactivate Caller
+end
+end
+
+rect rgba(128,128,128,0.1)
+note over Caller,td: Abort current drive operation
+rect rgba(255, 182, 193, 0.75)
+activate Caller
+     Caller ->> Backend: GET {/}
+     activate Backend
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
+deactivate Caller
+end
+end
+
+rect rgba(128,128,128,0.1)
+note over Caller,td: Push a eject Command to specific tape drive
+rect rgba(255, 182, 193, 0.75)
+activate Caller
+     Caller ->> Backend: GET {/}
+     activate Backend
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
+deactivate Caller
+end
+end
+
+rect rgba(128,128,128,0.1)
+note over Caller,td: Start read operation for a specific tape drive
+rect rgba(255, 182, 193, 0.75)
+activate Caller
+     Caller ->> Backend: GET {/}
+     activate Backend
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
+deactivate Caller
+end
+end
+
+rect rgba(128,128,128,0.1)
+note over Caller,td: Rewind a specific tape drive
+rect rgba(255, 182, 193, 0.75)
+activate Caller
+     Caller ->> Backend: GET {/}
+     activate Backend
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
+deactivate Caller
+end
+end
+
+rect rgba(128,128,128,0.1)
+note over Caller,td: Get status of a specific tape drive
+rect rgba(255, 182, 193, 0.75)
+activate Caller
+     Caller ->> Backend: GET {/}
+     activate Backend
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
+deactivate Caller
+end
+end
+
+rect rgba(128,128,128,0.1)
+note over Caller,td: Start write operation for a specific tape drive
+rect rgba(255, 182, 193, 0.75)
+activate Caller
+     Caller ->> Backend: GET {/}
+     activate Backend
+        Backend ->> Caller : 200: JSON{…}
+     deactivate Backend
+deactivate Caller
+end
+end
 
 
 ```

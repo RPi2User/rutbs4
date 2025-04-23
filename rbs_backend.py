@@ -118,7 +118,10 @@ def get_host_drives():
       200:
         description: Returns a list of all drives
     """
-    return host.get_drives()
+    drives = host.get_drives()
+    if "tape_drives" in drives and drives["tape_drives"]:
+        return drives, 200
+    return '', 204
 
 @app.route('/host/mounts', methods=['GET'])
 def get_host_mounts():
@@ -149,7 +152,7 @@ def get_drive_root():
         description: No drives found
     """
     drives = host.get_drives()
-    if drives != None :
+    if "tape_drives" in drives and drives["tape_drives"]:
         return drives, 200
     return '', 204
 
