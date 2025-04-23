@@ -74,7 +74,7 @@ note over Caller,System: Debugging path triggered
     end
 end
 
-rect rgba(128,128,128,0.1)
+rect rgba(128,128,128,0.1) 
 note over Caller,Backend: Fetches the version of the backend service
     rect rgba(255, 182, 193, 0.75)
     activate Caller
@@ -88,7 +88,6 @@ end
 
 rect rgba(128,128,128,0.1)
 note over Caller,System: Fetches status of this node
-
 
 rect rgba(255, 182, 193, 0.75)
 activate Caller
@@ -145,6 +144,7 @@ deactivate Caller
 end
 end
 
+
 rect rgba(128,128,128,0.1)
 note over Caller,System: Fetches all drives of Node
 
@@ -173,11 +173,11 @@ note over Caller,System: Fetches all drives of Node
         
     end
 deactivate Caller
-
 end
 
-Note over Caller,System: Fetches all Mounts of Node
 rect rgba(128,128,128,0.1)
+Note over Caller,System: Fetches all Mounts of Node
+    rect rgba(255, 182, 193, 0.75)
     activate Caller
     Caller ->> Backend: GET: {/host/mounts}
         activate Backend
@@ -186,9 +186,9 @@ rect rgba(128,128,128,0.1)
             activate Host
                 Host ->> Host: subprocess.run()
                     rect rgba(144, 238, 144, 0.75)
-                    Host ->> System: $ df -x tmpfs,devtmpfs,efivarfs --output=source,size,used,target,fstype
+                    Host ->> System: $ df -x tmpfs […] --output=source,size,used,target,fstype
                     activate System
-                        System ->> Host: {directory}
+                        System ->> Host: {filesystems}
                     deactivate System
                     end
                 Host ->> Host: Analyzes Output
@@ -201,7 +201,7 @@ rect rgba(128,128,128,0.1)
         
     end
     deactivate Caller
-
+end
 
 ```
 
