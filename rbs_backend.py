@@ -322,7 +322,7 @@ def post_drive_read(alias):
     if not tape_drive:
         return 'Drive not found', 404
     
-    if tape_drive.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
+    if tape_drive.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}:
         # Check if the tape exists
         status_json = tape_drive.getStatusJson()
         status_json["recommended_action"] = "Remount Tape!"
