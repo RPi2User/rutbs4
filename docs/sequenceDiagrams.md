@@ -243,7 +243,7 @@ activate Caller
         Backend ->> td: __init__({alias})
         activate td
             rect rgba(144, 238, 144, 0.75) 
-            td ->> System: $ mt -f /dev/{alias} status
+            td ->> System: $ mt -f /dev/n{alias} status
             activate System
                 System ->> td: {status}
             deactivate System
@@ -283,14 +283,97 @@ end
 end
 
 rect rgba(128,128,128,0.1)
-note over Caller,td: Start read operation for a specific tape drive
-rect rgba(255, 182, 193, 0.75)
-activate Caller
-     Caller ->> Backend: GET {/}
-     activate Backend
-        Backend ->> Caller : 200: JSON{…}
-     deactivate Backend
-deactivate Caller
+note over Caller,td: Start read process for a specific tape drive
+
+    rect rgba(255, 182, 193, 0.75)
+    activate Caller
+        Caller ->> Backend: POST {/drive/<alias>/read<br>[body: <…>]}
+        activate Backend
+        rect rgba(255, 255, 153, 0.75)
+            Backend ->> Host: getDrives(alias)
+            activate Host
+                Host -->> Backend: None
+        end
+                Backend -->> Caller: 404, Drive not Found
+        rect rgba(255, 255, 153, 0.75)
+                Note over Host,td: Init TapeDrive
+                Host ->> Backend: {TapeDrive}
+                
+            deactivate Host
+            Backend ->> td: Status?
+            activate td
+                rect rgba(144, 238, 144, 0.75)  
+                td ->> System: $ mt -f /dev/n<alias> status
+                activate System
+                    System ->> td: {…}
+                deactivate System
+                end
+                td ->> Backend: {Status}
+            deactivate td
+        end
+            Backend -->> Caller: 409, Tape not Ready!
+        rect rgba(255, 255, 153, 0.75)
+        Backend ->> Backend: Checking Body of REQ
+        end
+        Backend -->> Caller: 400, Bad Request!
+        rect rgba(255, 255, 153, 0.75)
+        Backend ->> Backend: Parsing Body of REQ
+        Backend ->> td: readTOC(destPath="/tmp")
+        activate td
+            td ->> td: rewind()
+            rect rgba(144, 238, 144, 0.75)
+                td ->> System: CREATE $destPath
+                activate System
+                    System -->> td: Exception: $e
+                deactivate System
+            end
+            td -->> Backend: [ERROR] Insufficient Permissions
+        deactivate td 
+        end
+            Backend -->> Caller: 500, [READ] Failed, TOC not readable
+        rect rgba(255, 255, 153, 0.75)
+            Backend ->> td: READ toc.file[] TO destPath
+            activate td
+            loop foreach FILE in TOC
+                td ->> td: read(FILE)
+                rect rgba(144, 238, 144, 0.75)
+                    td ->> System: $ dd if=/dev/n<alias> […] of=file.path […]
+                    activate System
+                    System ->> td: STDOUT
+                    System -->> td: STDERR, Exit Code
+                    rect rgba(255, 255, 153, 0.75)
+                        td -->> td: EXCEPTION
+                    end
+                    System ->> td: Exit Code
+                    deactivate System
+                end
+            end
+            td -->> Backend: [ERROR] Read operation failed at $file
+            td ->> td: Are Checksums available?
+            loop calcChecksums(toc)
+                rect rgba(144, 238, 144, 0.75)
+                    td ->> System: $ md5sum $destPath/$file.name
+                    activate System
+                        System ->> td: {md5}
+                    deactivate System
+                end
+                td ->> td: Checksums valid?
+                td -->> td: CHECKSUM_MISMATCH
+                td -->> td: CHECKSUM_EXCPTION
+            end
+            td -->> Backend: [ERROR] Checksum MISMATCH for FILE
+            td -->> Backend: [ERROR] Exception during checksum calculation for FILE
+        end
+        Backend -->> Caller: 500, JSON{Status}
+        rect rgba(255, 255, 153, 0.75)
+            td ->> td: rewind()
+            td ->> Backend: TOC
+            deactivate td
+        end
+        Backend ->> Caller: 200: [READ] Completed
+
+        deactivate Backend
+    deactivate Caller
 end
 end
 

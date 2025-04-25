@@ -157,7 +157,7 @@ class TapeDrive:
 
         return 200
     
-    def read(self, file: File) -> None:
+    def read(self, file: File) -> None: # we let this crash, exception handling is done in readTape and readTOC
         self.status = self.getStatus()
         if DEBUG: print("[READ] " + str(file))
         if self.status in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
@@ -223,20 +223,23 @@ class TapeDrive:
                 
         if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value}: # All conditions met
             self.readTOC(destPath=dest_path) # Put TOC in dest_path
+            # Tape moved from BOT to File 1
             if self.status == Status.ERROR.value: return None # TOC-Read is failed
-            try:
-                for file in toc.files:
-                    file.path = dest_path + "/" + file.name # Set the destination path
+            for file in toc.files:
+                file.path = dest_path + "/" + file.name # Set the destination path
+                
+                try:
                     self.read(file)
-                    while(self.bsy):
-                        sleep(0.1)
-                        self.status = self.getStatus()
-            except Exception as e:
-                self.status = Status.ERROR.value
-                self.status_msg = "[ERROR] Read operation failed: " + str(e) # Maybe this goes wrong, at least it is catched…
-                self.currentID = -1
-                return None
-            
+                except Exception as e:
+                    self.status = Status.ERROR.value
+                    self.status_msg = "[ERROR] Read operation failed: " + str(e) + " at " + str(file)
+                    self.currentID = -1
+                    return None
+                
+                while(self.bsy):
+                    sleep(0.1)
+                    self.status = self.getStatus()
+
         # Read completed
         self.currentID = -1
         if self.checksumming:
@@ -356,7 +359,6 @@ class TapeDrive:
         
     
     def calcChecksums(self, toc: TableOfContent, readWrite: bool) -> bool:
-        # We need to eval the calculated Checksums! RETURNTYPE!
         max_threads = self.coreCount  # get the number of CPU threads
         _out: bool = True
         with ThreadPoolExecutor(max_threads) as executor:

@@ -3,4 +3,5 @@ tbkv3.py
 *.pdf
 launch.json
 .vscode
+.idea
 __pycache__

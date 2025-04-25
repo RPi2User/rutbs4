@@ -343,7 +343,8 @@ def post_drive_read(alias):
     # Get fresh TOC
     toc: TableOfContent = tape_drive.readTOC()
     if toc is None:
-        return '[READ] Failed, TOC not readable', 500
+        status_json = tape_drive.getStatusJson()
+        return '[READ] Failed, TOC not readable {status_json}', 500
     # READ entire Tape
     toc = tape_drive.readTape(toc, dest_path)
     
@@ -445,7 +446,7 @@ def post_drive_write(alias):
 
 # -TOC-REQS--------------------------------------------------------------------
 
-@app.route('/drive/<alias>/toc/read', methods=['GET'])
+@app.route('/drive/<alias>/toc/read', methods=['GET']) #documented
 def get_drive_toc_read(alias):
     """
     Read the Table of Content (TOC) from a specific drive
