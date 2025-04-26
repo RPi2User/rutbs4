@@ -368,6 +368,14 @@ note over Caller,td: Start read process for a specific tape drive
         rect rgba(255, 255, 153, 0.75)
             td ->> td: rewind()
             td ->> Backend: TOC
+            Backend ->> Backend: ejectAfterSuccess?
+            Backend ->> td: eject()
+            rect rgba(144, 238, 144, 0.75)
+                td ->> System: $ mt -f /dev/n<alias> eject
+                activate System
+                    System ->> td: SUCCESS
+                deactivate System
+            end
             deactivate td
         end
         Backend ->> Caller: 200: [READ] Completed
