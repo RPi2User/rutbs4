@@ -104,7 +104,7 @@ def get_host_status():
     """
     return host.get_host_status()
 
-@app.route('/host/drives', methods=['GET'])
+@app.route('/host/drives', methods=['GET']) # documented
 def get_host_drives():
     """
     Get all drives of Host
@@ -120,7 +120,7 @@ def get_host_drives():
         return drives, 200
     return '', 204
 
-@app.route('/host/mounts', methods=['GET'])
+@app.route('/host/mounts', methods=['GET']) # documented
 def get_host_mounts():
     """
     Get all mounts of Host
@@ -135,7 +135,7 @@ def get_host_mounts():
 
 # -BASIC-DRIVE-OPERATIONS------------------------------------------------------
 
-@app.route('/drive/', methods=['GET'])  # Get all drives
+@app.route('/drive/', methods=['GET'])  # Get all drives, documented
 def get_drive_root():
     """
     Get all drives managed by this backend
@@ -153,7 +153,7 @@ def get_drive_root():
         return drives, 200
     return '', 204
 
-@app.route('/drive/<alias>', methods=['GET'])  # Get .toString() of a specific drive
+@app.route('/drive/<alias>', methods=['GET'])  # Get .toString() of a specific drive, documented
 def get_drive(alias):
     """
     Get details of a specific drive

@@ -2,6 +2,7 @@ backend/scratchpad.py
 tbkv3.py
 *.pdf
 launch.json
+Pipfile*
 .vscode
 .idea
 __pycache__

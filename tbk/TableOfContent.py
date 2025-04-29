@@ -28,10 +28,6 @@ class TableOfContent:
             self.tbkV: str = tbk_version        # Software-Version of Tape-Backup-Software from original TOC
             self.last_mod: str = last_modified  # Optional Timestamp (required for reading of tape)
             self.create_cksum: bool = createChecksum # Optional Checksum-Flag (required for writing to tape)
-        
-        
-    def calcChecksums(self) -> None: # Need to implement parallel checksumming based on CPU-Core-Count. (host.get_cpu_cores())
-        pass
     
     def xml2toc(self, file: File) -> str:
         try:    # Try to parse File
@@ -58,6 +54,9 @@ class TableOfContent:
         
         self.ltoV = int(xml_root[0][0].text)
         self.tape_size = self.get_tape_size_from_json()
+        if self.tape_size == -1:
+            if DEBUG: print("[ERROR] Could not get tape size from JSON see backend logs!")
+            return "[ERROR] Could not get tape size from JSON"
         self.bs = str(xml_root[0][1].text)
         self.tbkV = str(xml_root[0][3].text)
         self.last_mod = str(xml_root[0][4].text)
@@ -74,13 +73,19 @@ class TableOfContent:
         """
         script_dir = os.path.dirname(__file__)  # Get the directory of the current script
         json_path = os.path.join(script_dir, 'rbs_ltoV.json')  # Construct the relative path
-        with open(json_path, 'r') as f:
-            
-            lto_db = json.load(f)
-            for standard in lto_db["LTO_Standards"]:
-                if standard["Generation"] == self.ltoV:
-                    return standard["capacityInBytes"]
-        return 0  # Default value if not found
+        try:
+            with open(json_path, 'r') as f:
+                lto_db = json.load(f)
+                for standard in lto_db["LTO_Standards"]:
+                    if standard["Generation"] == self.ltoV:
+                        return standard["capacityInBytes"]
+        except FileNotFoundError:
+            if DEBUG: print(f"[ERROR] File not found: {json_path}")
+        except json.JSONDecodeError:
+            if DEBUG: print(f"[ERROR] Invalid JSON format in file: {json_path}")
+        except Exception as e:
+            if DEBUG: print(f"[ERROR] Unexpected error in get_tape_size_from_json: {e}")
+        return -1  # Default value if not found or error occurs
     
     def showTOC(self) -> str:
         # User-Readable listing from Contents of Tape
@@ -154,14 +159,6 @@ class TableOfContent:
                 }
             }
         return toc_dict
-    
-    def from_createJob(self, blockSize: str, directory: str, ltoV: int) -> json: #TODO
-        
-        self.bs = blockSize
-        self.ltoV = ltoV
-        
-        
-        return self.getAsJson(self)
     
     def from_json(self, json_data: dict) -> bool:
         try:
