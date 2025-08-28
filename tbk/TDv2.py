@@ -331,7 +331,18 @@ class TapeDrive:
         }
         return status_json
     
-    
+    def getTapeDriveJSON(self) -> json:        # This will return a JSON in favor of plain text
+        tape_json: json = {
+            "TapeDrive": {
+                "path" : self.path,
+                "ltoVersion" : self.ltoVersion,
+                "status" : self.status,
+                "blockSize" : self.blockSize,
+                "bsy?" : self.bsy
+            }
+        }
+        return tape_json
+
     
     def toc2xml(self, toc: TableOfContent) -> ET.ElementTree: # Imported from legacy TapeDrive.py
         # Create XML-Root
