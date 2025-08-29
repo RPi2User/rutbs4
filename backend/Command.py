@@ -1,6 +1,6 @@
 import subprocess
 import json
-
+import threading
 
 class Command:
 
@@ -16,39 +16,70 @@ class Command:
     status_msg: str # Additional Stuff like known Error Messages 
     # --------------------------------------------------------------
     """
-    def __init__(self, cmd: str) -> None: 
+    def __init__(self, cmd: str, filesize: int = -1) -> None: 
         self.cmd = cmd
         self.process: subprocess.Popen = None
         self.pid: int = -1
         self.running: bool = False
-        self.io: str = ""
+        self.filesize: int = filesize
+        self.io: List[str] = []      # noqa: F821
         self.io_path: str = ""
-        self.stdout: str = ""
-        self.stderr: str = ""
+        self.stdout: List[str] = []  # noqa: F821
+        self.stderr: List[str] = []  # noqa: F821
         self.exitCode: int = None
         self.status_msg: str = ""
 
+
     # This starts the process in the background
-    def start(self) -> None:
+    def start(self):
         self.process = subprocess.Popen(
             self.cmd,
             shell=True,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            text=True
         )
         self.pid = self.process.pid
         self.running = True
         self.io_path = f"/proc/{self.pid}/io"
+
         # Get Status of Process after spawn
+        threading.Thread(target=self._read_stdout, daemon=True).start()
+        threading.Thread(target=self._read_stderr, daemon=True).start()
         self.status()
 
+    def _read_stdout(self):
+        for line in self.process.stdout:
+            self.stdout.append(line.rstrip('\n'))
+
+    def _read_stderr(self):
+        for line in self.process.stderr:
+            self.stderr.append(line.rstrip('\n'))
+        
+
     def kill(self) -> None:
-        self.process.terminate()
         self.status()
+        self.process.terminate()
+        self.process.wait()
+        
     
     # This populates all Vars
     def status(self) -> None:
-        pass
+        if self.process is None:
+            return
+
+        if self.process.returncode is None:
+            self.running = True
+            self._pollIOfile()
+        
+        else:
+            self.running = False
+            self.exitCode = self.process.returncode
+            self.process = None
+
+    def _pollIOfile(self) -> None:
+        with open(self.io_path, "r") as f:
+            self.io = [line.rstrip('\n') for line in f.readlines()]
 
     def __str__(self):
         # Returns Command c in json
@@ -59,27 +90,8 @@ class Command:
             "running": self.running,
             "stdout": self.stdout,
             "stderr": self.stderr,
+            "filesize": self.filesize,
+            "io": self.io,
             "exitCode": self.exitCode
         }
         return json.dumps(data, indent=2)
-"""
-    def calcChecksums(self, toc: TableOfContent, readWrite: bool) -> bool:
-        max_threads = self.coreCount  # get the number of CPU threads
-        _out: bool = True
-        with ThreadPoolExecutor(max_threads) as executor:
-            future_to_file = {executor.submit(partial(file.CreateChecksum, readWrite)): file for file in toc.files}
-            
-            for future in as_completed(future_to_file):
-                file: File = future_to_file[future]
-                try:
-                    success = future.result()  # Wait for the checksum calculation to finish and get the result
-                    if not success: 
-                        self.status_msg = "[ERROR] Checksum MISMATCH for " + str(file)
-                        self.status = Status.ERROR.value
-                        _out = False
-                except Exception as e:
-                    self.status_msg = f"[ERROR] Exception during checksum calculation for {file}: {e}"
-                    self.status = Status.ERROR.value
-                    _out = False
-        return _out
-"""
