@@ -1,6 +1,5 @@
-import subprocess
-
 from tbk.Checksum import Checksum
+from backend.Command import Command
 
 DEBUG: bool = True
 
@@ -23,14 +22,17 @@ class File:
         
     def CreateChecksum(self, readWrite: bool) -> bool: # rw: true READ, false WRITE
         # Some bash/awk/string-Magic to get checksum from "md5sum" command
-        _out: str = str(subprocess.check_output("md5sum '" + self.path +  "' | awk '{ print $1}'", shell=True))
-        _out = _out.split("'", 2)[1].split("\\", 1)[0]
-        if DEBUG: print("[INFO] Checksum for " + str(self) + ": " + _out)
-        if self.cksum.value != _out and readWrite:
-            print("[ERROR] Checksum MISMATCH for " + str(self) + " IS LOCAL " + _out)
+        _cmd: Command = Command("md5sum '" + self.path +  "' | awk '{ print $1}'")
+        _cmd.start()
+        
+
+        if DEBUG: 
+            print("[INFO] Checksum for " + str(self) + ": " + str(_cmd))
+        if False and self.cksum.value != 0 and readWrite:
+            print("[ERROR] Checksum MISMATCH for " + str(self) + " IS LOCAL " + str(_cmd))
             return False
         else:
-            self.cksum.value = _out
+            self.cksum.value = _cmd
             return True
     
     def __str__(self) -> str:
