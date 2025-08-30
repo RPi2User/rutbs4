@@ -21,6 +21,7 @@ class Host():
     mem : dict
     load : tuple
     tape_drives : dict
+    threadLimit: int
     
     mounts : list[Mount]
     
@@ -31,6 +32,24 @@ class Host():
             alias = drive["alias"]
             alt_path = drive["alt_path"]
             self.tape_drives[alias] = TapeDrive(alt_path)
+    
+    def __str__(self) -> str:
+        self.refresh_status()
+        data = {
+            "hostname": self.hostname,
+            "ip_addr": self.ip_addr,
+            "uptime": self.uptime,
+            "threadLimit": self.threadLimit,
+            "CPUbyCore": self.CPUbyCore,
+            "mem": self.mem,
+            "load": self.load,
+            "tape_drives": self.tape_drives
+        }
+        return json.dumps(data, indent=2)
+
+    def DEBUG(self) -> str:
+        # This is the Main Debug Entry Point
+        pass
         
     def refresh_status(self):
         self.hostname = socket.gethostname(),
@@ -39,18 +58,6 @@ class Host():
         self.CPUbyCore = psutil.cpu_percent(percpu=True)
         self.mem = psutil.virtual_memory()._asdict()
         self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
-    
-    def get_host_status(self) -> json:        
-        self.refresh_status()
-        status = {
-            "hostname": self.hostname,
-            "ip_addr": self.ip_addr,
-            "uptime" : self.uptime,
-            "CPUbyCore": self.CPUbyCore,
-            "mem": self.mem,
-            "load": self.load
-        }
-        return status
     
     def get_drives(self) -> json:
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
