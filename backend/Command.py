@@ -1,3 +1,4 @@
+import sys
 import subprocess
 import json
 import threading
@@ -78,8 +79,12 @@ class Command:
             self.process = None
 
     def _pollIOfile(self) -> None:
-        with open(self.io_path, "r") as f:
-            self.io = [line.rstrip('\n') for line in f.readlines()]
+
+        try:
+            with open(self.io_path, "r") as f:
+                self.io = [line.rstrip('\n') for line in f.readlines()]
+        except PermissionError:
+            print("[ERROR] Insufficient Permissions: Can't read file " + self.io_path, file=sys.stderr)
 
     def __str__(self):
         # Returns Command c in json
