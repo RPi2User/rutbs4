@@ -16,7 +16,6 @@ VERSION = "4.0.0"
 DEBUG = False
 
 host: Host = Host() # only global variable
-
 app = Flask(__name__)
 swagger = Swagger(app)
 
@@ -31,9 +30,9 @@ def get_slash():
       - General
     responses:
       200:
-        description: Returns a simple HTML response
+        description: Returns a simple TEXT response
     """
-    return app.response_class(response="THIS IS A RUTBS-BACKEND", 
+    return app.response_class(response=host.greeter(), 
                               mimetype='text/plain')
 
 

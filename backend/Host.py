@@ -7,6 +7,8 @@ import re
 import socket
 import psutil
 
+from backend.Response import Response
+
 from backend.Mount import Mount
 from tbk.TDv2 import TapeDrive
 from tbk.TableOfContent import TableOfContent
@@ -14,6 +16,7 @@ from tbk.File import File
 
 class Host():
     
+    response: Response(response="", mimetype="text/plain", status=200)
     hostname : str
     ip_addr: str
     uptime: int
@@ -24,6 +27,14 @@ class Host():
     threadLimit: int
     
     mounts : list[Mount]
+
+    """_summary_
+    This handles the Main Logic.
+
+    Theory of Operation:
+       - Each API Request gets fetched here
+       - each Public Method returns self.response  
+    """
     
     def __init__(self):
         self.refresh_status()
@@ -37,9 +48,10 @@ class Host():
         self.refresh_status()
         data = {
             "hostname": self.hostname,
+            "last_response": self.response,
             "ip_addr": self.ip_addr,
             "uptime": self.uptime,
-            "threadLimit": self.threadLimit,
+            "threadLimit": self.threadLimdit,
             "CPUbyCore": self.CPUbyCore,
             "mem": self.mem,
             "load": self.load,
@@ -47,13 +59,16 @@ class Host():
         }
         return json.dumps(data, indent=2)
 
+    def greeter(self) -> str:
+        return "THIS IS A RUTBS BACKEND"
+
     def DEBUG(self) -> str:
         # This is the Main Debug Entry Point
         pass
         
     def refresh_status(self):
         self.hostname = socket.gethostname(),
-        self.ip_addr = socket.gethostbyname(socket.gethostname())
+        #self.ip_addr = socket.gethostbyname(self.hostname)
         self.uptime = (int) (time.time() - psutil.boot_time())
         self.CPUbyCore = psutil.cpu_percent(percpu=True)
         self.mem = psutil.virtual_memory()._asdict()
