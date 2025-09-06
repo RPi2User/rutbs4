@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import uuid
 import json
 import os
 import time
@@ -19,6 +20,7 @@ VERSION: str = "4.0.0"
 
 class Host():
     
+    uuid: str
     response: Response = Response(response='', mimetype="text/plain", status=0)
     hostname : str
     ip_addr: str
@@ -41,6 +43,7 @@ class Host():
     """
     
     def __init__(self):
+        self.uuid = str(uuid.uuid4)
         self.refresh_status()
         self.tape_drives = {}
         for drive in self.get_drives()["tape_drives"]:
@@ -52,6 +55,7 @@ class Host():
         self.refresh_status()
         data = {
             "hostname": self.hostname,
+            "host-uuid": self.uuid,
             "last_response": self.response._asdict(),
             "ip_addr": self.ip_addr,
             "uptime": self.uptime,
@@ -97,6 +101,7 @@ class Host():
         self.refresh_status()
         data = {
             "hostname": self.hostname,
+            "host-uuid": self.uuid,
             "last_response": self.response._asdict(),
             "ip_addr": self.ip_addr,
             "uptime": self.uptime,
