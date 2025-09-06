@@ -16,7 +16,7 @@ from tbk.File import File
 
 class Host():
     
-    response: Response(response="", mimetype="text/plain", status=200)
+    response: Response = Response(response='', mimetype="text/plain", status=0)
     hostname : str
     ip_addr: str
     uptime: int
@@ -24,6 +24,7 @@ class Host():
     mem : dict
     load : tuple
     tape_drives : dict
+    threadCount: int
     threadLimit: int
     
     mounts : list[Mount]
@@ -43,32 +44,86 @@ class Host():
             alias = drive["alias"]
             alt_path = drive["alt_path"]
             self.tape_drives[alias] = TapeDrive(alt_path)
-    
+
     def __str__(self) -> str:
         self.refresh_status()
         data = {
             "hostname": self.hostname,
-            "last_response": self.response,
+            "last_response": self.response._asdict(),
             "ip_addr": self.ip_addr,
             "uptime": self.uptime,
-            "threadLimit": self.threadLimdit,
+            "threadLimit": self.threadLimit,
             "CPUbyCore": self.CPUbyCore,
             "mem": self.mem,
             "load": self.load,
             "tape_drives": self.tape_drives
         }
-        return json.dumps(data, indent=2)
 
-    def greeter(self) -> str:
-        return "THIS IS A RUTBS BACKEND"
+        return json.dumps(data)
+
+    def greeter(self) -> Response:
+        self.response = Response(
+                            response="THIS IS A RUTBS BACKEND!",
+                            mimetype="text/plain",
+                            status=200
+                        )
+        return self.response
+
+    def setThreadlimit(self, count: int) -> Response:
+        _response_text: str = "ERROR setting ThreadLimit failed! See Logs"
+        _status_code = 500
+
+        if (count <= self.threadLimit):
+            _response_text = "Thread Limit set: " + self.threadLimit + " of " + self.threadCount
+            _status_code = 200
+        else:
+            _response_text = "Thread Limit higher as ThreadCount! Currently: " + self.threadLimit + " of " + self.threadCount
+            _status_code = 400
+
+        self.response = Response(
+            response= _response_text,
+            mimetype="text/plain",
+            status=_status_code
+        )
+        return self.response
+
+
+    def status(self) -> Response:
+        self.refresh_status()
+        data = {
+            "hostname": self.hostname,
+            "last_response": self.response._asdict(),
+            "ip_addr": self.ip_addr,
+            "uptime": self.uptime,
+            "threadLimit": self.threadLimit,
+            "CPUbyCore": self.CPUbyCore,
+            "mem": self.mem,
+            "load": self.load,
+            "tape_drives": self.tape_drives
+        }
+
+        
+        # This one does NOT use self.response because message len
+        # will rise recursively. We do not like recursion!
+        return Response(
+                response=json.dumps(data),
+                mimetype="application/json",
+                status=200)
+
+
 
     def DEBUG(self) -> str:
         # This is the Main Debug Entry Point
         pass
         
     def refresh_status(self):
-        self.hostname = socket.gethostname(),
-        #self.ip_addr = socket.gethostbyname(self.hostname)
+        self.hostname = socket.gethostname()
+        self.threadLimit = 1
+        try:
+            self.ip_addr = socket.gethostbyname(self.hostname)
+        except socket.gaierror:
+            self.ip_addr = "127.0.0.1"
+        
         self.uptime = (int) (time.time() - psutil.boot_time())
         self.CPUbyCore = psutil.cpu_percent(percpu=True)
         self.mem = psutil.virtual_memory()._asdict()

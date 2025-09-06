@@ -32,8 +32,7 @@ def get_slash():
       200:
         description: Returns a simple TEXT response
     """
-    return app.response_class(response=host.greeter(), 
-                              mimetype='text/plain')
+    return host.greeter()
 
 
 @app.route('/host', methods=['GET']) # documented
@@ -48,6 +47,27 @@ def get_host():
         description: Host is reachable
     """
     return '', 200
+
+@app.route('/host/threadlimit/<int:count>', methods=['POST']) # TODO: Documentation
+def post_host_threadlimit(count: int):
+    """
+    Get heartbeat
+    ---
+    tags:
+      - Host
+    parameters:
+      - name: count
+        in: path
+        type: integer
+        required: true
+        description: positive number between 1 and n, default: n
+    responses:
+      200:
+        description: Thread limit set
+      400:
+        description: Thread limit count above physical thread count
+    """
+    return host.setThreadlimit(count)
 
 @app.route('/host/debug', methods=['GET'])  # Quick and easy Debugging-Entry-Point, documented
 def get_host_debug():
@@ -101,7 +121,7 @@ def get_host_status():
       200:
         description: Returns the host status
     """
-    return host.get_host_status()
+    return host.status()
 
 @app.route('/host/drives', methods=['GET']) # documented
 def get_host_drives():
