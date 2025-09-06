@@ -15,6 +15,7 @@ from tbk.TableOfContent import TableOfContent
 from tbk.File import File
 
 DEBUG: bool = False
+VERSION: str = "4.0.0"
 
 class Host():
     
@@ -62,7 +63,7 @@ class Host():
             "tape_drives": self.tape_drives
         }
 
-        return json.dumps(data)
+        return json.dumps(data, indent=2)
 
     def greeter(self) -> Response:
         self.response = Response(
@@ -134,6 +135,18 @@ class Host():
             mimetype=_response_mimetype,
             status=_response_code)
         return self.response
+
+    def Version(self) -> Response:
+        data = {
+            "version": VERSION
+        }
+        self.response = Response(
+            response=json.dumps(data),
+            mimetype="application/json",
+            status=200
+        )
+
+        return self.response 
         
     # This keeps track of ALL system variables, maybe a "isInit: bool" will be added
     def refresh_status(self):
@@ -153,7 +166,11 @@ class Host():
         self.mem = psutil.virtual_memory()._asdict()
         self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
     
-    def get_drives(self) -> json:
+    def get_drives(self) -> Response:
+        _response_text: str
+        _response_mime: str
+        _response_code: int
+
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
         drive_map = {}
 
@@ -178,7 +195,22 @@ class Host():
                     drive_map[drive_id]["alt_path"] = full_path
 
         drives = [drive for drive in drive_map.values() if drive["path"]]
-        return {"tape_drives": drives}
+
+        if (len(drives) == 0):
+            _response_code = 204
+            _response_mime = "text/plain"
+            _response_text = "No tape drive found."
+        else:
+            _response_code = 200
+            _response_mime = "application/json"
+            _response_text = json.dumps(drives)
+
+        self.response = Response(
+            response=_response_text,
+            mimetype=_response_mime,
+            status=_response_code
+        )
+        return self.response
     
     def get_tape_drive(self, alias) -> TapeDrive:
         try:

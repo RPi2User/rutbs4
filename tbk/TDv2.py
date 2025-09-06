@@ -408,5 +408,7 @@ class TapeDrive:
             self.status = self.getStatus()  # Update status
             self.process = None  # Reset the process
             sleep(0.5)
+
+    # TODO conv to json OR _asdict()
     def __str__(self) -> str:
         return "TapeDrive(Path: " + self.path + ", ltoVersion: " + str(self.ltoVersion) + ", Status: " + str(self.status) + ", BlockSize: " + self.blockSize + ", Busy?: " + str(self.bsy) + "\n"

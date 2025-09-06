@@ -58,10 +58,11 @@ class Command:
             self.stderr.append(line.rstrip('\n'))
         
 
-    def kill(self) -> None:
+    # Retruns Exitcode of application
+    def kill(self) -> int:
         self.status()
         self.process.terminate()
-        self.process.wait()
+        return self.process.wait()
         
     
     # This populates all Vars
