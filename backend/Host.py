@@ -14,6 +14,8 @@ from tbk.TDv2 import TapeDrive
 from tbk.TableOfContent import TableOfContent
 from tbk.File import File
 
+DEBUG: bool = False
+
 class Host():
     
     response: Response = Response(response='', mimetype="text/plain", status=0)
@@ -114,10 +116,24 @@ class Host():
                 status=200)
 
 
+    def DEBUG(self) -> Response:
+        _response_text: str = ""
+        _response_mimetype: str = "text/plain"
+        _response_code = 400
 
-    def DEBUG(self) -> str:
-        # This is the Main Debug Entry Point
-        pass
+        if DEBUG:
+            # THIS is the Entry Point!
+            pass
+        else:
+            _response_text = "No Bugs found"
+            _response_mimetype = "text/plain"
+            _response_code = 418
+
+        self.response = Response(
+            response=_response_text,
+            mimetype=_response_mimetype,
+            status=_response_code)
+        return self.response
         
     # This keeps track of ALL system variables, maybe a "isInit: bool" will be added
     def refresh_status(self):

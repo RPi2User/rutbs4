@@ -77,24 +77,14 @@ def get_host_debug():
     tags:
       - Host
     responses:
+      200:
+        description: Custom, See Logs!
+      400:
+        description: Default for red Text || Programmer does not care about the statuscode
       418:
-        description: Debugging completed
+        description: Debugging no longer neccesary
     """
-    if DEBUG:
-        tapeDrive: TapeDrive = host.get_tape_drive("st0")
-        tapeDrive.write(File(0,"test.3", "/opt/test_files/test.3"))
-        #current_toc: TableOfContent = tapeDrive.readTOC()
-        #for file in current_toc.files:
-        #    file.path = "/opt/read_test/" + file.name
-        #host.calcChecksums(current_toc)
-
-        # for file in current_toc.files:
-        #     file.path = "/tmp/readtest" # Changed! user-defined destiation "entrypoint"
-        #     tapeDrive.read(file)
-        print("DEBUG Done")
-        
-        return tapeDrive.getStatusJson(), 418
-    return 'DEBUG is not enabled', 403
+    return host.DEBUG()
 
 @app.route('/host/version', methods=['GET'])  # doucmented
 def get_host_version():
