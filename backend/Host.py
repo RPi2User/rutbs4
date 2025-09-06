@@ -146,7 +146,7 @@ class Host():
             status=200
         )
 
-        return self.response 
+        return self.response
         
     # This keeps track of ALL system variables, maybe a "isInit: bool" will be added
     def refresh_status(self):
