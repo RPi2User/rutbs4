@@ -50,7 +50,7 @@ class TapeDrive:
     
     path : str
     ltoVersion : int
-    status : int = 255
+    status : Status = Status.NOT_IMPLEMENTED
     blockSize : str
     bsy : bool          # Only true when: R/W
     status_msg: str = "NotInitialized"
@@ -291,18 +291,20 @@ class TapeDrive:
             # This is very fucky string manipulation so it needs special treatment ^^ (exception handling)
             _out : str = subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout.split("\n")[-2].split(" ")
             self.status_msg = _out
-        except:
-            self.status_msg = "[ERROR] status-request failed: `mt '" + self.path + "' status` OUT: " + subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout
-            return 0
+
+        except Exception as e:
+            self.status_msg = "[ERROR] status-request failed: `mt '" + self.path + "' status` OUT: " + subprocess.run(["mt", "-f", self.path, "status"], capture_output=True, text=True).stdout + "\r\nException: " + str(e)
+            return Status.ERROR
+
         if 'ONLINE' in _out:
             if 'BOT' in _out:
                 if 'WR_PROT' in _out:
-                    return 3        # Tape RDY + WP
-                return 2            # Tape RDY
-            return 4                # Not at BOT, needs rewinding
-        return 1                    # No Tape
+                    return Status.TAPE_RDY_WP
+                return Status.TAPE_RDY
+            return Status.NOT_AT_BOT
+        return Status.NO_TAPE
 
-    def getStatusWhenBsy(self) -> int: # When bsy then is EITHER process currently running OR finished
+    def getStatusWhenBsy(self) -> Status: # When bsy then is EITHER process currently running OR finished
         # Process is terminated when self.process.poll() is not None -> has Exitcode
         
         if self.process.poll() is not None:  # if Process is terminated
@@ -311,11 +313,11 @@ class TapeDrive:
             
             if proc_exit_code != 0: # Eval EC
                 self.status_msg = "[ERROR] Operation at Status" + str(self.status) + " failed with exitcode: " + str(proc_exit_code)
-                self.status = 0 # Set ERROR state
+                self.status = Status.ERROR
                 
         return self.status
 
-    def getStatus(self) -> int: # Application must poll this fucker regularly :)
+    def getStatus(self) -> Status: # Application must poll this fucker regularly :)
         if self.bsy:
             return self.getStatusWhenBsy()
         else:
@@ -409,6 +411,15 @@ class TapeDrive:
             self.process = None  # Reset the process
             sleep(0.5)
 
-    # TODO conv to json OR _asdict()
+    def _asdict(self) -> dict:
+        data = {
+            "path": self.path,
+            "ltoVersion" : str(self.ltoVersion),
+            "status": str(self.status),
+            "blocksize": self.blockSize,
+            "busy?": str(self.bsy)
+        }
+        return data
+
     def __str__(self) -> str:
         return "TapeDrive(Path: " + self.path + ", ltoVersion: " + str(self.ltoVersion) + ", Status: " + str(self.status) + ", BlockSize: " + self.blockSize + ", Busy?: " + str(self.bsy) + "\n"

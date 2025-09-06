@@ -211,14 +211,41 @@ class Host():
             status=_response_code
         )
         return self.response
-    
-    def get_tape_drive(self, alias) -> TapeDrive:
+
+    # Gets JSON from a single drive
+    # 200: Drive found
+    # 404: No drive Found
+    # 500: Everything else, like st0 is on fire
+    def get_tape_drive(self, alias) -> Response:
+
+        _response_text: str
+        _response_mime: str
+        _response_code: int
         try:
-            return self.tape_drives.get(alias)
-        except:
-            return None
+            drive: TapeDrive = self.tape_drives.get(alias)
+            _response_text=json.dumps(drive._asdict())
+            _response_mime="application/json"
+            _response_code=200
+
+        except KeyError:
+            _response_code=404
+            _response_mime="text/plain"
+            _response_text=""
+
+        except Exception as e:
+            _response_code=500,
+            _response_mime="text/plain",
+            _response_text="Unkown Exception: \r\n" + str(e)
 
     
+        self.response = Response(
+            response=_response_text,
+            status=_response_code,
+            mimetype=_response_mime
+        )
+
+        return self.response
+
     def get_mounts(self):
         result = subprocess.run(
             ["df", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "--output=source,size,used,target,fstype"],
