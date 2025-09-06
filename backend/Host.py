@@ -25,7 +25,7 @@ class Host():
     load : tuple
     tape_drives : dict
     threadCount: int
-    threadLimit: int
+    threadLimit: int = 0
     
     mounts : list[Mount]
 
@@ -52,8 +52,9 @@ class Host():
             "last_response": self.response._asdict(),
             "ip_addr": self.ip_addr,
             "uptime": self.uptime,
-            "threadLimit": self.threadLimit,
             "CPUbyCore": self.CPUbyCore,
+            "threadCount": self.threadCount,
+            "threadLimit": self.threadLimit,
             "mem": self.mem,
             "load": self.load,
             "tape_drives": self.tape_drives
@@ -74,10 +75,11 @@ class Host():
         _status_code = 500
 
         if (count <= self.threadLimit):
-            _response_text = "Thread Limit set: " + self.threadLimit + " of " + self.threadCount
+            self.threadLimit = count
+            _response_text = "ThreadLimit set: " + str(self.threadLimit) + " of " + str(self.threadCount)
             _status_code = 200
         else:
-            _response_text = "Thread Limit higher as ThreadCount! Currently: " + self.threadLimit + " of " + self.threadCount
+            _response_text = "ThreadLimit higher then ThreadCount! Currently: " + str(self.threadLimit) + " of " + str(self.threadCount)
             _status_code = 400
 
         self.response = Response(
@@ -95,8 +97,9 @@ class Host():
             "last_response": self.response._asdict(),
             "ip_addr": self.ip_addr,
             "uptime": self.uptime,
-            "threadLimit": self.threadLimit,
             "CPUbyCore": self.CPUbyCore,
+            "threadCount": self.threadCount,
+            "threadLimit": self.threadLimit,
             "mem": self.mem,
             "load": self.load,
             "tape_drives": self.tape_drives
@@ -116,9 +119,9 @@ class Host():
         # This is the Main Debug Entry Point
         pass
         
+    # This keeps track of ALL system variables, maybe a "isInit: bool" will be added
     def refresh_status(self):
         self.hostname = socket.gethostname()
-        self.threadLimit = 1
         try:
             self.ip_addr = socket.gethostbyname(self.hostname)
         except socket.gaierror:
@@ -126,6 +129,11 @@ class Host():
         
         self.uptime = (int) (time.time() - psutil.boot_time())
         self.CPUbyCore = psutil.cpu_percent(percpu=True)
+        self.threadCount = len(self.CPUbyCore)
+
+        if (self.threadLimit == 0):     # if ThreadLimit not initialized, then set it to max.
+            self.threadLimit = self.threadCount
+
         self.mem = psutil.virtual_memory()._asdict()
         self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
     
