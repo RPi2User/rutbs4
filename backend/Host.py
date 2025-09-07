@@ -62,7 +62,7 @@ class Host():
             "threadLimit": self.threadLimit,
             "mem": self.mem,
             "load": self.load,
-            "tape_drives": self.tape_drives
+            "tape_drives": self.drives
         }
 
         return json.dumps(data, indent=2)
@@ -108,7 +108,7 @@ class Host():
             "threadLimit": self.threadLimit,
             "mem": self.mem,
             "load": self.load,
-            "tape_drives": self.drives
+            "tape_drives": self.drives._asdict()
         }
 
         
