@@ -28,7 +28,7 @@ class Host():
     CPUbyCore: dict
     mem : dict
     load : tuple
-    tape_drives : dict
+    drives : list[TapeDrive]
     threadCount: int
     threadLimit: int = 0
     
@@ -44,12 +44,10 @@ class Host():
     
     def __init__(self):
         self.uuid = str(uuid.uuid4)
+        self.drives: TapeDrive = {}
         self.refresh_status()
-        self.tape_drives = {}
-        for drive in self.get_drives()["tape_drives"]:
-            alias = drive["alias"]
-            alt_path = drive["alt_path"]
-            self.tape_drives[alias] = TapeDrive(alt_path)
+        self.drives = list[TapeDrive]()
+
 
     def __str__(self) -> str:
         self.refresh_status()
@@ -110,7 +108,7 @@ class Host():
             "threadLimit": self.threadLimit,
             "mem": self.mem,
             "load": self.load,
-            "tape_drives": self.tape_drives
+            "tape_drives": self.drives
         }
 
         
@@ -198,18 +196,26 @@ class Host():
                     drive_map[drive_id]["path"] = full_path
                 else:
                     drive_map[drive_id]["alt_path"] = full_path
+        print(drive_map)
 
-        drives = [drive for drive in drive_map.values() if drive["path"]]
+        for i in range(len(drive_map.values())):
+            current_element: dict = drive_map.get(str(i)) 
+            tape_drive: TapeDrive = TapeDrive(
+                path_to_tape_drive=current_element["path"]
+            )
+            self.drives.append(tape_drive)    
 
-        if (len(drives) == 0):
+        if (len(self.drives) == 0):
             _response_code = 204
             _response_mime = "text/plain"
             _response_text = "No tape drive found."
         else:
             _response_code = 200
             _response_mime = "application/json"
-            _response_text = json.dumps(drives)
-
+            data = {}
+            for drive in self.drives:
+                data.update({drive.path : drive._asdict()})
+            _response_text = json.dumps(data)
         self.response = Response(
             response=_response_text,
             mimetype=_response_mime,
