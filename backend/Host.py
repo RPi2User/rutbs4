@@ -28,7 +28,7 @@ class Host():
     CPUbyCore: dict
     mem : dict
     load : tuple
-    drives : list[TapeDrive]
+    drives : list[TapeDrive] = list[TapeDrive]()
     threadCount: int
     threadLimit: int = 0
     
@@ -43,11 +43,8 @@ class Host():
     """
     
     def __init__(self):
-        self.uuid = str(uuid.uuid4)
-        self.drives: TapeDrive = {}
+        self.uuid = str(uuid.uuid4())
         self.refresh_status()
-        self.drives = list[TapeDrive]()
-
 
     def __str__(self) -> str:
         self.refresh_status()
@@ -97,6 +94,9 @@ class Host():
 
     def status(self) -> Response:
         self.refresh_status()
+        _drives = {}
+        for drive in self.drives:
+            _drives.update({drive.path : drive._asdict()}) 
         data = {
             "hostname": self.hostname,
             "host-uuid": self.uuid,
@@ -108,7 +108,7 @@ class Host():
             "threadLimit": self.threadLimit,
             "mem": self.mem,
             "load": self.load,
-            "tape_drives": self.drives._asdict()
+            "tape_drives": _drives
         }
 
         
@@ -168,12 +168,15 @@ class Host():
 
         self.mem = psutil.virtual_memory()._asdict()
         self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
+
+        self.get_drives(silent=True)
     
-    def get_drives(self) -> Response:
+    def get_drives(self, silent: bool = False) -> Response:
         _response_text: str
         _response_mime: str
         _response_code: int
 
+        # TODO migrate result to backend.Command() to achive 
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
         drive_map = {}
 
@@ -196,14 +199,16 @@ class Host():
                     drive_map[drive_id]["path"] = full_path
                 else:
                     drive_map[drive_id]["alt_path"] = full_path
-        print(drive_map)
 
         for i in range(len(drive_map.values())):
             current_element: dict = drive_map.get(str(i)) 
             tape_drive: TapeDrive = TapeDrive(
                 path_to_tape_drive=current_element["path"]
             )
-            self.drives.append(tape_drive)    
+            self.drives.append(tape_drive)
+
+        if silent:
+            return self.response
 
         if (len(self.drives) == 0):
             _response_code = 204
