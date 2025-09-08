@@ -177,10 +177,7 @@ def get_drive(alias):
       404:
         description: Drive not found
     """
-    tapeDrive = host.get_tape_drive(alias)
-    if tapeDrive is not None:
-        return tapeDrive.getTapeDriveJSON(), 200
-    return '', 404
+    return host.get_tape_drive(alias)
 
 @app.route('/drive/<alias>/status', methods=['GET']) # Get status of a specific drive
 def get_drive_status(alias):

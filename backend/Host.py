@@ -203,6 +203,7 @@ class Host():
         for i in range(len(drive_map.values())):
             current_element: dict = drive_map.get(str(i)) 
             tape_drive: TapeDrive = TapeDrive(
+                alias = current_element["alias"],
                 path_to_tape_drive=current_element["path"]
             )
             self.drives.append(tape_drive)
@@ -236,10 +237,16 @@ class Host():
 
         _response_text: str
         _response_mime: str
-        _response_code: int
+        _response_code: int = 0
         try:
-            drive: TapeDrive = self.tape_drives.get(alias)
-            _response_text=json.dumps(drive._asdict())
+            _drive: TapeDrive
+            for drive in self.drives:
+                if (drive.alias == alias):
+                    _drive = drive
+                    break
+
+            
+            _response_text=json.dumps(_drive._asdict())
             _response_mime="application/json"
             _response_code=200
 
@@ -249,11 +256,10 @@ class Host():
             _response_text=""
 
         except Exception as e:
-            _response_code=500,
-            _response_mime="text/plain",
+            _response_code=500
+            _response_mime="text/plain"
             _response_text="Unkown Exception: \r\n" + str(e)
 
-    
         self.response = Response(
             response=_response_text,
             status=_response_code,

@@ -49,6 +49,7 @@ Bugs:
 class TapeDrive:
     
     path : str
+    alias: str
     ltoVersion : int
     status : Status = Status.NOT_IMPLEMENTED
     blockSize : str
@@ -69,10 +70,11 @@ class TapeDrive:
     CMD_DD_READ = "dd if='{path}' of='{file_path}' bs='{block_size}' status=progress"
     CMD_DD_WRITE = "dd if='{file_path}' of='{path}' bs='{block_size}' status=progress"
     
-    def __init__(self, path_to_tape_drive: str, blockSize: str = "1M", ltoVersion: int = 0) -> None:
+    def __init__(self, alias: str, path_to_tape_drive: str, blockSize: str = "1M", ltoVersion: int = 0) -> None:
         self.status_msg = "Initializing..."
         self.ltoVersion = ltoVersion
         self.blockSize: str = blockSize
+        self.alias: str = alias 
         self.path: str = path_to_tape_drive
         self.bsy = False
         self.status = self.getStatus()
@@ -337,6 +339,7 @@ class TapeDrive:
         tape_json: json = {
             "TapeDrive": {
                 "path" : self.path,
+                "alias" : self.alias,
                 "ltoVersion" : self.ltoVersion,
                 "status" : self.status,
                 "blockSize" : self.blockSize,
@@ -414,6 +417,7 @@ class TapeDrive:
     def _asdict(self) -> dict:
         data = {
             "path": self.path,
+            "alias" : self.alias,
             "ltoVersion" : str(self.ltoVersion),
             "status": str(self.status),
             "blocksize": self.blockSize,
@@ -422,4 +426,4 @@ class TapeDrive:
         return data
 
     def __str__(self) -> str:
-        return "TapeDrive(Path: " + self.path + ", ltoVersion: " + str(self.ltoVersion) + ", Status: " + str(self.status) + ", BlockSize: " + self.blockSize + ", Busy?: " + str(self.bsy) + "\n"
+        return "TapeDrive(Path: " + self.path + ", alias: " + self.alias + ", ltoVersion: " + str(self.ltoVersion) + ", Status: " + str(self.status) + ", BlockSize: " + self.blockSize + ", Busy?: " + str(self.bsy) + "\n"
