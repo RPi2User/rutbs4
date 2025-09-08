@@ -60,7 +60,7 @@ def post_host_threadlimit(count: int):
         in: path
         type: integer
         required: true
-        description: positive number between 1 and n, default: n
+        description: "positive number between 1 and n, default: n"
     responses:
       200:
         description: Thread limit set
@@ -80,7 +80,7 @@ def get_host_debug():
       200:
         description: Custom, See Logs!
       400:
-        description: Default for red Text || Programmer does not care about the statuscode
+        description: Default for red Text Programmer does not care about the statuscode
       418:
         description: Debugging no longer neccesary
     """
@@ -156,10 +156,7 @@ def get_drive_root():
       204:
         description: No drives found
     """
-    drives = host.get_drives()
-    if "tape_drives" in drives and drives["tape_drives"]:
-        return drives, 200
-    return '', 204
+    return host.get_drives()
 
 @app.route('/drive/<alias>', methods=['GET'])  # Get .toString() of a specific drive, documented
 def get_drive(alias):

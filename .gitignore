@@ -6,6 +6,6 @@ launch.json
 Pipfile*
 .vscode
 .idea
-.env
+.venv
 .run
 __pycache__
