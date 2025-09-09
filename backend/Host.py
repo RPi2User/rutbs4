@@ -9,6 +9,7 @@ import socket
 import psutil
 
 from backend.Response import Response
+from backend.Command import Command
 
 from backend.Mount import Mount
 from tbk.TDv2 import TapeDrive
@@ -19,7 +20,7 @@ DEBUG: bool = False
 VERSION: str = "4.0.0"
 
 class Host():
-    
+
     uuid: str
     response: Response = Response(response='', mimetype="text/plain", status=0)
     hostname : str
@@ -31,7 +32,8 @@ class Host():
     drives : list[TapeDrive] = list[TapeDrive]()
     threadCount: int
     threadLimit: int = 0
-    
+    last_command: Command = None
+
     mounts : list[Mount]
 
     """_summary_
@@ -39,9 +41,9 @@ class Host():
 
     Theory of Operation:
        - Each API Request gets fetched here
-       - each Public Method returns self.response  
+       - each Public Method returns self.response
     """
-    
+
     def __init__(self):
         self.uuid = str(uuid.uuid4())
         self.refresh_status()
@@ -96,7 +98,7 @@ class Host():
         self.refresh_status()
         _drives = {}
         for drive in self.drives:
-            _drives.update({drive.path : drive._asdict()}) 
+            _drives.update({drive.path : drive._asdict()})
         data = {
             "hostname": self.hostname,
             "host-uuid": self.uuid,
@@ -111,7 +113,7 @@ class Host():
             "tape_drives": _drives
         }
 
-        
+
         # This one does NOT use self.response because message len
         # will rise recursively. We do not like recursion!
         return Response(
@@ -150,7 +152,7 @@ class Host():
         )
 
         return self.response
-        
+
     # This keeps track of ALL system variables, maybe a "isInit: bool" will be added
     def refresh_status(self):
         self.hostname = socket.gethostname()
@@ -158,7 +160,7 @@ class Host():
             self.ip_addr = socket.gethostbyname(self.hostname)
         except socket.gaierror:
             self.ip_addr = "127.0.0.1"
-        
+
         self.uptime = (int) (time.time() - psutil.boot_time())
         self.CPUbyCore = psutil.cpu_percent(percpu=True)
         self.threadCount = len(self.CPUbyCore)
@@ -170,18 +172,18 @@ class Host():
         self.load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else "N/A"
 
         self.get_drives(silent=True)
-    
+
     def get_drives(self, silent: bool = False) -> Response:
         _response_text: str
         _response_mime: str
         _response_code: int
 
-        # TODO migrate result to backend.Command() to achive 
+        # TODO migrate result to backend.Command() to achive
         result = subprocess.run(["find", "/dev", "-maxdepth", "1", "-type", "c"], capture_output=True, text=True)
         drive_map = {}
 
         for dev in result.stdout.split("\n"):
-            dev = dev.strip().split("/")[-1] 
+            dev = dev.strip().split("/")[-1]
             match = re.match(r"^(nst|st)(\d+)$", dev)
             if match:
                 drive_type, drive_id = match.groups()
@@ -201,7 +203,7 @@ class Host():
                     drive_map[drive_id]["alt_path"] = full_path
 
         for i in range(len(drive_map.values())):
-            current_element: dict = drive_map.get(str(i)) 
+            current_element: dict = drive_map.get(str(i))
             tape_drive: TapeDrive = TapeDrive(
                 alias = current_element["alias"],
                 path_to_tape_drive=current_element["path"]
@@ -245,7 +247,7 @@ class Host():
                     _drive = drive
                     break
 
-            
+
             _response_text=json.dumps(_drive._asdict())
             _response_mime="application/json"
             _response_code=200
@@ -268,7 +270,7 @@ class Host():
 
         return self.response
 
-    def drive_eject(self, alias):
+    def drive_eject(self, alias) -> Response:
         """_summary_
         This relays the eject call to correct TapeDrive
         Args:
@@ -276,10 +278,46 @@ class Host():
 
         HTTP-Codes:
             - 200:  success
+            - 202:  drive busy, retry
             - 404:  drive not found
         """
+        self.refresh_status()
+
+        _response_text: str
+        _response_mime: str
+        _response_code: int
+        _response_retry_after: int = 120
+
+        _drive: TapeDrive = None
         for drive in self.drives:
-            pass
+            if drive.alias == alias:
+                _drive = drive
+                break
+
+        if _drive is None:
+            _response_code = 404
+            _response_mime = "text/plain"
+            _response_text = "Drive not found."
+        elif _drive.bsy:
+            _response_code = 503
+            _response_mime = "text/plain"
+            _response_text = "Drive is busy. Please try again later."
+        else:
+           # Hier ggf. deine Eject-Logik implementieren
+            _response_code = 200
+            _response_mime = "text/plain"
+            _response_text = "Eject Command issued."
+
+        response = Response(
+            response=_response_text,
+            status=_response_code,
+            mimetype=_response_mime
+        )
+        if (_response_code == 503):
+            response.headers["Retry-After"] = _response_retry_after
+
+        return response
+
 
 
     def get_mounts(self):
@@ -288,10 +326,10 @@ class Host():
             capture_output=True,
             text=True
         )
-        
+
         lines = result.stdout.strip().split("\n")[1:]  # Skip header, sadly "df" does not have a "--quiet | --no-head" option
         mounts : list[Mount] = []
-        
+
         for line in lines:
             parts = line.split()
             if len(parts) == 5:
@@ -302,5 +340,5 @@ class Host():
                     mountpoint=parts[3],
                     fstype=parts[4]
                 ))
-                
+
         return json.dumps({"mounts": [mount.__dict__ for mount in mounts]})

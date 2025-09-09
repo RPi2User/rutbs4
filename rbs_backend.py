@@ -220,7 +220,7 @@ def post_drive_eject(alias):
       404:
         description: Drive not found
     """
-    return host.eject(alias)
+    return host.drive_eject(alias)
 
 @app.route('/drive/<alias>/rewind', methods=['POST']) # Rewind a specific drive
 def post_drive_rewind(alias):

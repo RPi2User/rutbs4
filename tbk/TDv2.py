@@ -8,6 +8,8 @@ import uuid
 import threading
 
 import xml.etree.ElementTree as ET
+
+from backend.Command import Command
 from tbk.TableOfContent import TableOfContent
 from tbk.File import File
 from tbk.Status import Status
@@ -56,6 +58,7 @@ class TapeDrive:
     bsy : bool          # Only true when: R/W
     status_msg: str = "NotInitialized"
     currentID: int = -1
+    command: Command
     process: subprocess.Popen = None
     coreCount: int = os.cpu_count()
     
@@ -79,12 +82,13 @@ class TapeDrive:
         self.bsy = False
         self.status = self.getStatus()
     
-    def eject(self) -> None:
+    def eject(self) -> Command:
         if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
             self.bsy = True
             self.status = Status.EJECTING.value
             self.status_msg = "Ejecting..."
-            self.process = subprocess.Popen(self.CMD_EJECT.format(path=self.path), shell=True)
+            self.command = Command(self.CMD_EJECT)
+        return self.command
 
     def write(self, file: File) -> None:
         self.status = self.getStatus()
