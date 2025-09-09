@@ -87,8 +87,7 @@ class Command:
         except PermissionError:
             print("[ERROR] Insufficient Permissions: Can't read file " + self.io_path, file=sys.stderr)
 
-    def __str__(self):
-        # Returns Command c in json
+    def _asdict(self) -> dict:
         self.status()
         data = {
             "cmd": self.cmd,
@@ -100,4 +99,10 @@ class Command:
             "io": self.io,
             "exitCode": self.exitCode
         }
-        return json.dumps(data, indent=2)
+
+        return data
+
+    def __str__(self):
+        # Returns Command json as str
+
+        return json.dumps(self._asdict())
