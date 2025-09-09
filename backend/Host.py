@@ -279,6 +279,7 @@ class Host():
         HTTP-Codes:
             - 200:  success
             - 404:  drive not found
+            - 409:  Tape Drive in invalid state
             - 503:  drive busy, retry
         """
         self.refresh_status()
@@ -308,6 +309,10 @@ class Host():
             _response_text = "Eject Command queued."
 
             last_command = _drive.eject()
+            if self.last_command is None:
+                _response_code = 409
+                _response_mime = "text/plain"
+                _response_text = "Eject: TapeDrive in Invalid State:" + str(_drive.status)
             last_command.status()
 
             while last_command.running:
@@ -320,7 +325,7 @@ class Host():
 
                 data = {
                     "description": f"Eject command at {_drive.path} failed!",
-                    "command" : str(last_command)
+                    "command" : last_command._asdict()
                 }
                 _response_text = json.dumps(data)
 

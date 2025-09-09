@@ -58,7 +58,7 @@ class TapeDrive:
     bsy : bool          # Only true when: R/W
     status_msg: str = "NotInitialized"
     currentID: int = -1
-    command: Command
+    command: Command = Command("pwd")
     process: subprocess.Popen = None
     coreCount: int = os.cpu_count()
     
@@ -67,8 +67,9 @@ class TapeDrive:
     readThread: threading.Thread = None
     writeThread: threading.Thread = None
     
+    # BUG migrate this into a sigle dict
     CMD_STATUS = "mt -f '{path}' status"
-    CMD_EJECT = "mt -f '{path}' eject"
+    CMD_EJECT = f"mt -f '{path}' eject"
     CMD_REWIND = "mt -f '{path}' rewind"
     CMD_DD_READ = "dd if='{path}' of='{file_path}' bs='{block_size}' status=progress"
     CMD_DD_WRITE = "dd if='{file_path}' of='{path}' bs='{block_size}' status=progress"
@@ -83,13 +84,14 @@ class TapeDrive:
         self.status = self.getStatus()
     
     def eject(self) -> Command:
-        if self.getStatus() in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
+        if self.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
             self.bsy = True
             self.status = Status.EJECTING.value
             self.status_msg = "Ejecting..."
             self.command = Command(self.CMD_EJECT)
             self.command.start()
-        return self.command
+            return self.command
+        return None
 
     def write(self, file: File) -> None:
         self.status = self.getStatus()

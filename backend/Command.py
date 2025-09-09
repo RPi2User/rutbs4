@@ -29,6 +29,7 @@ class Command:
         self.stderr: List[str] = []  # noqa: F821
         self.exitCode: int = None
         self.status_msg: str = ""
+        self.permError: bool = False
 
 
     # This starts the process in the background
@@ -70,9 +71,28 @@ class Command:
         if self.process is None:
             return
 
+        # This kills the zombie process
+        try:
+            self.process.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            pass
+
         if self.process.returncode is None:
             self.running = True
-            self._pollIOfile()
+            data = {
+                "cmd": self.cmd,
+                "pid": self.pid,
+                "running": self.running,
+                "stdout": self.stdout,
+                "stderr": self.stderr,
+                "filesize": self.filesize,
+                "io": self.io,
+                "exitCode": self.exitCode
+            }
+
+            print("DEBUG: cmd " + json.dumps(data)) # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
+            if not self.permError: 
+                self._pollIOfile()
         
         else:
             self.running = False
@@ -80,12 +100,13 @@ class Command:
             self.process = None
 
     def _pollIOfile(self) -> None:
-
-        try:
-            with open(self.io_path, "r") as f:
-                self.io = [line.rstrip('\n') for line in f.readlines()]
-        except PermissionError:
-            print("[ERROR] Insufficient Permissions: Can't read file " + self.io_path, file=sys.stderr)
+        if not self.permError:
+            try:
+                with open(self.io_path, "r") as f:
+                    self.io = [line.rstrip('\n') for line in f.readlines()]
+            except PermissionError:
+                print("[ERROR] Insufficient Permissions: Can't read file " + self.io_path, file=sys.stderr)
+                self.permError = True
 
     def _asdict(self) -> dict:
         self.status()
