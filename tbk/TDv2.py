@@ -88,6 +88,7 @@ class TapeDrive:
             self.status = Status.EJECTING.value
             self.status_msg = "Ejecting..."
             self.command = Command(self.CMD_EJECT)
+            self.command.start()
         return self.command
 
     def write(self, file: File) -> None:

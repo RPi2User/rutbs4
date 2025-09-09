@@ -278,8 +278,8 @@ class Host():
 
         HTTP-Codes:
             - 200:  success
-            - 202:  drive busy, retry
             - 404:  drive not found
+            - 503:  drive busy, retry
         """
         self.refresh_status()
 
@@ -303,10 +303,26 @@ class Host():
             _response_mime = "text/plain"
             _response_text = "Drive is busy. Please try again later."
         else:
-           # Hier ggf. deine Eject-Logik implementieren
             _response_code = 200
             _response_mime = "text/plain"
-            _response_text = "Eject Command issued."
+            _response_text = "Eject Command queued."
+
+            last_command = _drive.eject()
+            last_command.status()
+
+            while last_command.running:
+                last_command.status()
+                time.sleep(0.1)
+
+            if (last_command.exitCode != 0):
+                _response_code = 500
+                _response_mime = "application/json"
+
+                data = {
+                    "description": f"Eject command at {_drive.path} failed!",
+                    "command" : str(last_command)
+                }
+                _response_text = json.dumps(data)
 
         response = Response(
             response=_response_text,
@@ -314,10 +330,9 @@ class Host():
             mimetype=_response_mime
         )
         if (_response_code == 503):
-            response.headers["Retry-After"] = _response_retry_after
+            response.headers["Retry-After"] = str(_response_retry_after)
 
         return response
-
 
 
     def get_mounts(self):
