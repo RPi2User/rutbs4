@@ -158,7 +158,7 @@ def get_drive_root():
     """
     return host.get_drives()
 
-@app.route('/drive/<alias>', methods=['GET'])  # Get .toString() of a specific drive, documented
+@app.route('/drive/<alias>', methods=['GET'])  
 def get_drive(alias):
     """
     Get details of a specific drive
@@ -179,10 +179,10 @@ def get_drive(alias):
     """
     return host.get_tape_drive(alias)
 
-@app.route('/drive/<alias>/status', methods=['GET']) # Get status of a specific drive
+@app.route('/drive/<alias>/status', methods=['GET']) # same req as /deive/<alias>
 def get_drive_status(alias):
     """
-    Get status of a specific drive
+    DUPLICATE Get details of a specific drive
     ---
     tags:
       - Drive Operations
@@ -194,15 +194,11 @@ def get_drive_status(alias):
         description: Alias of the tape drive
     responses:
       200:
-        description: Returns the status of the specified drive
+        description: Returns details of the specified drive
       404:
         description: Drive not found
     """
-    tape_drive = host.get_tape_drive(alias)
-    if tape_drive:
-        tape_drive.status = tape_drive.getStatus()
-        return tape_drive.getStatusJson(), 200
-    return '', 404
+    return host.get_tape_drive(alias)
 
 
 @app.route('/drive/<alias>/eject', methods=['POST']) # Eject a specific drive
@@ -224,11 +220,7 @@ def post_drive_eject(alias):
       404:
         description: Drive not found
     """
-    tape_drive = host.get_tape_drive(alias)
-    if tape_drive:
-        tape_drive.eject()
-        return '', 200
-    return '', 404
+    return host.eject(alias)
 
 @app.route('/drive/<alias>/rewind', methods=['POST']) # Rewind a specific drive
 def post_drive_rewind(alias):

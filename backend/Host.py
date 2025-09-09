@@ -268,6 +268,20 @@ class Host():
 
         return self.response
 
+    def drive_eject(self, alias):
+        """_summary_
+        This relays the eject call to correct TapeDrive
+        Args:
+            alias (str): alias of Tape Drive
+
+        HTTP-Codes:
+            - 200:  success
+            - 404:  drive not found
+        """
+        for drive in self.drives:
+            pass
+
+
     def get_mounts(self):
         result = subprocess.run(
             ["df", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "--output=source,size,used,target,fstype"],
