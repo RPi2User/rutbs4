@@ -241,16 +241,20 @@ class Host():
         _response_mime: str
         _response_code: int = 0
         try:
-            _drive: TapeDrive
+            _drive: TapeDrive = None
             for drive in self.drives:
                 if (drive.alias == alias):
                     _drive = drive
                     break
 
-
-            _response_text=json.dumps(_drive._asdict())
-            _response_mime="application/json"
-            _response_code=200
+            if _drive is None:
+                _response_text="No drives found for '" + alias + "'!"
+                _response_mime="text/plain"
+                _response_code=404
+            else:
+                _response_text=json.dumps(_drive._asdict())
+                _response_mime="application/json"
+                _response_code=200
 
         except KeyError:
             _response_code=404

@@ -49,7 +49,7 @@ Bugs:
 """
 
 class TapeDrive:
-    
+
     path : str
     alias: str
     ltoVersion : int
@@ -58,7 +58,7 @@ class TapeDrive:
     bsy : bool          # Only true when: R/W
     status_msg: str = "NotInitialized"
     currentID: int = -1
-    command: Command = Command("pwd")
+    availableCommands: dict[Command] = {}
     process: subprocess.Popen = None
     coreCount: int = os.cpu_count()
     
@@ -67,12 +67,9 @@ class TapeDrive:
     readThread: threading.Thread = None
     writeThread: threading.Thread = None
     
-    # BUG migrate this into a sigle dict
-    CMD_STATUS = "mt -f '{path}' status"
-    CMD_EJECT = f"mt -f '{path}' eject"
-    CMD_REWIND = "mt -f '{path}' rewind"
-    CMD_DD_READ = "dd if='{path}' of='{file_path}' bs='{block_size}' status=progress"
-    CMD_DD_WRITE = "dd if='{file_path}' of='{path}' bs='{block_size}' status=progress"
+
+    # CMD_DD_READ = "dd if='{path}' of='{file_path}' bs='{block_size}' status=progress"
+    # CMD_DD_WRITE = "dd if='{file_path}' of='{path}' bs='{block_size}' status=progress"
     
     def __init__(self, alias: str, path_to_tape_drive: str, blockSize: str = "1M", ltoVersion: int = 0) -> None:
         self.status_msg = "Initializing..."
@@ -82,6 +79,15 @@ class TapeDrive:
         self.path: str = path_to_tape_drive
         self.bsy = False
         self.status = self.getStatus()
+
+        self.availableCommands = {
+            "status" : Command(cmd="mt -f " + self.path + " status"),
+            "eject" : Command(cmd="mt -f " + self.path + " eject"),
+            "rewind" : Command(cmd="mt -f " + self.path + "rewind"),
+            "read" : "",
+            "write" : ""
+        }
+        print(str(self.availableCommands))
     
     def eject(self) -> Command:
         if self.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
