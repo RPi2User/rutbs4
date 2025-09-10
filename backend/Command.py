@@ -34,6 +34,9 @@ class Command:
 
     # This starts the process in the background
     def start(self):
+        if self.cmd == "":
+            raise Exception("ERROR: Process cannot be initiated, command string empty")
+
         self.process = subprocess.Popen(
             self.cmd,
             shell=True,

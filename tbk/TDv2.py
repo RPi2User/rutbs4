@@ -58,7 +58,7 @@ class TapeDrive:
     bsy : bool          # Only true when: R/W
     status_msg: str = "NotInitialized"
     currentID: int = -1
-    availableCommands: dict[Command] = {}
+    availableCommands: dict[str, Command] = {}
     process: subprocess.Popen = None
     coreCount: int = os.cpu_count()
     
@@ -81,13 +81,12 @@ class TapeDrive:
         self.status = self.getStatus()
 
         self.availableCommands = {
-            "status" : Command(cmd="mt -f " + self.path + " status"),
-            "eject" : Command(cmd="mt -f " + self.path + " eject"),
-            "rewind" : Command(cmd="mt -f " + self.path + "rewind"),
-            "read" : "",
-            "write" : ""
+            "status" : Command(cmd="mt -f '" + self.path + "' status"),
+            "eject" : Command(cmd="mt -f '" + self.path + "' eject"),
+            "rewind" : Command(cmd="mt -f '" + self.path + "' rewind"),
+            "read" : Command(cmd=""),
+            "write" : Command(cmd="")
         }
-        print(str(self.availableCommands.get("status")))
     
     def eject(self) -> Command:
         if self.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
@@ -432,7 +431,7 @@ class TapeDrive:
             "path": self.path,
             "alias" : self.alias,
             "ltoVersion" : str(self.ltoVersion),
-            "currentCommands": self.availableCommands,
+            "currentCommands": {name: cmd._asdict() for name, cmd in self.availableCommands.items()},
             "status": str(self.status),
             "blocksize": self.blockSize,
             "busy?": str(self.bsy)
