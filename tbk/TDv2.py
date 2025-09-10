@@ -87,7 +87,7 @@ class TapeDrive:
             "read" : "",
             "write" : ""
         }
-        print(str(self.availableCommands))
+        print(str(self.availableCommands.get("status")))
     
     def eject(self) -> Command:
         if self.getStatus() not in {Status.TAPE_RDY.value, Status.TAPE_RDY_WP.value, Status.NOT_AT_BOT.value}:
@@ -432,6 +432,7 @@ class TapeDrive:
             "path": self.path,
             "alias" : self.alias,
             "ltoVersion" : str(self.ltoVersion),
+            "currentCommands": self.availableCommands,
             "status": str(self.status),
             "blocksize": self.blockSize,
             "busy?": str(self.bsy)
