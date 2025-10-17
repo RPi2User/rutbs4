@@ -111,6 +111,7 @@ class TapeDrive:
             self.status = Status.WRITING.value
             self.bsy = True
             #if DEBUG: print("DD-CMD: dd if='" + file.path + "' of='" + self.path + "' bs='" + self.blockSize + "' status=progress")
+            #TODO wth?! self.availableCommands.update["write"]  Command("dd if='" + file.path + "'")
             self.process = subprocess.Popen(["dd", f"if={file.path}", f"of={self.path}", f"bs={self.blockSize}" ,"status=progress"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
             def write_thread(self):

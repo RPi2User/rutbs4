@@ -1,11 +1,80 @@
-import datetime
-import os
 import tbk.TableOfContent as TableOfContent
 import tbk.File as File
-import xml.etree.ElementTree as ET
+import tbk.Status as Status
+import backend.Command as Command
+
+from tbk.h_TapeDrive import TapeDrive
 
 DEBUG: bool = False
-VERSION = 3
+VERSION = 4.1
+
+
+# lets boot that file up again
+
+class TapeDrive:
+    
+    print(TapeDrive.FOO)
+
+    _status: Status = Status.ERROR
+    _path: str = ""
+    _blocksize: str = ""
+    _command: Command
+    _readOnly:  bool = True 
+
+    def __init___(self, tapeDrive: File):
+        pass
+
+    def _asdict(self):
+        pass
+
+    def __str__(self):
+        pass
+
+    def rewind(self):
+        if self._status != Status.NOT_AT_BOT:
+            return
+
+        self._status = Status.REWINDING
+        self.__rewind()
+        
+        if self._readOnly:    
+            self._status = Status.TAPE_RDY_WP
+        else:
+            self._status = Status.TAPE_RDY
+
+
+    def eject(self):
+        if self._status != {Status.NOT_AT_BOT, Status.TAPE_RDY, Status.TAPE_RDY_WP}:
+            return
+        self._status = Status.EJECTING
+
+        # After Success, set current State accordingly
+        self._status = Status.NO_TAPE
+
+
+    def write(self, file: File):
+        if self._status != {Status.NOT_AT_BOT, Status.TAPE_RDY}:
+            return
+        self._status = Status.WRITING
+
+        # After Success, set current State accordingly
+        self._status = Status.NOT_AT_BOT
+
+    def writeTOC(self, tableOfContent: TableOfContent):
+        for file in tableOfContent.files:
+            pass
+        
+
+    def read(self, f: File):
+        self._status = Status.READING
+        self._status = Status.NOT_AT_BOT
+        
+        
+    def __rewind(self):
+        c: Command = TapeDrive.COMMANDS[TapeDrive.REWIND]
+        c.start()
+        
+        
 
 #DEPRECATED!
 #DEPRECATED!
@@ -20,6 +89,8 @@ VERSION = 3
 #DEPRECATED!
 #DEPRECATED!
 
+
+"""
 class TapeDrive:
     
     status : int = 0
@@ -164,7 +235,7 @@ class TapeDrive:
             
     def getStatus(self) -> int:
         
-        """_stati_
+        """"""_stati_
         0   Error
         1   No Tape
         2   Tape RDY
@@ -174,7 +245,9 @@ class TapeDrive:
         6   Reading
         
         255 notImplemented
-        """
+        """"""
         
         
         return 255
+"""
+
