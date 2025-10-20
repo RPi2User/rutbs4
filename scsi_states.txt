@@ -1,0 +1,216 @@
+// === LTO 8 ===========================================================
+
+// --- NO TAPE ---------------------------------------------------------
+root@leonie01:/stornvme/vault# mt -f /dev/st0 eject
+root@leonie01:/stornvme/vault# sg_inq /dev/sg6
+standard INQUIRY:
+  PQual=0  PDT=1  RMB=1  LU_CONG=0  hot_pluggable=0  version=0x06  [SPC-4]
+  [AERC=0]  [TrmTsk=0]  NormACA=0  HiSUP=1  Resp_data_format=2
+  SCCS=0  ACC=0  TPGS=0  3PC=0  Protect=1  [BQue=0]
+  EncServ=0  MultiP=1 (VS=0)  [MChngr=0]  [ACKREQQ=0]  Addr16=0
+  [RelAdr=0]  WBus16=0  Sync=0  [Linked=0]  [TranDis=0]  CmdQue=1
+  [SPI: Clocking=0x0  QAS=0  IUS=0]
+    length=70 (0x46)   Peripheral device type: tape
+ Vendor identification: IBM
+ Product identification: ULT3580-HH8
+ Product revision level: MA71
+ Unit serial number: 10WT083661
+root@leonie01:/stornvme/vault# sg_modes --all /dev/sg6
+    IBM       ULT3580-HH8       MA71   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+  Mode data length=231, medium type=0x00, specific param=0x10, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x0
+ 00     00 00 00 00 00 00 00 00
+
+>> Read-Write error recovery, page_control: current
+ 00     01 0a 28 ff 00 00 00 00  ff 00 00 00
+>> Disconnect-Reconnect, page_control: current
+ 00     02 0e 00 00 00 01 00 00  00 a0 00 00 00 00 00 00
+>> Control, page_control: current
+ 00     0a 0a 00 01 00 00 00 00  ff ff 00 00
+>> Data Compression, page_control: current
+ 00     0f 0e c0 80 00 00 00 ff  00 00 00 ff 00 00 00 00
+>> Device configuration, page_control: current
+ 00     90 0e 00 00 00 00 01 2c  40 00 10 00 00 00 01 90
+>> Medium Partition [1], page_control: current
+ 00     11 0e 03 00 3c 03 08 00  00 00 00 00 00 00 00 00
+>> Protocol specific logical unit (SAS), page_control: current
+ 00     18 06 16 00 00 00 00 00
+>> Protocol specific port (SAS), page_control: current
+ 00     19 0e 46 00 07 d0 07 d0  00 00 00 00 00 00 00 00
+>> Power condition, page_control: current
+ 00     9a 26 00 08 00 00 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 2e e0 00 00 00 00  00 00 00 00 00 00 00 00
+ 20     00 00 00 00 00 00 00 00
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 08 04 00 00 00 00  00 00 00 00
+>> Medium configuration, page_control: current
+ 00     1d 1e 00 00 01 02 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> page_code: 0x2f, page_control: current
+ 00     af 08 00 01 00 01 00 00  00 01
+>> page_code: 0x30, page_control: current
+ 00     30 07 01 02 03 20 40 42  43
+
+
+// --- no WP -----------------------------------------------------------
+root@leonie01:~# sg_modes --all /dev/sg6
+    IBM       ULT3580-HH8       MA71   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+  Mode data length=231, medium type=0x88, specific param=0x10, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x5e
+ 00     5e 00 00 00 00 00 00 00
+
+>> Read-Write error recovery, page_control: current
+ 00     01 0a 28 ff 00 00 00 00  ff 00 00 00
+>> Disconnect-Reconnect, page_control: current
+ 00     02 0e 00 00 00 01 00 00  00 a0 00 00 00 00 00 00
+>> Control, page_control: current
+ 00     0a 0a 00 01 00 00 00 00  ff ff 00 00
+>> Data Compression, page_control: current
+ 00     0f 0e c0 80 00 00 00 ff  00 00 00 ff 00 00 00 00
+>> Device configuration, page_control: current
+ 00     90 0e 00 00 00 00 01 2c  40 00 10 00 00 00 01 90
+>> Medium Partition [1], page_control: current
+ 00     11 0e 03 00 3c 03 09 00  2e e0 00 00 00 00 00 00
+>> Protocol specific logical unit (SAS), page_control: current
+ 00     18 06 16 00 00 00 00 00
+>> Protocol specific port (SAS), page_control: current
+ 00     19 0e 46 00 07 d0 07 d0  00 00 00 00 00 00 00 00
+>> Power condition, page_control: current
+ 00     9a 26 00 08 00 00 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 2e e0 00 00 00 00  00 00 00 00 00 00 00 00
+ 20     00 00 00 00 00 00 00 00
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 08 04 00 00 00 00  00 00 00 00
+>> Medium configuration, page_control: current
+ 00     1d 1e 00 00 01 02 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> page_code: 0x2f, page_control: current
+ 00     af 08 00 01 00 01 00 00  00 01
+>> page_code: 0x30, page_control: current
+ 00     30 07 01 02 03 20 40 42  43
+
+
+// --- WP --------------------------------------------------------------
+root@leonie01:/stornvme/vault# sg_modes --all /dev/sg6
+    IBM       ULT3580-HH8       MA71   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+  Mode data length=231, medium type=0x88, specific param=0x90, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x5e
+ 00     5e 00 00 00 00 00 00 00
+
+>> Read-Write error recovery, page_control: current
+ 00     01 0a 28 ff 00 00 00 00  ff 00 00 00
+>> Disconnect-Reconnect, page_control: current
+ 00     02 0e 00 00 00 01 00 00  00 a0 00 00 00 00 00 00
+>> Control, page_control: current
+ 00     0a 0a 00 01 00 00 00 00  ff ff 00 00
+>> Data Compression, page_control: current
+ 00     0f 0e c0 80 00 00 00 ff  00 00 00 ff 00 00 00 00
+>> Device configuration, page_control: current
+ 00     90 0e 00 00 00 00 01 2c  40 00 10 00 00 00 01 90
+>> Medium Partition [1], page_control: current
+ 00     11 0e 03 00 3c 03 09 00  2e e0 00 00 00 00 00 00
+>> Protocol specific logical unit (SAS), page_control: current
+ 00     18 06 16 00 00 00 00 00
+>> Protocol specific port (SAS), page_control: current
+ 00     19 0e 46 00 07 d0 07 d0  00 00 00 00 00 00 00 00
+>> Power condition, page_control: current
+ 00     9a 26 00 08 00 00 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 2e e0 00 00 00 00  00 00 00 00 00 00 00 00
+ 20     00 00 00 00 00 00 00 00
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 08 04 00 00 00 00  00 00 00 00
+>> Medium configuration, page_control: current
+ 00     1d 1e 00 00 01 02 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> page_code: 0x2f, page_control: current
+ 00     af 08 00 01 00 01 00 00  00 01
+>> page_code: 0x30, page_control: current
+ 00     30 07 01 02 03 20 40 42  43
+
+
+
+// === LTO 3 ===========================================================
+
+// --- NO TAPE ---------------------------------------------------------
+    IBM       ULTRIUM-TD3       5CM0   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+ 00     00 76 00 10 00 00 00 08
+  Mode data length=120, medium type=0x00, specific param=0x10, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x44
+ 00     44 00 00 00 00 00 00 00
+
+>> Read-Write error recovery, page_control: current
+ 00     01 0a 08 ff 00 00 00 00  ff 00 00 00
+>> Disconnect-Reconnect, page_control: current
+ 00     02 0e 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> Data Compression, page_control: current
+ 00     0f 0e c0 80 00 00 00 01  00 00 00 01 00 00 00 00
+>> Device configuration, page_control: current
+ 00     10 0e 00 00 00 00 00 00  40 00 10 00 00 00 01 80
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 00 03 00 00 00 00  00 00 00 00
+>> Medium configuration, page_control: current
+ 00     1d 1e 00 00 01 02 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+
+
+// --- ohne WP --------------------------------------------------------
+    IBM       ULTRIUM-TD3       5CM0   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+ 00     00 76 38 10 00 00 00 08
+  Mode data length=120, medium type=0x38, specific param=0x10, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x44
+ 00     44 00 00 00 00 00 00 00
+
+>> Read-Write error recovery, page_control: current
+ 00     01 0a 08 ff 00 00 00 00  ff 00 00 00
+>> Disconnect-Reconnect, page_control: current
+ 00     02 0e 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> Data Compression, page_control: current
+ 00     0f 0e c0 80 00 00 00 01  00 00 00 01 00 00 00 00
+>> Device configuration, page_control: current
+ 00     10 0e 00 00 00 00 00 00  40 00 10 00 00 00 01 80
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 00 03 00 00 00 00  00 00 00 00
+>> Medium configuration, page_control: current
+ 00     1d 1e 00 00 01 02 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+
+
+// ---- mit WP ------------------------------------------------------
+    IBM       ULTRIUM-TD3       5CM0   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+ 00     00 76 38 90 00 00 00 08
+  Mode data length=120, medium type=0x38, specific param=0x90, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x44
+ 00     44 00 00 00 00 00 00 00
+
+>> Read-Write error recovery, page_control: current
+ 00     01 0a 08 ff 00 00 00 00  ff 00 00 00
+>> Disconnect-Reconnect, page_control: current
+ 00     02 0e 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> Data Compression, page_control: current
+ 00     0f 0e c0 80 00 00 00 01  00 00 00 01 00 00 00 00
+>> Device configuration, page_control: current
+ 00     10 0e 00 00 00 00 00 00  40 00 10 00 00 00 01 80
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 00 03 00 00 00 00  00 00 00 00
+>> Medium configuration, page_control: current
+ 00     1d 1e 00 00 01 02 00 00  00 00 00 00 00 00 00 00
+ 10     00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+
