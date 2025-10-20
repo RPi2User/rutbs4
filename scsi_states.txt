@@ -140,6 +140,68 @@ Mode parameter header from MODE SENSE(10):
 
 // === LTO 3 ===========================================================
 
+// === TANDBERG LTO3 ===
+// --- NO TAPE ---------------------------------------------------------
+    TANDBERG  TS800             0409   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+ 00     00 4a 00 90 00 00 00 08
+  Mode data length=76, medium type=0x00, specific param=0x90, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x44
+ 00     44 00 00 00 00 00 02 00
+
+>> Disconnect-Reconnect, page_control: current
+ 00     82 0e 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> Data Compression, page_control: current
+ 00     8f 0e c0 80 00 00 00 01  00 00 00 01 00 00 00 00
+>> Device configuration, page_control: current
+ 00     90 0e 00 00 00 00 17 70  40 00 18 00 00 00 00 00
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 08 00 00 00 00 00  00 00 00 00
+
+
+// --- TAPE no WP ------------------------------------------------------
+    TANDBERG  TS800             0409   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+ 00     00 4a 00 10 00 00 00 08
+  Mode data length=76, medium type=0x00, specific param=0x10, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x44
+ 00     44 00 00 00 00 00 02 00
+
+>> Disconnect-Reconnect, page_control: current
+ 00     82 0e 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> Data Compression, page_control: current
+ 00     8f 0e c0 80 00 00 00 01  00 00 00 01 00 00 00 00
+>> Device configuration, page_control: current
+ 00     90 0e 00 00 00 00 17 70  40 00 18 00 00 00 00 00
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 08 00 00 00 00 00  00 00 00 00
+
+
+// --- WP --------------------------------------------------------------
+    TANDBERG  TS800             0409   peripheral_type: tape [0x1]
+Mode parameter header from MODE SENSE(10):
+ 00     00 4a 00 90 00 00 00 08
+  Mode data length=76, medium type=0x00, specific param=0x90, longlba=0
+  Block descriptor length=8
+> General mode parameter block descriptors:
+   Density code=0x44
+ 00     44 00 00 00 00 00 02 00
+
+>> Disconnect-Reconnect, page_control: current
+ 00     82 0e 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+>> Data Compression, page_control: current
+ 00     8f 0e c0 80 00 00 00 01  00 00 00 01 00 00 00 00
+>> Device configuration, page_control: current
+ 00     90 0e 00 00 00 00 17 70  40 00 18 00 00 00 00 00
+>> Informational exceptions control (tape version), page_control: current
+ 00     1c 0a 08 00 00 00 00 00  00 00 00 00
+
+
+// === IBM LTO3 ===
 // --- NO TAPE ---------------------------------------------------------
     IBM       ULTRIUM-TD3       5CM0   peripheral_type: tape [0x1]
 Mode parameter header from MODE SENSE(10):
