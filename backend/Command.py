@@ -59,13 +59,14 @@ class Command:
         self.status()
 
     def _read_stdout(self):
+        # Some commands may print raw binary, those can't be interpreted as UTF-8
         _raw: str = "0x"
         for element in self.process.stdout:
             if self.raw:
                 _raw += f"{element.hex()}"
             else:
                 self.stdout.append(element.decode('utf-8').rstrip('\n'))
-                
+
         if self.raw: 
             self.stdout.append(_raw)
 
@@ -146,6 +147,4 @@ class Command:
         return data
 
     def __str__(self):
-        # Returns Command json as str
-
         return json.dumps(self._asdict())

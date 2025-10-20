@@ -14,7 +14,7 @@ from backend.Command import Command
 from backend.Mount import Mount
 from tbk.TDv2 import TapeDrive
 from tbk.TableOfContent import TableOfContent
-from tbk.File import File
+from backend.File import File
 
 DEBUG: bool = False
 VERSION: str = "4.0.0"

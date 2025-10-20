@@ -1,6 +1,5 @@
 from tbk.Checksum import Checksum
 from backend.Command import Command
-from backend.File import File
 
 DEBUG: bool = True
 
@@ -36,11 +35,7 @@ class File:
             self.cksum.value = _cmd
             return True
 
-    def Encrypt(self, keyfile: File):
-        pass
 
-    def Decrypt(self, keyfile: File):
-        pass
     
     def _asdict(self) -> dict:
         return {}

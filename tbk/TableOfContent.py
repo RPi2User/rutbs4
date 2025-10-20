@@ -1,7 +1,7 @@
 import json
 import os
 import xml.etree.ElementTree as ET
-from tbk.File import File
+from backend.File import File
 from tbk.Checksum import Checksum
 from datetime import datetime
 

@@ -4,7 +4,7 @@ import time
 from flask import Flask, request
 from flasgger import Swagger # type: ignore
 
-from tbk.File import File
+from backend.File import File
 from tbk.TableOfContent import TableOfContent
 
 from tbk.TDv2 import TapeDrive

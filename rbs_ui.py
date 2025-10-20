@@ -1,6 +1,6 @@
 import requests
 import os
-from tbk.File import File
+from backend.File import File
 from tbk.TableOfContent import TableOfContent
 from tbk.TapeDrive import TapeDrive
 

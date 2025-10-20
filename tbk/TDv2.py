@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 from backend.Command import Command
 from tbk.TableOfContent import TableOfContent
-from tbk.File import File
+from backend.File import File
 from tbk.Status import Status
 from tbk.Checksum import Checksum
 
