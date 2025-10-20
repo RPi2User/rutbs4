@@ -2,6 +2,9 @@ import sys
 import subprocess
 import json
 import threading
+from typing import List
+
+from pydantic import InstanceOf
 
 class Command:
 
@@ -11,13 +14,14 @@ class Command:
     running: bool   # process running?
     io : str        # contents of /proc/<PID>/io
     io_path : str   # /proc/<PID>/io
+    raw: bool       # return stdout/stderr as hex
     stdout: str     # current stdout of process
     stderr: str     # current stderr of process
     exitCode: int   # Exit-Code
     status_msg: str # Additional Stuff like known Error Messages 
     # --------------------------------------------------------------
     """
-    def __init__(self, cmd: str, filesize: int = -1) -> None: 
+    def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None: 
         self.cmd = cmd
         self.process: subprocess.Popen = None
         self.pid: int = -1
@@ -25,7 +29,8 @@ class Command:
         self.filesize: int = filesize
         self.io: List[str] = []      # noqa: F821
         self.io_path: str = ""
-        self.stdout: List[str] = []  # noqa: F821
+        self.raw: bool = raw
+        self.stdout: List[str] = []
         self.stderr: List[str] = []  # noqa: F821
         self.exitCode: int = None
         self.status_msg: str = ""
@@ -42,7 +47,7 @@ class Command:
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=False
         )
         self.pid = self.process.pid
         self.running = True
@@ -54,12 +59,26 @@ class Command:
         self.status()
 
     def _read_stdout(self):
-        for line in self.process.stdout:
-            self.stdout.append(line.rstrip('\n'))
+        _raw: str = "0x"
+        for element in self.process.stdout:
+            if self.raw:
+                _raw += f"{element.hex()}"
+            else:
+                self.stdout.append(element.decode('utf-8').rstrip('\n'))
+                
+        if self.raw: 
+            self.stdout.append(_raw)
 
     def _read_stderr(self):
-        for line in self.process.stderr:
-            self.stderr.append(line.rstrip('\n'))
+        _raw: str = "0x"
+        for element in self.process.stderr:
+            if self.raw:
+                _raw += f"{element.hex()}"
+            else:
+                self.stderr.append(element.decode('utf-8').rstrip('\n'))
+                
+        if self.raw: 
+            self.stderr.append(_raw)
         
 
     # Retruns Exitcode of application
