@@ -38,7 +38,15 @@ class File:
 
     
     def _asdict(self) -> dict:
-        return {}
+        data = {
+            "id": self.id,
+            "size": self.size,
+            "name": self.name,
+            "path": self.path,
+            "cksum": self.cksum._asdict()
+        }
+        return data
 
     def __str__(self) -> str:
+        return self._asdict()
         return "File(ID: " + str(self.id) + ", Size: " + str(self.size) + ", Name: " + self.name + ", Path: " + self.path + ", cksum: " + str(self.cksum) + ")"

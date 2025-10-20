@@ -15,8 +15,8 @@ class Folder:
     def decrypt(self, keyfile: File):
         pass
     
-    # This generates a List 
     def __init__(self, path: str):
+        self.path = path
         _find_cmd: str = "find '" + path + "' -maxdepth 1 -type f"
         _id = 0
         find_files: Command = Command(_find_cmd)
@@ -26,7 +26,6 @@ class Folder:
                 id = _id,
                 name =  file.split('/')[-1],
                 path = file))
-            print(self.files[_id])
             _id+=1
 
     def __str__(self) -> str:
@@ -34,8 +33,7 @@ class Folder:
     
     def _asdict(self) -> dict:
         data = {
-            "files" : self.files,
-            "path": self.path
+            "path": self.path,
+            "files" : [file._asdict() for file in self.files]
         }
-        
         return data
