@@ -9,6 +9,9 @@ class Folder:
     files: List[File] = []
     path: str = ""
 
+    def encrypt(self, passphrase: str):
+        pass
+
     def encrypt(self, keyfile: File):
         pass
 

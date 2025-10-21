@@ -1,3 +1,4 @@
+import json
 from tbk.Checksum import Checksum
 from backend.Command import Command
 
@@ -11,7 +12,6 @@ class File:
     path : str                  # Complete-path including filename!
     cksum : Checksum
     
-    
 
     def __init__(self, id: int, name: str, path: str, cksum: Checksum = Checksum(), size: int = 0) -> None:
         self.id: int = id
@@ -19,6 +19,20 @@ class File:
         self.name: str = name
         self.path: str = path
         self.cksum: Checksum = Checksum(cksum.value, cksum.type)
+        self.readSize()
+        
+        
+    def readSize(self) -> None:
+        c_size: Command = Command("stat -c %s '" + self.path + "'")
+        c_size.start()
+        try:
+            self.size = c_size.stdout[0]
+        except TypeError:
+            self.size = 0
+        except IndexError:
+            self.size = 0
+        except Exception as e:
+            print("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
         
     def CreateChecksum(self, readWrite: bool) -> bool: # rw: true READ, false WRITE
         # Some bash/awk/string-Magic to get checksum from "md5sum" command
@@ -48,5 +62,4 @@ class File:
         return data
 
     def __str__(self) -> str:
-        return self._asdict()
-        return "File(ID: " + str(self.id) + ", Size: " + str(self.size) + ", Name: " + self.name + ", Path: " + self.path + ", cksum: " + str(self.cksum) + ")"
+        return json.dumps(self._asdict())

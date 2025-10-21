@@ -113,7 +113,7 @@ class Command:
                 "exitCode": self.exitCode
             }
 
-            print("DEBUG: cmd " + json.dumps(data)) # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
+            #print("DEBUG: cmd " + json.dumps(data)) # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
             if not self.permError: 
                 self._pollIOfile()
         
