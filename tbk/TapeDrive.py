@@ -1,9 +1,9 @@
 import tbk.TableOfContent as TableOfContent
 import backend.File as File
-import tbk.Status as Status
 import backend.Command as Command
 
-from tbk.h_TapeDrive import TapeDrive
+from tbk.TapeDriveCommands import TapeDriveCommands as TDC
+from tbk.Status import Status
 
 DEBUG: bool = False
 VERSION = 4.1
@@ -13,7 +13,7 @@ VERSION = 4.1
 
 class TapeDrive:
     
-    print(TapeDrive.FOO)
+    print(TDC.FOO)
 
     _status: Status = Status.ERROR
     _path: str = ""
