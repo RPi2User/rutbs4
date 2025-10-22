@@ -1,3 +1,4 @@
+import json
 import tbk.TableOfContent as TableOfContent
 import backend.File as File
 import backend.Command as Command
@@ -16,19 +17,25 @@ class TapeDrive:
     print(TDC.FOO)
 
     _status: Status = Status.ERROR
-    _path: str = ""
+    path: str = ""
+    generic_path: str = ""
     _blocksize: str = ""
     _command: Command
     _readOnly:  bool = True 
 
-    def __init___(self, tapeDrive: File):
-        pass
+    def __init___(self, path: str, generic_path: str):
+        self.path = path
+        self.generic_path = generic_path
 
-    def _asdict(self):
-        pass
+    def _asdict(self) -> dict:
+        data = {
+            "path": self.path,
+            "generic_path": self.generic_path
+        }
+        return data
 
-    def __str__(self):
-        pass
+    def __str__(self) -> str:
+        return json.dumps(self._asdict())
 
     def rewind(self):
         if self._status != Status.NOT_AT_BOT:
