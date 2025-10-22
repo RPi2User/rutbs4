@@ -21,7 +21,7 @@ class TapeDrive:
     _command: Command
     _readOnly:  bool = True 
 
-    def __init___(self, path: str, generic_path: str):
+    def __init__(self, path: str, generic_path: str):
         self.path = path
         self.generic_path = generic_path
 
