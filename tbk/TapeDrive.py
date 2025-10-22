@@ -13,8 +13,6 @@ VERSION = 4.1
 # lets boot that file up again
 
 class TapeDrive:
-    
-    print(TDC.FOO)
 
     _status: Status = Status.ERROR
     path: str = ""

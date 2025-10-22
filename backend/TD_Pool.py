@@ -27,14 +27,14 @@ class TD_Pool:
             _generic_path = paths
             _generic = paths.split("/")[-1]
             
-            c_val = Command("find /sys/class/scsi_generic/" + _generic +"/device/scsi_tape/nst? -maxdepth 0")
-            c_val.start()
+            self.c_val = Command("find /sys/class/scsi_generic/" + _generic + "/device/scsi_tape/nst? -maxdepth 0")
+            self.c_val.start()
             
             if self.c_val.exitCode != 0 or self.c_val.stderr != []:
                 self.message = "[ERROR] Tape " + _generic_path + " not supported by Kernel!"
                 return
             
-            _path = "/dev/" + c_val.stdout[0].split("/")[-1]
+            _path = "/dev/" + self.c_val.stdout[0].split("/")[-1]
             
             self.drives.append(TapeDrive(
                 path =_path,
