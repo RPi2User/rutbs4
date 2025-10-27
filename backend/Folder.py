@@ -1,18 +1,23 @@
 import json
+from enum import Enum
 from typing import List
 from backend.File import File
 from backend.Command import Command
+from tbk.Checksum import ChecksumType
 
+class FolderKeyType(Enum):
+    FILE = 1
+    PASSPHRASE = 2
+    NO_ENCRYPTION = 3
 
 class Folder:
 
-    FILE: int = 1
-    PASSPHRASE: int = 2
-    NO_ENCRYPTION: int = 0
-
     files: List[File] = []
     path: str = ""
-    encyrption_status: int = NO_ENCRYPTION
+    encyrption_status: FolderKeyType = FolderKeyType.NO_ENCRYPTION
+
+    def setChecksumType(self, cksumType: ChecksumType) -> None:
+        self.cksumType = cksumType
 
     def encryptByPassphrase(self, passphrase: str):
         pass
@@ -52,7 +57,7 @@ class Folder:
     def _asdict(self) -> dict:
         data = {
             "path": self.path,
-            "encryption_state": self.encyrption_status,
+            "encryption_state": self.encyrption_status.name,
             "files" : [file._asdict() for file in self.files]
         }
         return data

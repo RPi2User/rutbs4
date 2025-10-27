@@ -19,20 +19,20 @@ class File:
     def validatePath(self, path: str):
         # This checks whether the given path is valid
         # and sets self.path accordingly
-        cmd = Command("find '" + self.path +  "'")
-        cmd.start()
+        self.cmd = Command("find '" + path +  "'")
+        self.cmd.start()
 
-        if cmd.exitCode == 1:
+        if self.cmd.exitCode == 1:
             raise FileNotFoundError("Invalid Path given!")
         else:
             self.path = path
             self.name = path.split('/')[-1]
 
     def readSize(self) -> None:
-        c_size: Command = Command("stat -c %s '" + self.path + "'")
-        c_size.start()
+        self.cmd: Command = Command("stat -c %s '" + self.path + "'")
+        self.cmd.start()
         try:
-            self.size = c_size.stdout[0]
+            self.size = self.cmd.stdout[0]
         except TypeError:
             self.size = 0
         except IndexError:
@@ -58,6 +58,7 @@ class File:
         self.validatePath(path)
         self.id: int = id
         self.readSize()
+        self.cksum = Checksum(self.path)
 
     def _asdict(self) -> dict:
         data = {

@@ -19,6 +19,12 @@ from backend.File import File
 DEBUG: bool = False
 VERSION: str = "4.0.0"
 
+# !!! WARNING !!!
+# Each response MUST HAVE an timestamp
+# Background: 
+#   Frontend must have the opportunity to implement a throughput calculation :3
+# !!!!!!!!!!!!!!!
+
 class Host():
 
     uuid: str
