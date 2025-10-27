@@ -5,19 +5,27 @@ from backend.Command import Command
 
 
 class Folder:
-    
+
+    FILE: int = 1
+    PASSPHRASE: int = 2
+    NO_ENCRYPTION: int = 0
+
     files: List[File] = []
     path: str = ""
+    encyrption_status: int = NO_ENCRYPTION
 
-    def encrypt(self, passphrase: str):
+    def encryptByPassphrase(self, passphrase: str):
         pass
 
-    def encrypt(self, keyfile: File):
+    def encryptByKeyfile(self, keyfile: File):
         pass
 
-    def decrypt(self, keyfile: File):
+    def decryptByPassphrase(self, passphrase: str):
         pass
-    
+
+    def decryptByKeyfile(self, keyfile: File):
+        pass
+
     def __init__(self, path: str):
         self.path = path
         _find_cmd: str = "find '" + path + "' -maxdepth 1 -type f"
@@ -27,9 +35,16 @@ class Folder:
         for file in find_files.stdout:
             self.files.append(File(
                 id = _id,
-                name =  file.split('/')[-1],
                 path = file))
             _id+=1
+
+    def encrypt(self):
+        pass
+
+    def decrypt(self):
+        pass
+
+    # SYSTEM
 
     def __str__(self) -> str:
         return json.dumps(self._asdict())
@@ -37,6 +52,7 @@ class Folder:
     def _asdict(self) -> dict:
         data = {
             "path": self.path,
+            "encryption_state": self.encyrption_status,
             "files" : [file._asdict() for file in self.files]
         }
         return data

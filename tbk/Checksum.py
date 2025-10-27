@@ -1,18 +1,36 @@
+import json
+
+from backend.Command import Command
+
 class Checksum:
     
-    type: str
-    value: str
+    MD5: int = 1
+    SHA256: int = 2
+    
+    type: int = MD5
+    file_path: str = ""
 
-    def __init__(self, value: str = "00000000000000000000000000000000", type: str = "md5"):
+    cmd: Command = Command("")
+
+    def create(self):
+
+        if (self.type == self.MD5):
+            self.cmd = Command("openssl md5 '" + self.file_path +"'")
+
+        else:
+            pass
+
+    def __init__(self, file_path: str, type: int = MD5):
         self.type = type
-        self.value = value
+        self.file_path = file_path
         
     def _asdict(self) -> dict:
         data = {
             "type" : self.type,
-            "value" : self.value
+            "value" : self.value,
+            "command": self.cmd._asdict()
         }
         return data
 
     def __str__(self):
-        return f"{self.type}, {self.value}"
+        return json.dumps(self._asdict())

@@ -11,17 +11,23 @@ class File:
     name : str                  # Just name with extension
     path : str                  # Complete-path including filename!
     cksum : Checksum
-    
+    cmd: Command
 
-    def __init__(self, id: int, name: str, path: str, cksum: Checksum = Checksum(), size: int = 0) -> None:
-        self.id: int = id
-        self.size: int = size
-        self.name: str = name
-        self.path: str = path
-        self.cksum: Checksum = Checksum(cksum.value, cksum.type)
-        self.readSize()
-        
-        
+    def checksum(self, c: Checksum) -> None:
+        self.cksum = c
+
+    def validatePath(self, path: str):
+        # This checks whether the given path is valid
+        # and sets self.path accordingly
+        cmd = Command("find '" + self.path +  "'")
+        cmd.start()
+
+        if cmd.exitCode == 1:
+            raise FileNotFoundError("Invalid Path given!")
+        else:
+            self.path = path
+            self.name = path.split('/')[-1]
+
     def readSize(self) -> None:
         c_size: Command = Command("stat -c %s '" + self.path + "'")
         c_size.start()
@@ -34,11 +40,10 @@ class File:
         except Exception as e:
             print("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
         
-    def CreateChecksum(self, readWrite: bool) -> bool: # rw: true READ, false WRITE
+    def createChecksum(self, readWrite: bool) -> bool: # rw: true READ, false WRITE
         # Some bash/awk/string-Magic to get checksum from "md5sum" command
-        _cmd: Command = Command("md5sum '" + self.path +  "' | awk '{ print $1}'")
-        _cmd.start()
-        
+
+        _cmd = "THIS NEEDS REFACTORING!"
 
         if DEBUG: 
             print("[INFO] Checksum for " + str(self) + ": " + str(_cmd))
@@ -46,17 +51,21 @@ class File:
             print("[ERROR] Checksum MISMATCH for " + str(self) + " IS LOCAL " + str(_cmd))
             return False
         else:
-            self.cksum.value = _cmd
+            self.cksum.value = "0xFFFFFFFFFFFFFFFF"
             return True
 
+    def __init__(self, id: int, path: str) -> None:
+        self.validatePath(path)
+        self.id: int = id
+        self.readSize()
 
-    
     def _asdict(self) -> dict:
         data = {
             "id": self.id,
             "size": self.size,
             "name": self.name,
             "path": self.path,
+            "last_command": self.cmd._asdict(),
             "cksum": self.cksum._asdict()
         }
         return data
