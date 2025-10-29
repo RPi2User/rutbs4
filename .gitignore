@@ -1,4 +1,4 @@
-.gitignore
+testing/testfiles/*
 backend/scratchpad.py
 tbkv3.py
 _deb.py
