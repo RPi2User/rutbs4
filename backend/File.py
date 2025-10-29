@@ -1,5 +1,5 @@
 import json
-from tbk.Checksum import Checksum
+from backend.Checksum import Checksum
 from backend.Command import Command
 
 DEBUG: bool = True
