@@ -20,6 +20,7 @@ class TapeDrive:
     _blocksize: str = ""
     _command: Command
     _readOnly:  bool = True
+    file: File
 
     def __init__(self, path: str, generic_path: str):
         self.path = path
@@ -28,12 +29,17 @@ class TapeDrive:
     def _asdict(self) -> dict:
         data = {
             "path": self.path,
-            "generic_path": self.generic_path
+            "generic_path": self.generic_path,
+            # TODO: current operation
+            "currentFile": self.file,
         }
         return data
 
     def __str__(self) -> str:
         return json.dumps(self._asdict())
+
+    def getStatus(self) -> Status:
+        pass
 
     def rewind(self):
         if self._status != Status.NOT_AT_BOT:
@@ -66,8 +72,8 @@ class TapeDrive:
         self._status = Status.NOT_AT_BOT
 
     def writeTOC(self, tableOfContent: TableOfContent):
-        for file in tableOfContent.files:
-            pass
+        # This writes TOC as first File on Tape
+        pass
         
 
     def read(self, f: File):
