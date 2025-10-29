@@ -6,6 +6,7 @@ from backend.Command import Command
 class ChecksumType(Enum):
     MD5 = 1
     SHA256 = 2
+    NONE = 3
 
 class Checksum:
 
@@ -19,6 +20,8 @@ class Checksum:
         self.file_path = file_path
 
     def create(self):
+        if (self.type == ChecksumType.NONE):
+            return  # Do nothing when user wants nothing.
         if (self.type == ChecksumType.MD5):
             self.cmd = Command("openssl md5 -r '" + self.file_path +"'")
         else:

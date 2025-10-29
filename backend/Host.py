@@ -349,7 +349,6 @@ class Host():
 
         return response
 
-
     def get_mounts(self):
         result = subprocess.run(
             ["df", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "--output=source,size,used,target,fstype"],
