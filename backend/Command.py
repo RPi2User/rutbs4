@@ -21,27 +21,32 @@ class Command:
     """
     def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None: 
         self.cmd = cmd
+        self.filesize: int = filesize
+        self.raw: bool = raw
+        self.running: bool = False
+        
+        self.clearCommand()
+
+    def clearCommand(self)-> None:
         self.process: subprocess.Popen = None
         self.pid: int = -1
-        self.running: bool = False
-        self.filesize: int = filesize
-        self.io: List[str] = []      # noqa: F821
+        
+        self.io: List[str] = []
         self.io_path: str = ""
-        self.raw: bool = raw
         self.stdout: List[str] = []
-        self.stderr: List[str] = []  # noqa: F821
+        self.stderr: List[str] = []
         self.exitCode: int = None
         self.status_msg: str = ""
         self.permError: bool = False
 
-
     # This starts the process in the background
     def start(self):
+        self.clearCommand()
         if self.cmd == "":
-            raise Exception("ERROR: Process cannot be initiated, command string empty")
+            raise ValueError("ERROR: Process cannot be initiated, command string empty")
 
         self.process = subprocess.Popen(
-            self.cmd,
+            args=self.cmd,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -58,7 +63,7 @@ class Command:
 
     def _read_stdout(self):
         # Some commands may print raw binary, those can't be interpreted as UTF-8
-        _raw: str = "0x"
+        _raw: str = ""
         for element in self.process.stdout:
             if self.raw:
                 _raw += f"{element.hex()}"
@@ -69,7 +74,7 @@ class Command:
             self.stdout.append(_raw)
 
     def _read_stderr(self):
-        _raw: str = "0x"
+        _raw: str = ""
         for element in self.process.stderr:
             if self.raw:
                 _raw += f"{element.hex()}"
