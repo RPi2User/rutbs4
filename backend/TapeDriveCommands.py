@@ -10,7 +10,6 @@ class TapeDriveCommands:
     
     path: str = "<undefined>"
     generic_path: str = "<undefined>"
-    FOO: int = 400
     
     def __init__(self):
         pass
