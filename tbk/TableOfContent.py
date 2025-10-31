@@ -2,7 +2,7 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from backend.File import File
-from tbk.Checksum import Checksum
+from backend.Checksum import Checksum
 from datetime import datetime
 
 DEBUG: bool = True

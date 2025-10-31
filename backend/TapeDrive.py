@@ -1,9 +1,13 @@
 import json
 from enum import Enum
+from sys import stdout
+from typing import List
 
-import tbk.TableOfContent as TableOfContent
-import backend.File as File
-import backend.Command as Command
+from regex import E
+
+from tbk.TableOfContent import TableOfContent
+from backend.File import File
+from backend.Command import Command
 
 from backend.TapeDriveCommands import TapeDriveCommands as TDC
 from tbk.Status import Status
@@ -11,13 +15,29 @@ from tbk.Status import Status
 DEBUG: bool = False
 VERSION = 4.1
 
+class E_LTOv(Enum):
+    LTO_1 = 1
+    LTO_2 = 2
+    LTO_3 = 3
+    LTO_4 = 4
+    LTO_5 = 5
+    LTO_6 = 6
+    LTO_7 = 7
+    LTO_8 = 8
+    LTO_9 = 9
+    LTO_10 = 0xa
+    LTO_11 = 0xb
+    LTO_12 = 0xc
+    LTO_13 = 0xd
+    LTO_14 = 0xe
+    LTO_15 = 0xf
+
+class E_Tape(Enum):
+    NO_TAPE = 0
+    WRITE_PROTECT = 1
+    ONLINE = 2
 
 class Tape():
-    lto_version: int = 0
-    native_capacity: int = 0
-    write_protect: bool = True
-    begin_of_tape: bool = False
-    
     """_summary_
     
     -SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI
@@ -41,7 +61,7 @@ class Tape():
         medium type=0x88, specific param=0x90
     
     When medium type = 0 no tape is inserted. Specific param = 0x10 means no write protection
-    medium type = 0x8X the X shows the LTO-Version
+    medium type = 0xX8 the X shows the LTO-Version
     specific param = 0x90 means write protect.
     
     I know those assumptions are quite risky. But yet again: Nothing is standardized :c
@@ -147,22 +167,62 @@ class Tape():
        IBM: https://www.ibm.com/docs/en/ts4500-tape-library?topic=x5a-mode-parameter-header-mode-sense-10
     """
     
-    
+    lto_version: int = 0
+    native_capacity: int = 0
+    write_protect: bool = True
+    begin_of_tape: bool = False
+    state: E_Tape = E_Tape.NO_TAPE
+
     def __init__(self, hardware_id: str)-> None:
-        pass
         
+        # 3890
+        
+        self.lto_version = int(hardware_id[0], 16)
+        self.write_protect = (int(hardware_id[2], 16) & 0x80 > 0) # Isolated bit 4
+        type: int = int(hardware_id[1], 16)
+        
+        tail: int = int(hardware_id[3], 16)
+        
+        if self.lto_version == 0 and type == 0:
+            self.state = E_Tape.NO_TAPE
+            return
+        
+        if self.lto_version != 0 and type == 8:
+            if (self.write_protect):
+                self.state = E_Tape.WRITE_PROTECT
+            else:
+                self.state = E_Tape.ONLINE
     
     
+    def _asdict(self) -> dict:
+        data = {
+            "lto-version": self.lto_version,
+            "write_protect": self.write_protect,
+            "beginOfTape": self.begin_of_tape,
+            "current_state": self.state.name
+        }
+        return data
     
+    def __str__(self):
+        return json.dumps(self._asdict())
 
 class TD_State(Enum):
     READ = 0,
     WRITE = 1,
     REWIND = 2,
     EJECT = 3,
+    IDLE = 4,
     ERROR = -1
 
 class TapeDrive:
+    
+    vendor: str = ""
+    model: str = ""
+    serial: str = ""
+    
+    # sg_raw -r 1k /dev/sg1 5a 0 0 0 0 0 0 0 20 0
+    
+    tape: Tape = Tape("0000")
     
     state: TD_State = TD_State.ERROR
     status: Status = Status.ERROR
@@ -172,23 +232,75 @@ class TapeDrive:
     command: Command
     _readOnly:  bool = True
     file: File
+    
+    def _refresh(self) -> None:
+        self._inquiry()
+        self._readModeSense()
+        
+    def _inquiry(self) -> None:
+       
+        """
+        > sg_raw -r 1k /dev/sgX 12 1 83 0 2a 0
+        0183002602010022 49424d2020202020 -> First 8 Byte got discarded, lower 8 Bytes will be treated as "VENDOR" until first Space (0x20)
+        554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
+        3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
+        """
+        
+        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 12 1 83 0 2a 0", 0, True)
+        self.command.wait()
+        
+        if(self.command.exitCode != 0 or not self.command.stdout):
+            self.command.wait()
+            if(self.command.exitCode != 0):
+                self.state = TD_State.ERROR
+
+        self.state = TD_State.IDLE
+        
+        self.vendor = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[8:15].strip()
+        self.model = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[16:31].strip()
+        self.serial = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[32:42].strip()
+
+            
+    
+    def _readModeSense(self) -> None:
+        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
+        self.command.wait()
+
+        try:
+            self.tape = Tape(self.command.stdout[0][4:])
+        except IndexError:
+            self.tape = Tape("0000")
+        
+        
 
     def __init__(self, path: str, generic_path: str):
         self.path = path
         self.generic_path = generic_path
-
+        self.file = None
+        self._refresh()
+        
     def _asdict(self) -> dict:
+        self._refresh()
         data = {
             "path": self.path,
             "generic_path": self.generic_path,
             "state": self.state.name,
+            "vendor": self.vendor,
+            "model": self.model,
+            "serial": self.serial,
+            
             # TODO: current operation
+            "command": self.command._asdict(),
             "currentFile": self.file,
+            "tape": self.tape._asdict(),
         }
         return data
 
     def __str__(self) -> str:
         return json.dumps(self._asdict())
+    
+    def tapeOverride(self, _tape: Tape) -> None:
+        self.tape = _tape
 
     def getStatus(self) -> Status:
         pass

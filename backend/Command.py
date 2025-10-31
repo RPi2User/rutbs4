@@ -2,6 +2,7 @@ import sys
 import subprocess
 import json
 import threading
+from time import sleep
 from typing import List
 
 class Command:
@@ -26,6 +27,19 @@ class Command:
         self.running: bool = False
         
         self.clearCommand()
+        
+    def wait(self, timeout: int = 1) -> None: 
+        self.start()
+        
+        if timeout == 0:
+            while self.running:
+                sleep(.1)
+        
+        if timeout != 0:
+            for n in range(timeout):
+                sleep(.1)
+            self.kill()
+            self.status()
 
     def clearCommand(self)-> None:
         self.process: subprocess.Popen = None
@@ -88,8 +102,10 @@ class Command:
     # Retruns Exitcode of application
     def kill(self) -> int:
         self.status()
-        self.process.terminate()
-        return self.process.wait()
+        if (self.process):
+            self.process.terminate()
+            return self.process.wait()
+        return 0
         
     
     # This populates all Vars
