@@ -23,12 +23,28 @@ class E_LTOv(Enum):
     LTO_7 = 7
     LTO_8 = 8
     LTO_9 = 9
-    LTO_10 = 0xa
-    LTO_11 = 0xb
-    LTO_12 = 0xc
-    LTO_13 = 0xd
-    LTO_14 = 0xe
-    LTO_15 = 0xf
+    LTO_10 = 10
+    LTO_11 = 11
+    LTO_12 = 12
+    LTO_13 = 13
+    LTO_14 = 14
+    LTO_15 = 15
+    
+    LTO_7_M8 = 0xff
+    
+class E_LTO_Cap(Enum):
+    LTO_1 = 100 * 10^9
+    LTO_2 = 200 * 10^9
+    LTO_3 = 300 * 10^9
+    LTO_4 = 800 * 10^9
+    LTO_5 = 1500 * 10^9
+    LTO_6 = 2500 * 10^9
+    LTO_7 = 6 * 10^12
+    LTO_8 = 12 * 10^12
+    LTO_9 = 18 * 10^12
+    LTO_10 = 30 * 10^12
+    
+    LTO_7_M8 = 9 * 10^12    # Not supported in Autodetect!
 
 class E_Tape(Enum):
     NO_TAPE = 0
@@ -179,8 +195,6 @@ class Tape():
         self.write_protect = (int(hardware_id[2], 16) & 0x8 > 0) # Isolated bit 4
         type: int = int(hardware_id[1], 16)
         
-        tail: int = int(hardware_id[3], 16)
-        
         if self.lto_version == 0 and type == 0:
             self.state = E_Tape.NO_TAPE
             return
@@ -214,11 +228,20 @@ class TD_State(Enum):
 
 class TapeDrive:
     
+    """_summary_
+    Main Interfaces:
+        - write(file: File)                 -> Main WRITE Command
+        - read() -> List[Folder]            -> Main READ Command
+        - writeInit(toc: TableOfContent)    -> rewinds tape and write TOC
+        - readToc() -> TableOfContent       -> rewinds tape and returns TOC
+        - clearErrorState() -> None:        -> User can clear Error, NOT SELF RESETTING!
+    Returns:
+        _type_: _description_
+    """
+    
     vendor: str = ""
     model: str = ""
     serial: str = ""
-    
-    # sg_raw -r 1k /dev/sg1 5a 0 0 0 0 0 0 0 20 0
     
     tape: Tape = Tape("0000")
     
@@ -232,18 +255,24 @@ class TapeDrive:
     file: File
     
     def _refresh(self) -> None:
-        self._inquiry()
-        self._readModeSense()
+        # Don't interfere with running commands!
+        if self.command.running:
+            return
+        
+        if self.command.exitCode != 0:
+            self.state = TD_State.ERROR
+        else:
+            self._inquiry()
+            self._readModeSense()
         
     def _inquiry(self) -> None:
-       
         """
         > sg_raw -r 1k /dev/sgX 12 1 83 0 2a 0
         0183002602010022 49424d2020202020 -> First 8 Byte got discarded, lower 8 Bytes will be treated as "VENDOR" until first Space (0x20)
         554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
         3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
         """
-        
+
         self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 12 1 83 0 2a 0", 0, True)
         self.command.wait()
         
@@ -258,8 +287,6 @@ class TapeDrive:
         self.model = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[16:31].strip()
         self.serial = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[32:42].strip()
 
-            
-    
     def _readModeSense(self) -> None:
         self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
         self.command.wait()
@@ -268,12 +295,11 @@ class TapeDrive:
             self.tape = Tape(self.command.stdout[0][4:])
         except IndexError:
             self.tape = Tape("0000")
-        
-        
 
-    def __init__(self, path: str, generic_path: str):
+    def __init__(self, path: str, generic_path: str, blocksize: str = "256K"):
         self.path = path
         self.generic_path = generic_path
+        self._blocksize = blocksize
         self.file = None
         self._refresh()
         
@@ -282,10 +308,11 @@ class TapeDrive:
         data = {
             "path": self.path,
             "generic_path": self.generic_path,
-            "state": self.state.name,
             "vendor": self.vendor,
             "model": self.model,
             "serial": self.serial,
+            "state": self.state.name,
+            "blocksize": self._blocksize,
             
             # TODO: current operation
             "command": self.command._asdict(),
@@ -303,18 +330,15 @@ class TapeDrive:
     def getStatus(self) -> Status:
         pass
 
-    def rewind(self):
-        if self._status != Status.NOT_AT_BOT:
+    def rewind(self) -> None: 
+        self._refresh()
+        if(self.state != TD_State.IDLE or self.tape.begin_of_tape):
             return
 
-        self._status = Status.REWINDING
+        self.state = TD_State.EJECT
         self.__rewind()
         
-        if self._readOnly:    
-            self._status = Status.TAPE_RDY_WP
-        else:
-            self._status = Status.TAPE_RDY
-
+        
 
     def eject(self):
         if self._status != {Status.NOT_AT_BOT, Status.TAPE_RDY, Status.TAPE_RDY_WP}:
