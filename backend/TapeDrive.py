@@ -277,7 +277,9 @@ class TapeDrive:
 
         match self.state:
             case TD_State.REWIND: self.tape.begin_of_tape = True
-            case TD_State.EJECT: self.tape.state = E_Tape.NO_TAPE
+            case TD_State.EJECT: 
+                self.tape.state = E_Tape.NO_TAPE
+                self.tape.begin_of_tape = False
         
         self.state = TD_State.IDLE
         self._inquiry()
