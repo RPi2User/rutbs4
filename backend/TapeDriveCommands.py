@@ -15,7 +15,3 @@ class TapeDriveCommands:
         pass
     
     
-    COMMANDS = {
-        REWIND : Command("sg_raw '" + generic_path + "' 0x01 0 0 0 0 0"),
-        EJECT : Command("sg_raw '" + generic_path + "' 0x1B 0 0 0 0 0"),
-    }

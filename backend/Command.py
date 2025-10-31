@@ -6,6 +6,8 @@ from time import sleep
 from typing import List
 
 class Command:
+    
+    quiet: bool = False
 
     """
     # --------------------------------------------------------------
@@ -74,6 +76,8 @@ class Command:
         threading.Thread(target=self._read_stdout, daemon=True).start()
         threading.Thread(target=self._read_stderr, daemon=True).start()
         self.status()
+        if not self.quiet:
+            print("[EXEC] " + self.__str__())
 
     def _read_stdout(self):
         # Some commands may print raw binary, those can't be interpreted as UTF-8
