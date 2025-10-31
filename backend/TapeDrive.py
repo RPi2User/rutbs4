@@ -176,7 +176,7 @@ class Tape():
         # 3890
         
         self.lto_version = int(hardware_id[0], 16)
-        self.write_protect = (int(hardware_id[2], 16) & 0x80 > 0) # Isolated bit 4
+        self.write_protect = (int(hardware_id[2], 16) & 0x8 > 0) # Isolated bit 4
         type: int = int(hardware_id[1], 16)
         
         tail: int = int(hardware_id[3], 16)
