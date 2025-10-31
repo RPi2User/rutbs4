@@ -3,8 +3,6 @@ from enum import Enum
 from sys import stdout
 from typing import List
 
-from regex import E
-
 from tbk.TableOfContent import TableOfContent
 from backend.File import File
 from backend.Command import Command
