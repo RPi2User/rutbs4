@@ -300,6 +300,9 @@ class TapeDrive:
         
         I know the "raw" JSON string is not readable at all. 
         But given the complex nature of tape in general this object structure is necessary.
+        
+        Useful resources:
+            https://www.cyberciti.biz/hardware/unix-linux-basic-tape-management-commands/
     """
     def __init__(self, path: str, generic_path: str, drive_override: bool = False, blocksize: str = "256K"):
         self.path = path
@@ -344,13 +347,16 @@ class TapeDrive:
         
         if self.tape_override or self.generic_path == "":
             return
-        
+
         self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
         self.command.wait()
-        
-        # When ModeSense needs an Inquiry than make it :3
+
+        # When ModeSense needs an Inquiry than make one :3
         if self.command.exitCode == 6:
             self._inquiry()
+            # Ugly, but I don't know "nicer" way currently
+            self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
+            self.command.wait()
 
         if self.tape.state == E_Tape.NO_TAPE:
             try:
