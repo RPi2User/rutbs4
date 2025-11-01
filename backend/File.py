@@ -1,4 +1,7 @@
 import json
+import os
+from pathlib import Path
+
 from backend.Checksum import Checksum
 from backend.Command import Command
 
@@ -16,6 +19,14 @@ class File:
     def checksum(self, c: Checksum) -> None:
         self.cksum = c
 
+    def touch(self, path: str) -> None:
+        try:
+            Path(path).touch(exist_ok=True)
+        except PermissionError:
+            raise PermissionError("[ERROR] Insufficient permissions on '" + path + "'")
+        except Exception:
+            raise
+
     def validatePath(self, path: str):
         # This checks whether the given path is valid
         # and sets self.path accordingly
@@ -23,7 +34,7 @@ class File:
         self.cmd.start()
 
         if self.cmd.exitCode == 1:
-            raise FileNotFoundError("Invalid Path given!")
+            raise FileNotFoundError("[ERROR] Invalid Path given!")
         else:
             self.path = path
             self.name = path.split('/')[-1]
@@ -54,7 +65,31 @@ class File:
             self.cksum.value = "0xFFFFFFFFFFFFFFFF"
             return True
 
-    def __init__(self, id: int, path: str) -> None:
+    def remove(self) -> None:
+        # This removes the file from the filesystem and resets `self`
+        try:
+            os.remove(self.path)
+        except PermissionError:
+            raise PermissionError("[ERROR] Could not delete File '" + self.path + "'")
+        except:
+            raise
+
+        self.id = None
+        self.size = None
+        self.name = None
+        self.path = None
+        self.cksum = None
+        self.cmd = None
+
+    """_summary_ File.()
+        - createFile = True will `touch` file.path
+        - id is some arbitrary number you can like
+        - path is the path file... like the path yk... 
+    """
+    def __init__(self, id: int, path: str, createFile: bool = False) -> None:
+        if createFile:
+            self.touch(path)
+        
         self.validatePath(path)
         self.id: int = id
         self.readSize()
