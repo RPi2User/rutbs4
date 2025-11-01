@@ -152,30 +152,212 @@ class TD_State(Enum):
     ERROR = -1
 
 class TapeDrive:
-    
+
     """_summary_
     Main Interfaces:
-        - write(file: File)                 -> Main WRITE Command
-        - read() -> List[Folder]            -> Main READ Command
-        - writeInit(toc: TableOfContent)    -> rewinds tape and write TOC
-        - readToc() -> TableOfContent       -> rewinds tape and returns TOC
-        - clearErrorState() -> None:        -> User can clear Error, NOT SELF RESETTING!
+        - write(file: File)               -> Main WRITE Command
+        - read() -> List[Folder]          -> Main READ Command
+        - writeInit(toc: TableOfContent)  -> rewinds tape and write TOC
+        - readToc() -> TableOfContent     -> rewinds tape and returns TOC
+        - clearErrorState() -> None:      -> User can clear Error
     """
-    
+
+    # System parameters (public)
     vendor: str = ""
     model: str = ""
     serial: str = ""
-    
+    blocksize: str = ""
+
+    rewindCommand: Command = None
+    ejectCommand: Command = None
+
+    # Internal variables, do not edit!
+    drive_override: bool = False    
     tape: Tape = Tape("0000")
     tape_override: bool = False
-    
     state: TD_State = TD_State.ERROR
     path: str = ""
     generic_path: str = ""
-    blocksize: str = ""
     command: Command = None
     file: File = None
+
+    """_summary_
+    This Backend is written for SCSI/SAS-Drives but can support other drives via an override.
+    Due to the lack of a fibre channel drive I can't do any research to support them.
+    MAYBE they are supported via the same SCSI Commands I HOPE this is the case.
+        Please, if you have a spare FC-TapeDrive for me, please reach out!
     
+    !!!             Currently only LTO-based tapes will be handled correctly!                   !!!
+    
+    A typical SCSI-Based Drive will be recognized on most linux systems as `/dev/*stX`.
+    Like:
+        - /dev/st0 
+        - /dev/nst0 
+        - /dev/nst1
+        - ... 
+        
+    If you are interested on how this project recognize a valid drive, please go to backend.TD_Pool
+    
+    If you want to create an TapeDrive object just search for two different paths:
+        - the non-rewinding path -> like /dev/nst0
+        - the generic scsi path -> like /dev/sg0
+        
+    Both values can be easily found with this simple command `lsscsi -g`
+    So in a python shell you can easily create a tape drive object with this two commands:
+    
+        ```python
+        >>> from backend.TapeDrive import TapeDrive
+        >>> tapedrive = TapeDrive("/dev/nst0", "/dev/sg0")
+        ```
+
+    Hence this project is optimized for API usage all __str__() functions will return a JSON string.
+    
+    If your drive is more an "exotic" one you can OVERRIDE some assumptions I made in this project.
+    
+    For example:
+        Our imaginary drive is recognized by the linux kernel as `/dev/nst0`. With no generic path.
+            !!! For this program to write multiple files, a NON REWINDING DRIVE is needed !!!
+        
+        ```python
+        >>> from backend.TapeDrive import TapeDrive
+        >>> from backend.Command import Command
+        >>> td_custom = TapeDrive(path="/dev/nst0", genericPath="", drive_override=True)
+        >>> td_custom.rewindCommand = Command("<YOUR REWIND COMMAND>")    # This can be a bash-script or a simple program call
+        >>> td_custom.ejectCommand = Command("<YOUR EJECT COMMAND>")
+        ```
+        In theory you can also populate all other variables like vendor, model, serial or blocksize.
+
+            NOTE: that all following FAILING commands (exit code != 0) will set the tape into an ERROR state
+            This ERROR can be cleared with `td_custom.clearError()`
+
+        If your drive won't be recognized by the backend, it's tape won't be either - most likely.
+        So you can OVERRIDE the TAPE as well:
+        
+        ```python
+        >>> from backend.Tape import Tape
+        >>> tape = Tape("0800") # This sets: writeprotect = False, size = 0, state = ONLINE
+        >>> td_custom.tapeOverride(tape)
+        >>> td_custom.rewind()
+        ```
+
+        After a quick `print(td_custom)` you can validate it's state and you can write any Files:
+        
+        ```python
+        >>> from backend.File import File
+        >>> testFile = File(id=0, path="/mnt/some_large_file.img")
+        >>> td_custom.write(testFile)
+        >>> print(td_custom)
+        {   "environment": {
+                "path": "/dev/nst0",
+                "generic_path": ""},
+            "drive_info": {
+                "vendor": "DriveVendor Tech.",
+                "model": "EverStor5000",
+                "serial": "1Ab2c3-aabbcc"},
+            "override": {
+                "active": true,
+                "rewindCommand": {
+                    "cmd": "mt -f /dev/nst0 rewind",
+                    "pid": 10559,
+                    "running": false,
+                    {…}
+                    "exitCode": 0},
+                "ejectCommand": {
+                    "cmd": "mt -f /dev/nst0 eject",
+                    {…}
+                    "exitCode": null}
+                },
+            "state": "IDLE",
+            "blocksize": "256K",
+            "tape": {
+                "lto-version": "NONE",
+                "native_capacity": 0,
+                "beginOfTape": false,
+                "current_state": "ONLINE"},
+            "command": {
+                "cmd": "dd if='/mnt/some_large_file.img' of='/dev/nst0' iflag=fullblock status=none bs=256K",
+                "pid": 11628,
+                "running": false,
+                {…}
+                "filesize": "4294967296",
+                "io": {…}
+                "exitCode": 0},
+            "current_file": {
+                "id": 0,
+                "size": "4294967296",
+                "name": "some_large_file.img",
+                "path": "/mnt/some_large_file.img",
+                "last_command": {
+                    "cmd": "stat -c %s '/mnt/some_large_file.img'",
+                    {…}
+                },
+                "cksum": {…}
+                }
+            }
+        }
+        As you can see our custum drive state is "IDLE", we aren't at BOT (begin of tape) anymore, our current tape
+        state is "ONLINE". The "command" returned the exit code "0" so our write command was successful.
+        
+        I know the "raw" JSON string is not readable at all. 
+        But given the complex nature of tape in general this object structure is necessary.
+    """
+    def __init__(self, path: str, generic_path: str, drive_override: bool = False, blocksize: str = "256K"):
+        self.path = path
+        self.generic_path = generic_path
+        self.drive_override = drive_override
+        self.blocksize = blocksize
+        self.file = None
+        self._refresh()
+
+    def _inquiry(self) -> None:
+        """
+        > sg_raw -r 1k /dev/sgX 12 1 83 0 2a 0
+        0183002602010022 49424d2020202020 -> First 8 Byte got discarded, lower 8 Bytes will be treated as "VENDOR" until first Space (0x20)
+        554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
+        3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
+        """
+
+        # Do nothing if TapeDrive is unkown.
+        if self.drive_override:
+            self.state = TD_State.IDLE
+            return
+
+        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 12 1 83 0 2a 0", 0, True)
+        self.command.wait()
+        
+        if(self.command.exitCode != 0 or not self.command.stdout):
+            self.command.wait()
+            for n in range(5):
+                if (self.command.exitCode == 0):
+                    break
+                sleep(.5)
+                self.command.wait()
+            self.state = TD_State.ERROR
+
+        self.state = TD_State.IDLE
+        
+        self.vendor = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[8:16].strip()
+        self.model = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[16:31].strip()
+        self.serial = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[32:42].strip()
+
+    def _readModeSense(self) -> None:
+        
+        if self.tape_override or self.generic_path == "":
+            return
+        
+        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
+        self.command.wait()
+        
+        # When ModeSense needs an Inquiry than make it :3
+        if self.command.exitCode == 6:
+            self._inquiry()
+
+        if self.tape.state == E_Tape.NO_TAPE:
+            try:
+                self.tape = Tape(self.command.stdout[0][4:])
+            except IndexError:
+                self.tape = Tape("0000")
+
     def _refresh(self) -> None:
         # When still initializing run first inquiry
         if self.command is None:
@@ -204,60 +386,30 @@ class TapeDrive:
         self.state = TD_State.IDLE
         self._inquiry()
         self._readModeSense()
-        
-    def _inquiry(self) -> None:
-        """
-        > sg_raw -r 1k /dev/sgX 12 1 83 0 2a 0
-        0183002602010022 49424d2020202020 -> First 8 Byte got discarded, lower 8 Bytes will be treated as "VENDOR" until first Space (0x20)
-        554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
-        3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
-        """
 
-        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 12 1 83 0 2a 0", 0, True)
-        self.command.wait()
-        
-        if(self.command.exitCode != 0 or not self.command.stdout):
-            self.command.wait()
-            for n in range(5):
-                if (self.command.exitCode == 0):
-                    break
-                sleep(.5)
-                self.command.wait()
-            self.state = TD_State.ERROR
-
-        self.state = TD_State.IDLE
-        
-        self.vendor = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[8:16].strip()
-        self.model = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[16:31].strip()
-        self.serial = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[32:42].strip()
-
-    def _readModeSense(self) -> None:
-        
-        if self.tape_override:
-            return
-        
-        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
-        self.command.wait()
-        
-        # When ModeSense needs an Inquiry than make it :3
-        if self.command.exitCode == 6:
-            self._inquiry()
-
-        if self.tape.state == E_Tape.NO_TAPE:
-            try:
-                self.tape = Tape(self.command.stdout[0][4:])
-            except IndexError:
-                self.tape = Tape("0000")
-
-    def __init__(self, path: str, generic_path: str, blocksize: str = "256K"):
-        self.path = path
-        self.generic_path = generic_path
-        self.blocksize = blocksize
-        self.file = None
-        self._refresh()
-        
     def _asdict(self) -> dict:
         self._refresh()
+        
+        override = {
+            "active": self.drive_override
+        }
+
+        if self.rewindCommand != None:
+            override.update({"rewindCommand" : self.rewindCommand._asdict()})    
+
+        if self.ejectCommand != None:
+            override.update({"ejectCommand" : self.ejectCommand._asdict()})
+
+        if self.command is None:
+            command = {"command": None}
+        else:
+            command = self.command._asdict()
+        
+        if self.file is None:
+            currentFile = {"file": None}
+        else:
+            currentFile = self.file._asdict()
+            
         data = {
             "environment": {
                 "path": self.path,
@@ -266,15 +418,14 @@ class TapeDrive:
                 "vendor": self.vendor,
                 "model": self.model,
                 "serial": self.serial },
+            "override": override,
             "state": self.state.name,
             "blocksize": self.blocksize,
-            "command": self.command._asdict(),
-            "tape": self.tape._asdict()
-        }
-        if self.file is None:
-            data.update({"currentFile": None})
-        else:
-            data.update({"currentFile": self.file._asdict()})
+            "tape": self.tape._asdict(),
+            "command" : command,
+            "current_file": currentFile
+        }    
+        
         return data
 
     def __str__(self) -> str:
@@ -310,7 +461,7 @@ class TapeDrive:
         self.state = TD_State.WRITE
         self.command = Command(
             "dd if='" + self.file.path + "' of='" + self.path + "' " +
-            "iflag=fullblock status=progress bs=" + self.blocksize, 
+            "iflag=fullblock status=none bs=" + self.blocksize, 
             filesize=self.file.size)
         
         self.command.start()
@@ -339,7 +490,7 @@ class TapeDrive:
 
         self.command = Command(
             "dd if='" + self.file.path + "' of='" + self.path + "' " +
-            "iflag=fullblock status=progress bs=" + self.blocksize, 
+            "iflag=fullblock status=none bs=" + self.blocksize, 
             filesize=tocfile.size)
 
         self.command.wait()
@@ -357,11 +508,17 @@ class TapeDrive:
 
     def __eject(self):
         self.state = TD_State.EJECT
-        self.command = Command("sg_raw '" + self.generic_path + "' 0x1B 0 0 0 0 0")
+        if self.ejectCommand is None:
+            self.command = Command("sg_raw '" + self.generic_path + "' 0x1B 0 0 0 0 0")
+        else:
+            self.command = self.ejectCommand
         self.command.start()
         self.tape_override = False
 
     def __rewind(self):
         self.state = TD_State.REWIND
-        self.command = Command("sg_raw '" + self.generic_path + "' 0x01 0 0 0 0 0")
+        if self.rewindCommand is None:
+            self.command = Command("sg_raw '" + self.generic_path + "' 0x01 0 0 0 0 0")
+        else:
+            self.command = self.rewindCommand
         self.command.start()
