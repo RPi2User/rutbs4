@@ -295,7 +295,7 @@ class TapeDrive:
                 }
             }
         }
-        As you can see our custum drive state is "IDLE", we aren't at BOT (begin of tape) anymore, our current tape
+        As you can see our custom drive state is "IDLE", we aren't at BOT (begin of tape) anymore, our current tape
         state is "ONLINE". The "command" returned the exit code "0" so our write command was successful.
         
         I know the "raw" JSON string is not readable at all. 
