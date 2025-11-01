@@ -1,6 +1,8 @@
 import json
+import os
 from time import sleep
 from enum import Enum
+import uuid
 
 from tbk.TableOfContent import TableOfContent
 from backend.File import File
@@ -146,6 +148,7 @@ class TD_State(Enum):
     REWIND = 2,
     EJECT = 3,
     IDLE = 4,
+    WRITE_TOC = 5,
     ERROR = -1
 
 class TapeDrive:
@@ -299,14 +302,56 @@ class TapeDrive:
 
     def write(self, file: File):
         self._refresh()
+        if self.state != TD_State.IDLE:
+            return
+        
+        self.file = file
+
         self.state = TD_State.WRITE
+        self.command = Command(
+            "dd if='" + self.file.path + "' of='" + self.path + "' " +
+            "iflag=fullblock status=progress bs=" + self.blocksize, 
+            filesize=self.file.size)
+        
+        self.command.start()
 
     def writeTOC(self, tableOfContent: TableOfContent):
         # This writes TOC as first File on Tape
         self._refresh()
-        self.state = TD_State.WRITE
+        
+        if self.state != TD_State.IDLE or not self.tape.begin_of_tape:
+            return
+        
+        self.state = TD_State.WRITE_TOC
 
-    def read(self, file: File):
+        toc_uuid : str = str(uuid.uuid4())
+        toc_filename : str = "toc_" + toc_uuid + ".json"
+        toc_path: str = "/tmp/" + toc_filename
+        tocfile: File = File(0, toc_path)
+        
+        try:
+            with open(tocfile.path, 'w') as f:
+                f.write(json.dumps(tableOfContent._asdict(), indent=2))
+        except PermissionError:
+           raise PermissionError("Cannot write Temporary file into /tmp!")
+        except:
+            raise
+
+        self.command = Command(
+            "dd if='" + self.file.path + "' of='" + self.path + "' " +
+            "iflag=fullblock status=progress bs=" + self.blocksize, 
+            filesize=tocfile.size)
+
+        self.command.wait()
+        
+        if(self.command.exitCode != 0):
+            self.state = TD_State.ERROR
+            return
+        
+        tocfile.delete()
+            
+
+    def read(self, file: File) -> None:
         self._refresh()
         self.state = TD_State.READ
 
