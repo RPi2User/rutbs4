@@ -82,6 +82,7 @@ class WriteScheduler():
 
 
     # --- System ---------------------------------------------------
+    # TODO: this shall get all information from the TOC!
     def __init__(self, tapeDrive: TapeDrive, targetFolders: List[Folder], threadLimit: int, cksum_type: ChecksumType = ChecksumType.SHA256) -> None:
         self.drive = tapeDrive
         self.folders = targetFolders

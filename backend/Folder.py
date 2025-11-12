@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List
 from backend.File import File
 from backend.Command import Command
-from tbk.Checksum import ChecksumType
+from backend.Checksum import ChecksumType
 
 class FolderKeyType(Enum):
     FILE = 1
@@ -36,7 +36,7 @@ class Folder:
         _find_cmd: str = "find '" + path + "' -maxdepth 1 -type f"
         _id = 0
         find_files: Command = Command(_find_cmd)
-        find_files.start()
+        find_files.wait()   # wait until the find process is finished, shall be instant
         for file in find_files.stdout:
             self.files.append(File(
                 id = _id,
