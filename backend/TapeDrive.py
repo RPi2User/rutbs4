@@ -171,7 +171,7 @@ class TapeDrive:
     ejectCommand: Command = None
 
     # Internal variables, do not edit!
-    drive_override: bool = False    
+    drive_override: bool = False
     tape: Tape = Tape("0000")
     tape_override: bool = False
     state: TD_State = TD_State.ERROR
