@@ -1,5 +1,4 @@
 import json
-import os
 from time import sleep
 from enum import Enum
 import uuid
@@ -182,39 +181,39 @@ class TapeDrive:
     file: File = None
 
     """_summary_
-    This Backend is written for SCSI/SAS-Drives but can support other drives via an override.
-    Due to the lack of a fibre channel drive I can't do any research to support them.
-    MAYBE they are supported via the same SCSI Commands I HOPE this is the case.
-        Please, if you have a spare FC-TapeDrive for me, please reach out!
-    
-    !!!             Currently only LTO-based tapes will be handled correctly!                   !!!
-    
-    A typical SCSI-Based Drive will be recognized on most linux systems as `/dev/*stX`.
-    Like:
-        - /dev/st0 
-        - /dev/nst0 
-        - /dev/nst1
-        - ... 
+        This Backend is written for SCSI/SAS-Drives but can support other drives via an override.
+        Due to the lack of a fibre channel drive I can't do any research to support them.
+        MAYBE they are supported via the same SCSI Commands I HOPE this is the case.
+            Please, if you have a spare FC-TapeDrive for me, please reach out!
         
-    If you are interested on how this project recognize a valid drive, please go to backend.TD_Pool
-    
-    If you want to create an TapeDrive object just search for two different paths:
-        - the non-rewinding path -> like /dev/nst0
-        - the generic scsi path -> like /dev/sg0
+        !!!             Currently only LTO-based tapes will be handled correctly!                   !!!
         
-    Both values can be easily found with this simple command `lsscsi -g`
-    So in a python shell you can easily create a tape drive object with this two commands:
-    
-        ```python
-        >>> from backend.TapeDrive import TapeDrive
-        >>> tapedrive = TapeDrive("/dev/nst0", "/dev/sg0")
-        ```
+        A typical SCSI-Based Drive will be recognized on most linux systems as `/dev/*stX`.
+        Like:
+            - /dev/st0 
+            - /dev/nst0 
+            - /dev/nst1
+            - ... 
+            
+        If you are interested on how this project recognize a valid drive, please go to backend.TD_Pool
+        
+        If you want to create an TapeDrive object just search for two different paths:
+            - the non-rewinding path -> like /dev/nst0
+            - the generic scsi path -> like /dev/sg0
+            
+        Both values can be easily found with this simple command `lsscsi -g`
+        So in a python shell you can easily create a tape drive object with this two commands:
+        
+            ```python
+            >>> from backend.TapeDrive import TapeDrive
+            >>> tapedrive = TapeDrive("/dev/nst0", "/dev/sg0")
+            ```
 
-    Hence this project is optimized for API usage all __str__() functions will return a JSON string.
-    
-    If your drive is more an "exotic" one you can OVERRIDE some assumptions I made in this project.
-    
-    For example:
+        Hence this project is optimized for API usage all __str__() functions will return a JSON string.
+        
+        If your drive is more an "exotic" one you can OVERRIDE some assumptions I made in this project.
+        
+        For example:
         Our imaginary drive is recognized by the linux kernel as `/dev/nst0`. With no generic path.
             !!! For this program to write multiple files, a NON REWINDING DRIVE is needed !!!
         
@@ -302,13 +301,13 @@ class TapeDrive:
         But given the complex nature of tape in general this object structure is necessary.
         
         Useful resources:
-            https://www.cyberciti.biz/hardware/unix-linux-basic-tape-management-commands/
-    """
+            https://www.cyberciti.biz/hardware/unix-linux-basic-tape-management-commands/"""
+
     def __init__(self, path: str, generic_path: str, drive_override: bool = False, blocksize: str = "256K"):
         self.path = path
         self.generic_path = generic_path
         self.drive_override = drive_override
-        self.blocksize = blocksize
+        self.blocksize = blocksize      # TODO: (if i create a config file...) Make default blocksize parameter
         self.file = None
         self._refresh()
 
@@ -384,7 +383,8 @@ class TapeDrive:
             return
 
         match self.state:
-            case TD_State.REWIND: self.tape.begin_of_tape = True
+            case TD_State.REWIND:
+                self.tape.begin_of_tape = True
             case TD_State.EJECT: 
                 self.tape.state = E_Tape.NO_TAPE
                 self.tape.begin_of_tape = False
@@ -400,10 +400,10 @@ class TapeDrive:
             "active": self.drive_override
         }
 
-        if self.rewindCommand != None:
+        if self.rewindCommand is not None:
             override.update({"rewindCommand" : self.rewindCommand._asdict()})    
 
-        if self.ejectCommand != None:
+        if self.ejectCommand is not None:
             override.update({"ejectCommand" : self.ejectCommand._asdict()})
 
         if self.command is None:
@@ -448,7 +448,7 @@ class TapeDrive:
     def rewind(self) -> None: 
         self._refresh()
         if(self.state != TD_State.IDLE or self.tape.begin_of_tape):
-            return
+            return  # Can raise a custom exception for proper state handling
         self.__rewind()
 
     def eject(self) -> None:
@@ -471,6 +471,7 @@ class TapeDrive:
             filesize=self.file.size)
         
         self.command.start()
+        self.tape.begin_of_tape = False
 
     def writeTOC(self, tableOfContent: TableOfContent):
         # This writes TOC as first File on Tape
@@ -506,11 +507,27 @@ class TapeDrive:
             return
         
         tocfile.delete()
-            
+        self.tape.begin_of_tape = False
 
     def read(self, file: File) -> None:
-        self._refresh()
+        # this reads A SINGLE FILE!
+        # WARNING: this feature relies on the concept that every write-operation
+        #   a End-Of-File Mark is written.
+        # Worst case:
+        #   all Files will be written into one large. Shall be compatible with tar????
+
+        self._refresh() # we currently are at the first file!
+
+        if self.state != TD_State.IDLE:
+            return
+        
         self.state = TD_State.READ
+        self.command = Command(
+            "dd if='" + self.path + "' " + "of='" + file.path + "' " +
+            "bs='" + self.blocksize + "' " + "iflag=fullblock satus=none")
+
+        self.command.start()
+        self.tape.begin_of_tape = False
 
     def __eject(self):
         self.state = TD_State.EJECT
