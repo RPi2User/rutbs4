@@ -125,18 +125,8 @@ class Command:
 
         if self.process.returncode is None:
             self.running = True
-            data = {
-                "cmd": self.cmd,
-                "pid": self.pid,
-                "running": self.running,
-                "stdout": self.stdout,
-                "stderr": self.stderr,
-                "filesize": self.filesize,
-                "io": self.io,
-                "exitCode": self.exitCode
-            }
-
-            #print("DEBUG: cmd " + json.dumps(data)) # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
+            # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
+            
             if not self.permError: 
                 self._pollIOfile()
         
