@@ -170,6 +170,9 @@ class TapeDrive:
     rewindCommand: Command = None
     ejectCommand: Command = None
 
+    inquiryCommand: Command = None
+    readModeSenseCommand: Command = None
+
     # Internal variables, do not edit!
     drive_override: bool = False
     tape: Tape = Tape("0000")
@@ -324,9 +327,14 @@ class TapeDrive:
             self.state = TD_State.IDLE
             return
 
-        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 12 1 83 0 2a 0", 0, True)
+        # Sensible to override
+        if not self.inquiryCommand:
+            self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 12 1 83 0 2a 0", 0, True)
+        else:
+            self.command = self.inquiryCommand
+
         self.command.wait()
-        
+
         if(self.command.exitCode != 0 or not self.command.stdout):
             self.command.wait()
             for n in range(5):
@@ -347,7 +355,12 @@ class TapeDrive:
         if self.tape_override or self.generic_path == "":
             return
 
-        self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
+        # Sensible to override
+        if not self.readModeSenseCommand:
+            self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
+        else:
+            self.command = self.readModeSenseCommand
+
         self.command.wait()
 
         # When ModeSense needs an Inquiry than make one :3
@@ -364,6 +377,8 @@ class TapeDrive:
                 self.tape = Tape("0000")
 
     def _refresh(self) -> None:
+        # BUG: Need to handle drive override!
+
         # When still initializing run first inquiry
         if self.command is None:
             self._inquiry()

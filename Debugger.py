@@ -10,7 +10,7 @@ class Debugger():
         # Lets create a toc :3
 
         # 1. lets create a drive :3
-        drive: TapeDrive = TapeDrive("/dev/null", "/dev/zero", True, "200K")
+        drive: TapeDrive = TapeDrive("/dev/null", "", True, "200K")
         drive.ejectCommand = Command("echo eject")
         drive.rewindCommand = Command("echo rewind")
 
