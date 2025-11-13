@@ -12,9 +12,7 @@ class FolderKeyType(Enum):
 
 class Folder:
 
-    files: List[File] = []
-    path: str = ""
-    encyrption_status: FolderKeyType = FolderKeyType.NO_ENCRYPTION
+
 
     def setChecksumType(self, cksumType: ChecksumType) -> None:
         self.cksumType = cksumType
@@ -32,6 +30,9 @@ class Folder:
         pass
 
     def __init__(self, path: str):
+        self.files: List[File] = []
+        self.path: str = ""
+        self.encyrption_status: FolderKeyType = FolderKeyType.NO_ENCRYPTION
         self.path = path
         _find_cmd: str = "find '" + path + "' -maxdepth 1 -type f"
         _id = 0
