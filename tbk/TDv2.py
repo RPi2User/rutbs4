@@ -13,7 +13,7 @@ from backend.Command import Command
 from tbk.TableOfContent import TableOfContent
 from backend.File import File
 from tbk.Status import Status
-from tbk.Checksum import Checksum
+from backend.Checksum import Checksum
 
 from time import sleep
 from functools import partial

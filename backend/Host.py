@@ -163,7 +163,7 @@ class Host():
     def refresh_status(self):
         self.hostname = socket.gethostname()
         try:
-            self.ip_addr = socket.gethostbyname(self.hostname)
+            self.ip_addr = "127.0.0.1" # BUG
         except socket.gaierror:
             self.ip_addr = "127.0.0.1"
 

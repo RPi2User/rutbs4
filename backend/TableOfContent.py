@@ -75,7 +75,7 @@ class TableOfContent:
         self.command = Command("find '" + self.rootFolder.path + "' -mindepth 1 -maxdepth 1 -type d")
         self.command.wait()
         for folder in self.command.stdout:
-            self.folder.append(Folder(folder.split('/')[-1]))   # Get substring after last slash
+            self.folder.append(Folder(folder))
 
     def __init__(self, rootFolder: Folder) -> None:
         # 1. Add all Folders to list

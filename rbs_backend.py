@@ -12,6 +12,8 @@ from tbk.TDv2 import TapeDrive
 from backend.Host import Host
 from tbk.Status import Status
 
+from Debugger import Debugger
+
 VERSION = "4.0.0"
 DEBUG = False
 
@@ -579,5 +581,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Start RBS Backend Server")
     parser.add_argument('--port', type=int, default=5533, help='Port number')
     args = parser.parse_args()
-    
+    Debugger.main()
     app.run(host='0.0.0.0', port=args.port)
