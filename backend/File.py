@@ -9,13 +9,6 @@ DEBUG: bool = True
 
 class File:
 
-    id: int
-    size : int
-    name : str                  # Just name with extension
-    path : str                  # Complete-path including filename!
-    cksum : Checksum
-    cmd: Command
-
     def checksum(self, c: Checksum) -> None:
         self.cksum = c
 
@@ -87,6 +80,13 @@ class File:
         - path is the path file... like the path yk... 
     """
     def __init__(self, id: int, path: str, createFile: bool = False) -> None:
+        self.id: int
+        self.size : int
+        self.name : str
+        self.path : str
+        self.cksum : Checksum
+        self.cmd: Command
+
         if createFile:
             self.touch(path)
         

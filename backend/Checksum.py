@@ -10,12 +10,11 @@ class ChecksumType(Enum):
 
 class Checksum:
 
-    type: ChecksumType = ChecksumType.MD5
-    file_path: str = ""
-    value: str = ""
-    cmd: Command = Command("")
-
     def __init__(self, file_path: str, type: int = ChecksumType.MD5):
+        self.type: ChecksumType = ChecksumType.MD5
+        self.file_path: str = ""
+        self.value: str = ""
+        self.cmd: Command = Command("")
         self.type = type
         self.file_path = file_path
 

@@ -66,9 +66,7 @@ class TableOfContent:
         - rootFolder
         - folder[]
     """
-    command = None
-    rootFolder: Folder
-    folder: List[Folder] = []
+
 
     def _scanSubDirs(self):
         # -mindepth 1 is used so the root dir is not element of folder{}
@@ -78,6 +76,9 @@ class TableOfContent:
             self.folder.append(Folder(folder))
 
     def __init__(self, rootFolder: Folder) -> None:
+        self.command = None
+        self.rootFolder: Folder
+        self.folder: List[Folder] = []
         # 1. Add all Folders to list
         # 2. Add all Files from Root Folder
         self.rootFolder = rootFolder

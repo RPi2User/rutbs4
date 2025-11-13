@@ -12,8 +12,6 @@ class FolderKeyType(Enum):
 
 class Folder:
 
-
-
     def setChecksumType(self, cksumType: ChecksumType) -> None:
         self.cksumType = cksumType
 

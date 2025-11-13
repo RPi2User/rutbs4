@@ -43,11 +43,7 @@ class E_Tape(Enum):
 
 class Tape():
 
-    lto_version: E_LTOv = E_LTOv.NONE
-    native_capacity: E_LTO_Cap = E_LTO_Cap.NONE
-    write_protect: bool = True
-    begin_of_tape: bool = False
-    state: E_Tape = E_Tape.NO_TAPE
+
 
     def __init__(self, hardware_id: str)-> None:
 
@@ -64,6 +60,12 @@ class Tape():
             str[2]: 0bX001 when, X=0    → no write protect
             str[3]: not used
         """
+
+        self.lto_version: E_LTOv = E_LTOv.NONE
+        self.native_capacity: E_LTO_Cap = E_LTO_Cap.NONE
+        self.write_protect: bool = True
+        self.begin_of_tape: bool = False
+        self.state: E_Tape = E_Tape.NO_TAPE
 
         _lto_version: str = int(hardware_id[0], 16)
         self.write_protect = (int(hardware_id[2], 16) & 0x8 > 0) # Isolated bit 4

@@ -6,8 +6,6 @@ from time import sleep
 from typing import List
 
 class Command:
-    
-    quiet: bool = False
 
     """
     # --------------------------------------------------------------
@@ -23,6 +21,7 @@ class Command:
     # --------------------------------------------------------------
     """
     def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None: 
+        self.quiet: bool = False
         self.cmd = cmd
         self.filesize: int = filesize
         self.raw: bool = raw
