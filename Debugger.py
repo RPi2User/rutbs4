@@ -1,17 +1,28 @@
-from typing import List
-from backend.Folder import Folder
 from backend.Command import Command
+from backend.Folder import Folder, FolderKeyType
+from backend.Tape import Tape
+from backend.TapeDrive import TapeDrive
+from backend.TableOfContent import TableOfContent, TOC_Job, TOC_System
 
 class Debugger():
 
     def main():
-        subdirs: List[Folder] = []
-        f: Folder = Folder("/opt/rutbs/test")
-        c: Command = Command("find '" + f.path + "' -mindepth 1 -maxdepth 1 -type d")
+        # Lets create a toc :3
 
-        c.wait()
+        # 1. lets create a drive :3
+        drive: TapeDrive = TapeDrive("/dev/null", "/dev/zero", True, "200K")
+        drive.ejectCommand = Command("echo eject")
+        drive.rewindCommand = Command("echo rewind")
 
-        for q in c.stdout:
-            subdirs.append(Folder(q))
+        # 2. Insert a virtual tape :D
+        drive.tape = Tape("a810")
 
-        print(subdirs)
+        # 3. Construct needed objects ^^
+        rootFolder: Folder = Folder("/opt/rutbs/test")
+        job: TOC_Job = TOC_Job(FolderKeyType.PASSPHRASE)
+        system: TOC_System = TOC_System(drive, 4)
+
+        # FIRE
+        toc: TableOfContent = TableOfContent(rootFolder, system, job)
+
+        print(toc)

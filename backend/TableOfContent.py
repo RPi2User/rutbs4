@@ -1,29 +1,40 @@
 import json
 import platform
 
-from datetime.datetime import datetime
+from datetime import datetime
 from typing import List
 
 from backend.TapeDrive import TapeDrive
-
+from backend.Checksum import Checksum, ChecksumType
 from backend.Command import Command
-from backend.Folder import Folder
+from backend.Folder import Folder, FolderKeyType
 
 """_summary_
     Host must create a suitable TOC, with a valid TapeDrive object.
     After that, the TOC must be passed to the Read/Write-Scheduler
 """
 
+class TOC_Job:
+    def __init__(self, 
+                    encryptionScheme: FolderKeyType = FolderKeyType.NO_ENCRYPTION, 
+                    checksumType: ChecksumType = ChecksumType.SHA256):
+        self.encryptionScheme: FolderKeyType = encryptionScheme
+        self.checksumType: ChecksumType = checksumType
+
+    def _asdict(self) -> dict:
+        data = {
+            "encryptionScheme": self.encryptionScheme.name,
+            "checksumType": self.checksumType.name
+        }
+        return data
+
+    def __str__(self) -> str:
+        return json.dumps(self._asdict())
+
 class TOC_System:
 
-    timeStamp: str = ""
-    hostname: str = ""
-    threadCount: int = 0
-    tapeDrive: dict = {}
-
-
     def __init__(self, tapeDrive: TapeDrive, threadCount: int):
-        self.timeStamp = datetime.now()
+        self.timeStamp = str(datetime.now())
         self.hostname = platform.node()
         self.threadCount = threadCount
         self.tapeDrive = tapeDrive._asdict()
@@ -75,7 +86,7 @@ class TableOfContent:
         for folder in self.command.stdout:
             self.folder.append(Folder(folder))
 
-    def __init__(self, rootFolder: Folder) -> None:
+    def __init__(self, rootFolder: Folder, toc_system: TOC_System, toc_job: TOC_Job) -> None:
         self.command = None
         self.rootFolder: Folder
         self.folder: List[Folder] = []
@@ -83,16 +94,20 @@ class TableOfContent:
         # 2. Add all Files from Root Folder
         self.rootFolder = rootFolder
         self._scanSubDirs() # When no subdirs available, find returns nothing with exit_code = 0
+
+        self.toc_system: TOC_System = toc_system
+        self.toc_job: TOC_Job = toc_job
     
     
     def _asdict(self) -> dict:
         data = {
+            "environment": self.toc_system._asdict(),
+            "job": self.toc_job._asdict(),
             "rootFolder": self.rootFolder._asdict(),
-            "folders": [folder._asdict() for folder in self.folder],
+            "folders": [folder._asdict() for folder in self.folder]
         }
         
         return data
     
     def __str__(self) -> str:
         return json.dumps(self._asdict())
-    

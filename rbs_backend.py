@@ -582,4 +582,5 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=5533, help='Port number')
     args = parser.parse_args()
     Debugger.main()
+    exit(0)
     app.run(host='0.0.0.0', port=args.port)
