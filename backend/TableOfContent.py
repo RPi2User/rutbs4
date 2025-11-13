@@ -1,3 +1,5 @@
+import json
+
 from typing import List
 
 from backend.Command import Command
@@ -5,7 +7,7 @@ from backend.Folder import Folder
 
 class TableOfContent:
 
-    command: Command = None
+    command = None
     rootFolder: Folder
     folder: List[Folder] = []
 
@@ -21,3 +23,16 @@ class TableOfContent:
         # 2. Add all Files from Root Folder
         self.rootFolder = rootFolder
         self._scanSubDirs() # When no subdirs available, find returns nothing with exit_code = 0
+    
+    
+    def _asdict(self) -> dict:
+        data = {
+            "rootFolder": self.rootFolder._asdict(),
+            "folders": [folder._asdict() for folder in self.folder],
+        }
+        
+        return data
+    
+    def __str__(self) -> str:
+        return json.dumps(self._asdict())
+    
