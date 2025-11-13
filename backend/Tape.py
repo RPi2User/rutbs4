@@ -42,8 +42,7 @@ class E_Tape(Enum):
     ONLINE = 2
 
 class Tape():
-    
-    
+
     lto_version: E_LTOv = E_LTOv.NONE
     native_capacity: E_LTO_Cap = E_LTO_Cap.NONE
     write_protect: bool = True
@@ -51,9 +50,21 @@ class Tape():
     state: E_Tape = E_Tape.NO_TAPE
 
     def __init__(self, hardware_id: str)-> None:
-        
-        # 3890
-        
+
+        """
+        Example: "3890" 
+            str[0]: LTO-Version         → LTO-3
+            str[1]: always 8 for Tape   → Valid Tape
+            str[2]: 0bX001 when, X=1    → write protect enabled
+            str[3]: not used
+
+        Example: "8810" 
+            str[0]: LTO-Version         → LTO-8
+            str[1]: always 8 for Tape   → Valid Tape
+            str[2]: 0bX001 when, X=0    → no write protect
+            str[3]: not used
+        """
+
         _lto_version: str = int(hardware_id[0], 16)
         self.write_protect = (int(hardware_id[2], 16) & 0x8 > 0) # Isolated bit 4
         type: int = int(hardware_id[1], 16)
