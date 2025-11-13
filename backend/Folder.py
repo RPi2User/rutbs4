@@ -49,7 +49,6 @@ class Folder:
         pass
 
     # SYSTEM
-
     def __str__(self) -> str:
         return json.dumps(self._asdict())
     

@@ -1,8 +1,8 @@
 from backend.Command import Command
-from backend.Folder import Folder, FolderKeyType
+from backend.Folder import Folder
 from backend.Tape import Tape
 from backend.TapeDrive import TapeDrive
-from backend.TableOfContent import TableOfContent, TOC_Job, TOC_System
+from backend.TableOfContent import TableOfContent, TOC_System
 
 class Debugger():
 
@@ -19,10 +19,9 @@ class Debugger():
 
         # 3. Construct needed objects ^^
         rootFolder: Folder = Folder("/opt/rutbs/test")
-        job: TOC_Job = TOC_Job(FolderKeyType.PASSPHRASE)
         system: TOC_System = TOC_System(drive, 4)
 
         # FIRE
-        toc: TableOfContent = TableOfContent(rootFolder, system, job)
+        toc: TableOfContent = TableOfContent(rootFolder, system)
 
         print(toc)
