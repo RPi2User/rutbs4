@@ -4,6 +4,8 @@ from typing import List
 from enum import Enum
 
 from tbk.Status import Status
+
+from backend.TableOfContent import TableOfContent
 from backend.Command import Command
 from backend.TapeDrive import TapeDrive
 from backend.File import File
@@ -78,19 +80,21 @@ class WriteScheduler():
             self._checkWriteJob()
 
     def work(self):
+        # This must be in the background. We wait for completed tasks after all...
         self.state = WS_States.WAIT_FOR_DRIVE
 
 
     # --- System ---------------------------------------------------
-    # TODO: this shall get all information from the TOC!
-    def __init__(self, tapeDrive: TapeDrive, targetFolders: List[Folder], threadLimit: int, cksum_type: ChecksumType = ChecksumType.SHA256) -> None:
-        self.drive = tapeDrive
-        self.folders = targetFolders
-        if (threadLimit < 1):
+    def __init__(self, tableOfContent: TableOfContent) -> None:
+        self.drive = tableOfContent.toc_system.tapeDrive
+        self.folders = []
+        self.folder.append(tableOfContent.rootFolder)
+        self.folders = tableOfContent.folder
+        if (tableOfContent.toc_system.threadCount < 1):
             self.threadLimit = 1
         else:
-            self.threadLimit = threadLimit
-        self.cksum_type = cksum_type
+            self.threadLimit = tableOfContent.toc_system.threadCount
+        #self.cksum_type = tableOfContent. 
         self._initPipelines()
 
     def _asdict(self) -> dict:

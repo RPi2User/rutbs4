@@ -20,6 +20,10 @@ class File:
         except Exception:
             raise
 
+    def append(text: str):
+        try:
+            Path(path.)
+
     def validatePath(self, path: str):
         # This checks whether the given path is valid
         # and sets self.path accordingly

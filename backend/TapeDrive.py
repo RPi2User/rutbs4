@@ -377,8 +377,6 @@ class TapeDrive:
                 self.tape = Tape("0000")
 
     def _refresh(self) -> None:
-        # BUG: Need to handle drive override!
-
         # When still initializing run first inquiry
         if self.command is None:
             self._inquiry()
