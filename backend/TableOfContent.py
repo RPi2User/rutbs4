@@ -1,12 +1,71 @@
 import json
+import platform
 
+from datetime.datetime import datetime
 from typing import List
+
+from backend.TapeDrive import TapeDrive
 
 from backend.Command import Command
 from backend.Folder import Folder
 
+"""_summary_
+    Host must create a suitable TOC, with a valid TapeDrive object.
+    After that, the TOC must be passed to the Read/Write-Scheduler
+"""
+
+class TOC_System:
+
+    timeStamp: str = ""
+    hostname: str = ""
+    threadCount: int = 0
+    tapeDrive: dict = {}
+
+
+    def __init__(self, tapeDrive: TapeDrive, threadCount: int):
+        self.timeStamp = datetime.now()
+        self.hostname = platform.node()
+        self.threadCount = threadCount
+        self.tapeDrive = tapeDrive._asdict()
+
+
+    def _asdict(self)-> dict:
+        data = {
+            "timeStamp": self.timeStamp,
+            "hostname": self.hostname,
+            "threadCount": self.threadCount,
+            "tapeDrive": self.tapeDrive,
+        }
+        return data
+
+    def __str__(self) -> str:
+        return json.dumps(self._asdict())
+
+
 class TableOfContent:
 
+    """_summary_
+        A TableOfContent contains the following groups:
+        - System Data
+        - Job Properties
+        - All (future) FILES written on the Tape
+
+        NOTE: Tape Properties are included in TapeDrive object!
+
+        System Data:
+        - TimeStamp
+        - Hostname
+        - Thread Count
+        - TapeDrive
+
+        Job Properties:
+        - Encryption Scheme
+        - Checksum Type
+
+        Folder:
+        - rootFolder
+        - folder[]
+    """
     command = None
     rootFolder: Folder
     folder: List[Folder] = []
