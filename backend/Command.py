@@ -10,7 +10,7 @@ class Command:
     """
     # --------------------------------------------------------------
     pid: int = -1   # PID of cmd
-    running: bool   # process running?
+    running: bool   # process running? -> TODO make ths a parameter!
     io : str        # contents of /proc/<PID>/io
     io_path : str   # /proc/<PID>/io
     raw: bool       # return stdout/stderr as hex
