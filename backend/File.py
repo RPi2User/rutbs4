@@ -9,7 +9,7 @@ DEBUG: bool = True
 
 class File:
 
-    def checksum(self, c: Checksum) -> None:
+    def setChecksum(self, c: Checksum) -> None:
         self.cksum = c
 
     def touch(self, path: str) -> None:
@@ -21,8 +21,9 @@ class File:
             raise
 
     def append(text: str):
-        try:
-            Path(path.)
+        return
+        #try:
+        #    Path(path.)
 
     def validatePath(self, path: str):
         # This checks whether the given path is valid
@@ -48,19 +49,9 @@ class File:
         except Exception as e:
             print("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
         
-    def createChecksum(self, readWrite: bool) -> bool: # rw: true READ, false WRITE
-        # Some bash/awk/string-Magic to get checksum from "md5sum" command
+    def createChecksum(self) -> None:
+        self.cksum.create() # start the checksumming process
 
-        _cmd = "THIS NEEDS REFACTORING!"
-
-        if DEBUG: 
-            print("[INFO] Checksum for " + str(self) + ": " + str(_cmd))
-        if False and self.cksum.value != 0 and readWrite:
-            print("[ERROR] Checksum MISMATCH for " + str(self) + " IS LOCAL " + str(_cmd))
-            return False
-        else:
-            self.cksum.value = "0xFFFFFFFFFFFFFFFF"
-            return True
 
     def remove(self) -> None:
         # This removes the file from the filesystem and resets `self`
@@ -83,21 +74,25 @@ class File:
         - id is some arbitrary number you can like
         - path is the path file... like the path yk... 
     """
-    def __init__(self, id: int, path: str, createFile: bool = False) -> None:
-        self.id: int
-        self.size : int
-        self.name : str
-        self.path : str
-        self.cksum : Checksum
-        self.cmd: Command
 
+    def _refresh(self):
+        self.cksum._status()    # get current status
+
+
+    def __init__(self, id: int, path: str, createFile: bool = False) -> None:
         if createFile:
+            # raises PermissonError (if unsufficient perms detected)
             self.touch(path)
-        
+
         self.validatePath(path)
         self.id: int = id
+        self.size : int
+        self.name : str
+        self.path: str = path
+        self.cksum : Checksum = Checksum(self.path) 
+        self.cmd: Command
+
         self.readSize()
-        self.cksum = Checksum(self.path)
 
     def _asdict(self) -> dict:
         data = {
