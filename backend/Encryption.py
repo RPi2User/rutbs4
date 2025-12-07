@@ -18,9 +18,11 @@ class Key:
         self.value = self.cmd.stdout[0]
 
     def _asdict(self) -> dict:
+        if len(self.value) != 0:
+            value_exist: str = "<redacted>"
         data = {
             "length": self.length.name,
-            "value": self.value
+            "value": value_exist
         }
 
         return data
@@ -44,3 +46,5 @@ class Encryption:
             "key": self.key._asdict(),
             "iv": self.iv
         }
+
+        return data
