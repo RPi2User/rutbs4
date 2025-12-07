@@ -132,7 +132,7 @@ class Command:
         else:
             self.running = False
             self.exitCode = self.process.returncode
-            self.process = None
+            self.process.kill()
 
     def _pollIOfile(self) -> None:
         if not self.permError:
