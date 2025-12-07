@@ -76,7 +76,7 @@ class Command:
         threading.Thread(target=self._read_stderr, daemon=True).start()
         self.status()
         if not self.quiet:
-            print("[EXEC] " + self.__str__())
+            print("[EXEC] " + json.dumps(self._asdict(), indent=2))
 
     def _read_stdout(self):
         # Some commands may print raw binary, those can't be interpreted as UTF-8

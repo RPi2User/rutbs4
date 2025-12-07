@@ -1,4 +1,5 @@
 import unittest
+import json
 
 # Module imports
 from backend.Encryption import *
@@ -27,6 +28,17 @@ class UT_Encryption(unittest.TestCase):
         k: Key = Key(KeyLength.long)
         self.assertTrue(len(k.value) == k.length.value * 2)
 
+    def test_enc(self):
+        k: Key = Key() # create key
+
+        # a default key shall be 4096 Bytes long!
+        self.assertEqual(len(k.value), 2 * 4096)  
+
+        e: Encryption = Encryption(k)
+        print(json.dumps({"encryption":e._asdict()}, indent=2))
+
+        # this iv shall always be 16 Byte long (32 Char)
+        self.assertEqual(len(e.iv), 32)
 
 if __name__ == '__main__':
     unittest.main()
