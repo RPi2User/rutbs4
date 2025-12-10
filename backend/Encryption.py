@@ -1,6 +1,6 @@
+import json
 from typing import List
 from enum import Enum
-
 
 from backend.Command import Command
 
@@ -24,27 +24,60 @@ class Key:
             "length": self.length.name,
             "value": value_exist
         }
-
         return data
 
+class E_State(Enum):
+    IDLE = 0,
+    ENCRYPT = 1,
+    DECRYPT = 2
+
 class E_Mode(Enum):
-    AES128 = 1
-    AES256 = 2
+    AES128CBC = 1
+    AES256CBC = 2
+    
+    # ToDo
+    AES128CTR = 3
+    AES256CTR = 4
 
 class Encryption:
 
-    def __init__(self, key: Key, mode: E_Mode = E_Mode.AES256):
+    def __init__(self, key: Key, mode: E_Mode = E_Mode.AES256CBC):
         self.key = key
         self.mode = mode
         self.cmd = Command("openssl rand -hex 16")
         self.cmd.wait()
         self.iv = self.cmd.stdout[0]
+        self.state: E_State = E_State.IDLE
+        
+    def refresh(self) -> None:
+        self.cmd.status()
+        
+        if self.state in [E_State.ENCRYPT, E_State.DECRYPT ] :
+            # 
+            # is command successful terminated?
+            pass
+        
+        else:
+            # Continue IDLEing
+            pass
+
+
+    def encrypt(self) -> None:
+        self.refresh()
+        if self.cmd.running:
+            return
+
+        
 
     def _asdict(self) -> dict:
+        self.refresh()
         data = {
+            "state": self.state.name,
             "mode": self.mode.name,
             "key": self.key._asdict(),
             "iv": self.iv
         }
-
         return data
+    
+    def __str__(self) -> str:
+        return json.dumps(self._asdict(), indent=2)
