@@ -10,10 +10,10 @@ class ChecksumType(Enum):
 
 class Checksum:
 
-    def __init__(self, file_path: str, type: ChecksumType = ChecksumType.MD5):
-        self.type: ChecksumType = ChecksumType.MD5
+    def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256):
+        self.type: ChecksumType = type
         self.file_path: str = ""
-        self.value: str = None
+        self.value: str = ""
         self.cmd: Command = Command("")
         self.type = type
         self.file_path = file_path
@@ -33,29 +33,26 @@ class Checksum:
         self.cmd.status()
         if self.cmd.running:
             return
-        if self.cmd.exitCode == 0:
+        if (self.cmd.exitCode == 0) and not (self.old_value == "CKSUM_CREATED"):    # this "and not" reduces multiple 
             new_value = self.cmd.stdout[0].split()[0]
 
-            if self.value is None:
+            if (self.value == ""):
                 # we are creating a checksum, not validating...
                 self.value = new_value
                 self.mismatch = False
                 self.old_value = "CKSUM_CREATED"
+                return  # so our "message" won't get overwritten
 
             if self.value != new_value:
                 # checksum mismatch
                 self.mismatch = True
+                self.old_value = self.value
 
             if self.value == new_value:
                 # checksum validated
                 self.mismatch = False
 
-            self.old_value = self.value
             self.value = new_value
-
-        else:
-            pass 
-
 
         # Why don't we eval self.cmd.exitcode != 0?
         # This class has no messaging capabilities.

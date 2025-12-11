@@ -4,10 +4,27 @@ from pathlib import Path
 
 from backend.Checksum import Checksum
 from backend.Command import Command
+from backend.Encryption import *
 
 DEBUG: bool = True
 
+#TODO ADD ENCRYPTION
+"""
+ENCRYPTION:
+Needed:
+    - Master Key Phrase (2048/4096/8192)
+    - Type (aes-128-cbc/aes-256-cbc/aes-128-ctr/aes-256-ctr)
+
+"""
 class File:
+    
+    def decrypt(self, encryption_scheme: Encryption) -> None:
+        self.encryption_scheme = encryption_scheme
+        encryption_scheme.decrypt(self.path)
+    
+    def encrypt(self, encryption_scheme: Encryption) -> None:
+        self.encryption_scheme = encryption_scheme
+        encryption_scheme.encrypt(self.path)
 
     def setChecksum(self, c: Checksum) -> None:
         self.cksum = c
@@ -20,7 +37,15 @@ class File:
         except Exception:
             raise
 
-    def append(text: str):
+    def append(self, text: str):
+        # Needed in order to append a given string to a file
+        # In order to create a txt file you shall do:
+        # text = File()
+        # text.touch()
+        # text.append("This is a wonderful text")
+        # cmd = Command("cat " + text.path)
+        # cmd.wait()
+        # "This is a wonderful text" == cmd.stdout[0]
         return
         #try:
         #    Path(path.)
@@ -41,7 +66,7 @@ class File:
         self.cmd: Command = Command("stat -c %s '" + self.path + "'")
         self.cmd.start()
         try:
-            self.size = self.cmd.stdout[0]
+            self.size = int(self.cmd.stdout[0])
         except TypeError:
             self.size = 0
         except IndexError:
@@ -62,12 +87,13 @@ class File:
         except:
             raise
 
-        self.id = None
-        self.size = None
-        self.name = None
-        self.path = None
-        self.cksum = None
-        self.cmd = None
+        self.id = -1
+        self.size = -1
+        self.name = ""
+        self.path = ""
+        self.relative_path = ""
+        self.cksum = Checksum("")
+        self.cmd = Command("")
 
     """_summary_ File.()
         - createFile = True will `touch` file.path
@@ -89,7 +115,9 @@ class File:
         self.size : int
         self.name : str
         self.path: str = path
+        self.relative_path: str = ""    # this comes handy when restoring a tape
         self.cksum : Checksum = Checksum(self.path) 
+        self.encryption_scheme: Encryption = Encryption(Key())
         self.cmd: Command
 
         self.readSize()
@@ -100,8 +128,10 @@ class File:
             "size": self.size,
             "name": self.name,
             "path": self.path,
+            "rel_path": self.relative_path,
             "last_command": self.cmd._asdict(),
-            "cksum": self.cksum._asdict()
+            "cksum": self.cksum._asdict(),
+            "encryption": self.encryption_scheme._asdict(),
         }
         return data
 
