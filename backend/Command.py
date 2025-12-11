@@ -29,8 +29,11 @@ class Command:
         
         self.clearCommand()
         
-    def wait(self, timeout: int = 1) -> None: 
-        self.start()
+    def wait(self, timeout: int = 10) -> None:
+        self.status()
+        
+        if not self.running:
+            self.start()
         
         if timeout == 0:
             while self.running:
@@ -50,7 +53,7 @@ class Command:
         self.io_path: str = ""
         self.stdout: List[str] = []
         self.stderr: List[str] = []
-        self.exitCode: int = None
+        self.exitCode: int = -1
         self.status_msg: str = ""
         self.permError: bool = False
 
