@@ -29,7 +29,7 @@ class Command:
         
         self.clearCommand()
         
-    def wait(self, timeout: int = 10) -> None:
+    def wait(self, timeout: int = 100) -> None:
         self.status()
         
         if not self.running:
@@ -37,11 +37,13 @@ class Command:
         
         if timeout == 0:
             while self.running:
-                sleep(.1)
+                sleep(.01)
+                self.status()
         
         if timeout != 0:
             for n in range(timeout):
-                sleep(.1)
+                sleep(.01)
+                self.status()
             self.kill()
             self.status()
 
