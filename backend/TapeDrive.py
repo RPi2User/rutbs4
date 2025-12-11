@@ -148,6 +148,8 @@ class TD_State(Enum):
     EJECT = 3,
     IDLE = 4,
     WRITE_TOC = 5,
+    FORMAT = 6,
+    TEST_READ = 7,
     ERROR = -1
 
 class TapeDrive:
@@ -457,6 +459,25 @@ class TapeDrive:
     def clearError(self) -> None:
         self.state = TD_State.IDLE
         self.command = None
+
+    def format(self, len: int = 1) -> None:
+        """_summary_
+        The format process wipes the first 1MiB of data from tape
+        This header-area is used to store the table of content (TOC). 
+        When the TOC exceeds 1MiB in size (len > 1), additional 1MiB
+        blocks will be written.
+
+        If the format process fails this tape object will be marked
+        as write protect with `self.tape.write_protect = True`.
+        
+        This must throw an suitable exception to be able to
+        respond with a useful 5xx status.
+        """
+        
+        new_tape: Tape = Tape(str(self.tape.lto_version) + "8" + "9" + "0") # Create new tape object with the current LTO-Version and the correct WP-property
+        self.tapeOverride(new_tape) # override new WP-property
+        raise IOError("[ERROR] failed to format tape, medium write protected")
+        
 
     def rewind(self) -> None: 
         self._refresh()
