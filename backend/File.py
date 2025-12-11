@@ -20,11 +20,11 @@ class File:
     
     def decrypt(self, encryption_scheme: Encryption) -> None:
         self.encryption_scheme = encryption_scheme
-        encryption_scheme.decrypt(self.path)
+        self.path = encryption_scheme.decrypt(self.path)
     
     def encrypt(self, encryption_scheme: Encryption) -> None:
         self.encryption_scheme = encryption_scheme
-        encryption_scheme.encrypt(self.path)
+        self.path = encryption_scheme.encrypt(self.path)
 
     def setChecksum(self, c: Checksum) -> None:
         self.cksum = c
