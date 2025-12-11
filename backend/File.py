@@ -117,7 +117,7 @@ class File:
         self.path: str = path
         self.relative_path: str = ""    # this comes handy when restoring a tape
         self.cksum : Checksum = Checksum(self.path) 
-        self.encryption_scheme: Encryption = Encryption(Key())
+        self.encryption_scheme: Encryption = None
         self.cmd: Command
 
         self.readSize()
@@ -131,8 +131,9 @@ class File:
             "rel_path": self.relative_path,
             "last_command": self.cmd._asdict(),
             "cksum": self.cksum._asdict(),
-            "encryption": self.encryption_scheme._asdict(),
         }
+        if self.encryption_scheme != None:
+            data.update({"encryption": self.encryption_scheme._asdict()})
         return data
 
     def __str__(self) -> str:
