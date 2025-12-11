@@ -13,7 +13,7 @@ from backend.Folder import Folder
     After that, the TOC must be passed to the Read/Write-Scheduler
 """
 
-class TOC_System:
+class TOC_Header:
 
     def __init__(self, tapeDrive: TapeDrive, threadCount: int):
         self.timeStamp = str(datetime.now())
@@ -33,6 +33,15 @@ class TOC_System:
 
     def __str__(self) -> str:
         return json.dumps(self._asdict())
+
+class TOC_Body:
+
+    def createMasterKey(self): #???
+        pass
+
+    def __init__(self, rootDirectory: Folder, passphrase: str = ""):
+        self.root = rootDirectory
+        self.passphrase = passphrase
 
 
 class TableOfContent:
@@ -65,7 +74,7 @@ class TableOfContent:
         for folder in self.command.stdout:
             self.folder.append(Folder(folder))
 
-    def __init__(self, rootFolder: Folder, toc_system: TOC_System) -> None:
+    def __init__(self, rootFolder: Folder, header: TOC_Header) -> None:
         self.command = None
         self.rootFolder: Folder
         self.folder: List[Folder] = []
@@ -74,11 +83,11 @@ class TableOfContent:
         self.rootFolder = rootFolder
         self._scanSubDirs() # When no subdirs available, find returns nothing with exit_code = 0
 
-        self.toc_system: TOC_System = toc_system
+        self.header: TOC_Header = header
 
     def _asdict(self) -> dict:
         data = {
-            "environment": self.toc_system._asdict(),
+            "header": self.header._asdict(),
             "rootFolder": self.rootFolder._asdict(),
             "folders": [folder._asdict() for folder in self.folder]
         }
