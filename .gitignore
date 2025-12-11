@@ -10,3 +10,4 @@ Pipfile*
 .venv
 .run
 __pycache__
+pbkdf2.txt
