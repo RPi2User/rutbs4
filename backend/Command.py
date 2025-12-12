@@ -72,7 +72,7 @@ class Command:
             stderr=subprocess.PIPE,
             text=False
         )
-        self.pid = self.process.pid
+        self.pid = self.process.pid # BUG Wrong PID, only getting PID of "$ sh -c <exec>" cmd and NOT pid(<exec>)
         self.running = True
         self.io_path = f"/proc/{self.pid}/io"
 

@@ -3,6 +3,13 @@ import json
 from enum import Enum
 from backend.Command import Command
 
+class ChecksumState(Enum):
+    CREATE = 1,
+    VALIDATING = 2,
+    IDLE = 3,
+    ERROR = 4,
+    MISMATCH = 5
+
 class ChecksumType(Enum):
     MD5 = 1
     SHA256 = 2
@@ -10,7 +17,11 @@ class ChecksumType(Enum):
 
 class Checksum:
 
+    # TODO: 1. checksum.wait()
+    #       2. checksum.check(target: str)
+
     def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256):
+        self.state : ChecksumState = ChecksumState.IDLE
         self.type: ChecksumType = type
         self.file_path: str = ""
         self.value: str = ""
@@ -21,12 +32,16 @@ class Checksum:
         self.old_value: str = "CKSUM_OKAY"
 
     def create(self):
-        if (self.type == ChecksumType.NONE):
-            return  # Do nothing when user wants nothing.
-        if (self.type == ChecksumType.MD5):
-            self.cmd = Command("openssl md5 -r '" + self.file_path +"'")
-        else:
-            self.cmd = Command("openssl sha256 -r '" + self.file_path + "'")
+        if self.state != ChecksumState.IDLE or self.type == ChecksumType.NONE:
+            return
+
+        match self.type:
+            case ChecksumType.MD5:
+                self.cmd = Command("openssl md5 -r '" + self.file_path +"'")
+
+            case ChecksumType.SHA256:
+                self.cmd = Command("openssl sha256 -r '" + self.file_path +"'")
+
         self.cmd.start()
     
     def _status(self) -> None:
