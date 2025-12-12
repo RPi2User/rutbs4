@@ -28,6 +28,7 @@ class File:
 
     def setChecksum(self, c: Checksum) -> None:
         self.cksum = c
+        self.cksum.cmd.filesize = self.size
 
     def touch(self, path: str) -> None:
         try:

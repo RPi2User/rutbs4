@@ -558,7 +558,7 @@ class TapeDrive:
         self.state = TD_State.READ
         self.command = Command(
             "dd if='" + self.path + "' " + "of='" + file.path + "' " +
-            "bs='" + self.blocksize + "' " + "iflag=fullblock satus=none")
+            "bs='" + self.blocksize + "' " + "iflag=fullblock status=none")
 
         self.command.start()
         self.tape.begin_of_tape = False
