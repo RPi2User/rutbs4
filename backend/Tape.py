@@ -67,7 +67,7 @@ class Tape():
         self.begin_of_tape: bool = False
         self.state: E_Tape = E_Tape.NO_TAPE
 
-        _lto_version: str = str(int(hardware_id[0], 16))
+        _lto_version: int = int(hardware_id[0], 16)
         self.write_protect = (int(hardware_id[2], 16) & 0x8 > 0) # Isolated bit 4
         type: int = int(hardware_id[1], 16)
         
