@@ -17,29 +17,17 @@ class ChecksumType(Enum):
 
 class Checksum:
 
-    # TODO: 1. checksum.wait()
-    #       2. checksum.check(target: str)
-
     def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256):
         self.type: ChecksumType = type
-        self.file_path: str = ""
+        self.file_path: str = file_path
         self.value: str = ""
-        self.cmd: Command = Command("")
-        self.type = type
-        self.file_path = file_path
+        self.cmd: Command = Command("openssl " + self.type.name.lower() + " -r '" + self.file_path +"'")
         self.validation_target: str = ""
         self.state : ChecksumState = ChecksumState.IDLE
 
     def create(self):
         if self.state != ChecksumState.IDLE or self.type == ChecksumType.NONE:
             return
-
-        match self.type:
-            case ChecksumType.MD5:
-                self.cmd = Command("openssl md5 -r '" + self.file_path +"'")
-
-            case ChecksumType.SHA256:
-                self.cmd = Command("openssl sha256 -r '" + self.file_path +"'")
 
         self.state = ChecksumState.CREATE
         self.cmd.start()
@@ -51,9 +39,10 @@ class Checksum:
         if len(target) == 0:
             raise SystemError("[ERROR] Checksum validation: Target checksum empty!")
 
-        self.state = ChecksumState.VALIDATE
         self.validation_target = target
         self.create()
+
+        self.state = ChecksumState.VALIDATE
         self._status()
 
     def wait(self) -> None:
