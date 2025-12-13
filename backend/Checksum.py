@@ -4,11 +4,11 @@ from enum import Enum
 from backend.Command import Command
 
 class ChecksumState(Enum):
-    CREATE = 1,
-    VALIDATING = 2,
-    IDLE = 3,
-    ERROR = 4,
-    MISMATCH = 5
+    CREATE = 1,     # when a new checksum shall be calculated
+    VALIDATE = 2,   # when cross-checking the file integrity
+    IDLE = 3,       # when ALL_OKAY
+    ERROR = 4,      # when Checksum.cmd.exitCode != 0
+    MISMATCH = 5    # when VALIDATING -> IDLE (but with cksum_old != cksum_current)
 
 class ChecksumType(Enum):
     MD5 = 1
@@ -21,15 +21,14 @@ class Checksum:
     #       2. checksum.check(target: str)
 
     def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256):
-        self.state : ChecksumState = ChecksumState.IDLE
         self.type: ChecksumType = type
         self.file_path: str = ""
         self.value: str = ""
         self.cmd: Command = Command("")
         self.type = type
         self.file_path = file_path
-        self.mismatch: bool = True
-        self.old_value: str = "CKSUM_OKAY"
+        self.validation_target: str = ""
+        self.state : ChecksumState = ChecksumState.IDLE
 
     def create(self):
         if self.state != ChecksumState.IDLE or self.type == ChecksumType.NONE:
@@ -42,49 +41,67 @@ class Checksum:
             case ChecksumType.SHA256:
                 self.cmd = Command("openssl sha256 -r '" + self.file_path +"'")
 
+        self.state = ChecksumState.CREATE
         self.cmd.start()
-    
-    def _status(self) -> None:
-        self.cmd.status()
-        if self.cmd.running:
+
+    def validate(self, target: str) -> None:
+        if self.state != ChecksumState.IDLE:
             return
-        if (self.cmd.exitCode == 0) and not (self.old_value == "CKSUM_CREATED"):    # this "and not" reduces multiple 
-            new_value = self.cmd.stdout[0].split()[0]
 
-            if (self.value == ""):
-                # we are creating a checksum, not validating...
-                self.value = new_value
-                self.mismatch = False
-                self.old_value = "CKSUM_CREATED"
-                return  # so our "message" won't get overwritten
+        if len(target) == 0:
+            raise SystemError("[ERROR] Checksum validation: Target checksum empty!")
 
-            if self.value != new_value:
-                # checksum mismatch
-                self.mismatch = True
-                self.old_value = self.value
+        self.state = ChecksumState.VALIDATE
+        self.validation_target = target
+        self.create()
+        self._status()
 
-            if self.value == new_value:
-                # checksum validated
-                self.mismatch = False
+    def wait(self) -> None:
+        self.cmd.wait()
+        self._status()
 
-            self.value = new_value
+    def _status(self) -> None:
+        self.cmd.status()   # refresh current state
 
-        # Why don't we eval self.cmd.exitcode != 0?
-        # This class has no messaging capabilities.
-        # Caller needs to implement error handling (e.g. mismatches).
+        if self.cmd.running:    # abort if running
+            return
+
+        if self.cmd.exitCode != 0:  # Annoy user if error occured, be eff. write-protect
+            self.state = ChecksumState.ERROR
+            return
+
+        match self.state:
+            case ChecksumState.IDLE:
+                    return # we don't care, cmd exited fine (!= 0)
+            case ChecksumState.CREATE:
+                self._fin_create()
+            case ChecksumState.VALIDATE:
+                self._fin_validate()
+
+    def _fin_create(self) -> None:
+        self.value = self.cmd.stdout[0].split()[0]
+        self.state = ChecksumState.IDLE
+
+    def _fin_validate(self) -> None:
+        self.value = self.cmd.stdout[0].split()[0]
+
+        if self.value != self.validation_target:
+            self.state = ChecksumState.MISMATCH
+        else:
+            self.state = ChecksumState.IDLE
 
     def _asdict(self) -> dict:
         self._status()
-        summary = {
-            "mismatch": self.mismatch,
-            "old_value": self.old_value
-        }
         data = {
             "type" : self.type.name,
+            "state" : self.state.name,
             "value" : self.value,
-            "summary": summary,
-            "command": self.cmd._asdict()
         }
+
+        if len(self.validation_target) != 0: # add target value if necessary
+            data.update({"target_value": self.validation_target}) 
+
+        data.update({"command": self.cmd._asdict()})
         return data
 
     def __str__(self):

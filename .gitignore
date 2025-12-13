@@ -1,4 +1,5 @@
 testing/testfiles/*
+testing/test_1/*
 backend/scratchpad.py
 tbkv3.py
 _deb.py

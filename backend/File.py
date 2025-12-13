@@ -78,6 +78,11 @@ class File:
     def createChecksum(self) -> None:
         self.cksum.create() # start the checksumming process
 
+    def validateIntegrity(self) -> None:
+        if len(self.cksum.value) == 0:
+            return
+        self.cksum.validate(self.cksum.value)
+
 
     def remove(self) -> None:
         # This removes the file from the filesystem and resets `self`
