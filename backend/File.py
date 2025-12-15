@@ -9,19 +9,26 @@ from backend.Encryption import Encryption
 DEBUG: bool = True
 
 class File:
-    
-    def decrypt(self, encryption_scheme: Encryption) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.decrypt(self.path)
-    
-    def encrypt(self, encryption_scheme: Encryption) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.encrypt(self.path)
 
-    def setChecksum(self, c: Checksum) -> None:
-        self.cksum = c
-        self.cksum.cmd.filesize = self.size
-        self.cksum.file_path = self.path
+    def __init__(self, id: int, path: str, createFile: bool = False) -> None:
+        # TODO:
+        #    1. self.path must start with /
+        #    2. self.relative_path must start with ./
+        self.cmd: Command = Command("") # main command construct
+        if createFile:
+            # raises PermissonError (if unsufficient perms detected)
+            self.touch(path)
+
+        self.validatePath(path)
+        self.id: int = id
+        self.size : int
+        self.name : str
+        self.path: str = path
+        self.relative_path: str = ""    # this comes handy when restoring a tape
+        self.cksum : Checksum = Checksum(self.path) 
+        self.encryption_scheme: Encryption = None
+
+        self.readSize()
 
     def touch(self, path: str) -> None:
         try:
@@ -31,33 +38,18 @@ class File:
         except Exception:
             raise
 
-    def append(self, text: str):
-        # Needed in order to append a given string to a file
-        # In order to create a txt file you shall do:
-        # text = File()
-        # text.touch()
-        # text.append("This is a wonderful text")
-        # cmd = Command("cat " + text.path)
-        # cmd.wait()
-        # "This is a wonderful text" == cmd.stdout[0]
-        return
-        #try:
-        #    Path(path.)
-
     def validatePath(self, path: str):
-        # This checks whether the given path is valid
-        # and sets self.path accordingly
-        self.cmd = Command("find '" + path +  "'")
-        self.cmd.start()
+        self.cmd.cmd = "find '" + path +  "'"
+        self.cmd.start()    # we currently in __init__ therefor self.path does not exist
 
         if self.cmd.exitCode == 1:
-            raise FileNotFoundError("[ERROR] Invalid Path given!")
+            raise FileNotFoundError("[ERROR] Invalid Path given!") # This backend has no file-by-file interface
         else:
             self.path = path
             self.name = path.split('/')[-1]
 
     def readSize(self) -> None:
-        self.cmd: Command = Command("stat -c %s '" + self.path + "'")
+        self.cmd.cmd = "stat -c %s '" + self.path + "'"
         self.cmd.start()
         try:
             self.size = int(self.cmd.stdout[0])
@@ -67,7 +59,33 @@ class File:
             self.size = 0
         except Exception as e:
             print("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
-        
+
+    def setChecksum(self, c: Checksum) -> None:
+        self.cksum = c
+        self.cksum.cmd.filesize = self.size
+        self.cksum.file_path = self.path
+
+    def decrypt(self, encryption_scheme: Encryption) -> None:
+        self.encryption_scheme = encryption_scheme
+        self.path = encryption_scheme.decrypt(self.path)
+    
+    def encrypt(self, encryption_scheme: Encryption) -> None:
+        self.encryption_scheme = encryption_scheme
+        self.path = encryption_scheme.encrypt(self.path)
+
+    def append(self, text: str):
+        # Needed in order to append a given string to a file
+        # In order to create a txt file you shall do:
+        # text = File()
+        # text.touch()
+        # text.append("This is a wonderful text")
+        # cmd.cmd = "cat " + text.path
+        # cmd.wait()
+        # "This is a wonderful text" == cmd.stdout[0]
+        return
+        #try:
+        #    Path(path.)
+
     def createChecksum(self) -> None:
         self.cksum.create() # start the checksumming process
 
@@ -75,7 +93,6 @@ class File:
         if len(self.cksum.value) == 0:
             return
         self.cksum.validate(self.cksum.value)
-
 
     def remove(self) -> None:
         # This removes the file from the filesystem and resets `self`
@@ -92,39 +109,12 @@ class File:
         self.path = ""
         self.relative_path = ""
         self.cksum = Checksum("")
-        self.cmd = Command("")
-
-    """_summary_ File.()
-        - createFile = True will `touch` file.path
-        - id is some arbitrary number you can like
-        - path is the path file... like the path yk... 
-    """
 
     def _refresh(self):
         self.cksum._status()    # get current status
 
-
-    def __init__(self, id: int, path: str, createFile: bool = False) -> None:
-        # TODO:
-        #    1. self.path must start with /
-        #    2. self.relative_path must start with ./
-        if createFile:
-            # raises PermissonError (if unsufficient perms detected)
-            self.touch(path)
-
-        self.validatePath(path)
-        self.id: int = id
-        self.size : int
-        self.name : str
-        self.path: str = path
-        self.relative_path: str = ""    # this comes handy when restoring a tape
-        self.cksum : Checksum = Checksum(self.path) 
-        self.encryption_scheme: Encryption = None
-        self.cmd: Command
-
-        self.readSize()
-
     def _asdict(self) -> dict:
+        self._refresh()
         data = {
             "id": self.id,
             "size": self.size,

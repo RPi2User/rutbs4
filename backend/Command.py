@@ -22,7 +22,7 @@ class Command:
     """
     def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None: 
         self.quiet: bool = True
-        self.cmd = cmd
+        self.cmd: str = cmd
         self.filesize: int = filesize
         self.raw: bool = raw
         self.running: bool = False
