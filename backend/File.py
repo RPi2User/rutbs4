@@ -124,9 +124,9 @@ class File:
             "last_command": self.cmd._asdict(),
             "cksum": self.cksum._asdict(),
         }
-        if self.encryption_scheme != None:
+        if self.encryption_scheme is not None:
             data.update({"encryption": self.encryption_scheme._asdict()})
         return data
 
     def __str__(self) -> str:
-        return "FILE:" + json.dumps(self._asdict(), indent=2)
+        return "{\"FILE\" :" + json.dumps(self._asdict(), indent=2) + "}"

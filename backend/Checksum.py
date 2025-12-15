@@ -17,7 +17,7 @@ class ChecksumType(Enum):
 
 class Checksum:
 
-    def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256):
+    def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256): # BUG If init with sha256 cant change to md5
         self.type: ChecksumType = type
         self.file_path: str = file_path
         self.value: str = ""
