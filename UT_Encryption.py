@@ -18,7 +18,6 @@ class UT_Encryption(unittest.TestCase):
         k: Key = Key(KeyLength.medium)
         self.assertTrue(len(k.value), k.length.value * 2)
 
-
     def test_default(self):
         k: Key = Key() # create key
         e: Encryption = Encryption(k)
@@ -26,12 +25,6 @@ class UT_Encryption(unittest.TestCase):
         # --- File Init + Checksum
         file: File = File(1, "./testing/testfiles/test100.raw")
         file = self._checkChecksum(file, self.SHA256)
-
-        self.assertEqual(file.cksum.old_value, "CKSUM_OKAY")
-        file._asdict()
-        self.assertEqual(file.cksum.mismatch, False)
-
-        self.assertEqual(file.cksum.value, self.SHA256)
         # ----------------------------------------------------------
 
 
@@ -42,17 +35,7 @@ class UT_Encryption(unittest.TestCase):
             file._asdict()  # poll status as long as the encryption runs
 
         file.cksum.file_path = file.path     # refresh path var to path + ".crypt"
-        file.createChecksum()
-
-        file._asdict()
-
-        if len(file.cksum.value) == 0:
-            file.cksum.cmd.wait()
-
-        self.assertEqual(file.cksum.old_value, self.SHA256)
-        self.assertEqual(file.cksum.mismatch, True)
-
-        self.assertNotEqual(file.cksum.value, self.SHA256)
+        self._checkChecksum(file, self.SHA256, True)
         # ----------------------------------------------------------
 
         # --- Decrypt File
@@ -62,17 +45,7 @@ class UT_Encryption(unittest.TestCase):
             file._asdict()  # poll status as long as the decryption runs
 
         file.cksum.file_path = file.path    #TODO migrate this into file.encrypt() / file.decrypt()
-        file.createChecksum()
-
-        file._asdict()  # Return object to caller-API (in this case -> None)
-
-        if len(file.cksum.value) == 0:
-            file.cksum.cmd.wait()
-
-        self.assertNotEqual(file.cksum.old_value, self.SHA256) # still has cksum of encrypted file
-        self.assertEqual(file.cksum.mismatch, True)
-
-        self.assertEqual(file.cksum.value, self.SHA256) # THIS IS THE IMPORTANT STEP
+        self._checkChecksum(file, self.SHA256)
         
     def test_all(self) -> None:
         sha256: str = "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc"
@@ -88,47 +61,41 @@ class UT_Encryption(unittest.TestCase):
 
         for mode in E_Mode:
             e.mode = mode
+            print("Testing Encryption: " + e.mode.name)
             # --- ENCRYPT
             file.encrypt(e)
             while file.encryption_scheme.state == E_State.ENCRYPT:
                 file._asdict()  # poll status as long as the encryption runs
-            file = self._createChecksum(file)
-            self.assertNotEqual(file.cksum.value, self.SHA256)
+            file.cksum.file_path = file.path     # refresh path var to path + ".crypt"
+            self._checkChecksum(file, sha256, True)
             # ----------------------------------------------------------
 
             # --- DECRYPT
             file.decrypt(e)
             while file.encryption_scheme.state == E_State.DECRYPT:
                 file._asdict()  # poll status as long as the decryption runs
-            file = self._createChecksum(file)
-            self.assertEqual(file.cksum.value, sha256) # THIS IS THE IMPORTANT STEP
+            file.cksum.file_path = file.path
+            self._checkChecksum(file, sha256)
 
             result.update({mode.name: file._asdict()})
 
-        print(json.dumps(result, indent=2))
+        print("\n\"RESULT\": " + json.dumps(result, indent=2) + "\n")
 
-
-    def _checkChecksum(self, file: File, value: str) -> File:
+    def _checkChecksum(self, file: File, value: str, inverse: bool = False) -> File:
         c: Checksum = Checksum(file.path, ChecksumType.SHA256)
         c.value = value
         file.setChecksum(c)
-        file.createChecksum()
+        file.validateIntegrity()
 
-        if len(file.cksum.value) == 0:
-            file.cksum.cmd.wait()
+        file.cksum.wait()
 
-        self.assertEqual(file.cksum.value, value)
-        return file
-
-    def _createChecksum(self, file: File) -> File:
-        file.cksum.file_path = file.path    #TODO migrate this into file.encrypt() / file.decrypt()
-        file.createChecksum()
-
-        file._asdict()  # Return object to caller-API (in this case -> None)
-
-        if len(file.cksum.value) == 0:
-            file.cksum.cmd.wait()
-
+        self.assertEqual(file.cksum.validation_target, value)
+        if inverse:
+            self.assertEqual(file.cksum.state, ChecksumState.MISMATCH)
+            self.assertNotEqual(file.cksum.value, value)
+        else:
+            self.assertEqual(file.cksum.state, ChecksumState.IDLE)
+            self.assertEqual(file.cksum.value, value)
         return file
 
 if __name__ == '__main__':

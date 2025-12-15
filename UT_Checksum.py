@@ -1,5 +1,4 @@
 import unittest
-import json
 
 # Module imports
 from backend.Checksum import Checksum, ChecksumState, ChecksumType

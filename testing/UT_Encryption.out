@@ -1,0 +1,292 @@
+Testing Encryption: AES128CBC
+Testing Encryption: AES256CBC
+Testing Encryption: AES128CTR
+Testing Encryption: AES256CTR
+
+"RESULT": {
+  "AES128CBC": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9167,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "target_value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9201,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": 104857600,
+        "io": [
+          "rchar: 77796633",
+          "wchar: 0",
+          "syscr: 9523",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES128CBC",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-128-cbc -pbkdf2 -d -iv 76350a81db531bd7d698e9fefa302f0f -k 851d01e43e58f250a7f65340fa2d04fac17a451fbcd971e6b2792cf269e8a7c9 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9195,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 104887609",
+          "wchar: 104857600",
+          "syscr: 25632",
+          "syscw: 25600",
+          "read_bytes: 4096",
+          "write_bytes: 104857600",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  },
+  "AES256CBC": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9167,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "target_value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9242,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": 104857600,
+        "io": [
+          "rchar: 77944089",
+          "wchar: 0",
+          "syscr: 9541",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES256CBC",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-256-cbc -pbkdf2 -d -iv 76350a81db531bd7d698e9fefa302f0f -k 851d01e43e58f250a7f65340fa2d04fac17a451fbcd971e6b2792cf269e8a7c9 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9236,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 104887609",
+          "wchar: 104857600",
+          "syscr: 25632",
+          "syscw: 25600",
+          "read_bytes: 4096",
+          "write_bytes: 104857600",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  },
+  "AES128CTR": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9167,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "target_value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9281,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": 104857600,
+        "io": [
+          "rchar: 78304537",
+          "wchar: 0",
+          "syscr: 9585",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES128CTR",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-128-ctr -pbkdf2 -d -iv 76350a81db531bd7d698e9fefa302f0f -k 851d01e43e58f250a7f65340fa2d04fac17a451fbcd971e6b2792cf269e8a7c9 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9270,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 29977",
+          "wchar: 0",
+          "syscr: 30",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  },
+  "AES256CTR": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9167,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "target_value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9303,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": 104857600,
+        "io": [
+          "rchar: 80868633",
+          "wchar: 0",
+          "syscr: 9898",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES256CTR",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-256-ctr -pbkdf2 -d -iv 76350a81db531bd7d698e9fefa302f0f -k 851d01e43e58f250a7f65340fa2d04fac17a451fbcd971e6b2792cf269e8a7c9 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9297,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 104887593",
+          "wchar: 104857600",
+          "syscr: 25632",
+          "syscw: 25600",
+          "read_bytes: 4096",
+          "write_bytes: 104857600",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  }
+}
+

@@ -4,18 +4,10 @@ from pathlib import Path
 
 from backend.Checksum import Checksum
 from backend.Command import Command
-from backend.Encryption import *
+from backend.Encryption import Encryption
 
 DEBUG: bool = True
 
-#TODO ADD ENCRYPTION
-"""
-ENCRYPTION:
-Needed:
-    - Master Key Phrase (2048/4096/8192)
-    - Type (aes-128-cbc/aes-256-cbc/aes-128-ctr/aes-256-ctr)
-
-"""
 class File:
     
     def decrypt(self, encryption_scheme: Encryption) -> None:
@@ -29,6 +21,7 @@ class File:
     def setChecksum(self, c: Checksum) -> None:
         self.cksum = c
         self.cksum.cmd.filesize = self.size
+        self.cksum.file_path = self.path
 
     def touch(self, path: str) -> None:
         try:
@@ -112,6 +105,9 @@ class File:
 
 
     def __init__(self, id: int, path: str, createFile: bool = False) -> None:
+        # TODO:
+        #    1. self.path must start with /
+        #    2. self.relative_path must start with ./
         if createFile:
             # raises PermissonError (if unsufficient perms detected)
             self.touch(path)
@@ -143,4 +139,4 @@ class File:
         return data
 
     def __str__(self) -> str:
-        return json.dumps(self._asdict())
+        return "FILE:" + json.dumps(self._asdict(), indent=2)

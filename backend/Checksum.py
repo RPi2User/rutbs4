@@ -61,7 +61,7 @@ class Checksum:
 
         match self.state:
             case ChecksumState.IDLE:
-                    return # we don't care, cmd exited fine (!= 0)
+                    return # we don't care, cmd exited fine ($? != 0)
             case ChecksumState.CREATE:
                 self._fin_create()
             case ChecksumState.VALIDATE:

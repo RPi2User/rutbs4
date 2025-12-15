@@ -26,7 +26,6 @@ class Command:
         self.filesize: int = filesize
         self.raw: bool = raw
         self.running: bool = False
-        
         self.clearCommand()
         
     def wait(self, timeout: int = 100) -> None:
