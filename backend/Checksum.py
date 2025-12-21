@@ -17,13 +17,21 @@ class ChecksumType(Enum):
 
 class Checksum:
 
-    def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256): # BUG If init with sha256 cant change to md5
-        self.type: ChecksumType = type
+    def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256, value: str = "", target_value: str = ""): # BUG If init with sha256 cant change to md5
         self.file_path: str = file_path
-        self.value: str = ""
-        self.cmd: Command = Command("openssl " + self.type.name.lower() + " -r '" + self.file_path +"'")
-        self.validation_target: str = ""
+        self.value: str = value
+        self.validation_target: str = target_value
+
+        # Set type and finish init.
+        self.setType(type)
         self.state : ChecksumState = ChecksumState.IDLE
+
+    def setType(self, target_type: ChecksumType) -> None:
+        self.type = target_type
+        if not hasattr(self, "cmd"):
+            self.cmd: Command = Command("openssl " + self.type.name.lower() + " -r '" + self.file_path + "'")
+            return
+        self.cmd.cmd = "openssl " + self.type.name.lower() + " -r '" + self.file_path + "'"
 
     def create(self):
         if self.state != ChecksumState.IDLE or self.type == ChecksumType.NONE:

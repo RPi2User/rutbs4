@@ -35,24 +35,22 @@ class UT_Checksum(unittest.TestCase):
         file.cksum.wait()
         file._asdict()
 
-        #print(json.dumps(file._asdict(), indent=2))    # this triggers a refresh of all params
-
         self.assertEqual(file.cksum.state, ChecksumState.IDLE)
         self.assertEqual(file.cksum.value, self.SHA256)
 
 
     def test_check_md5(self) -> None:
         file: File = File(1, "./testing/test_1/test100.raw")
-        c: Checksum = Checksum(file.path, ChecksumType.MD5)
-        c.value = self.MD5
+        c: Checksum = Checksum(file_path=file.path, value=self.MD5)
+        self.assertEqual(c.type, ChecksumType.SHA256)
+
+        c.setType(ChecksumType.MD5) # This get Called to check the if changing cktype is possible
         
         file.setChecksum(c)
         file.validateIntegrity()
 
         file.cksum.wait()
         file._asdict()
-
-        #print(json.dumps(file._asdict(), indent=2))    # this triggers a refresh of all params
 
         self.assertEqual(file.cksum.validation_target, self.MD5)
         self.assertEqual(file.cksum.state, ChecksumState.IDLE)
