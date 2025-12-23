@@ -66,9 +66,9 @@ class Encryption:
                 self.state = E_State.ERROR
             else:
                 self.state = E_State.IDLE
-        
+
         # Continue IDLEing
-        
+
     def decrypt(self, path: str) -> str:
         if self.state != E_State.IDLE:
             return path # DO NOTHING
@@ -76,7 +76,7 @@ class Encryption:
         self.state = E_State.ENCRYPT
 
         fin_path = ".".join([part for part in path.split('.')[:-1]]) # removes ".tail"
-        self.cmd = Command(self.MODE_CMD[self.mode] + "-d -iv " + self.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + fin_path + "'")
+        self.cmd.cmd = self.MODE_CMD[self.mode] + "-d -iv " + self.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + fin_path + "'"
         self.cmd.start()
 
         self.refresh()
@@ -91,7 +91,7 @@ class Encryption:
         self.state = E_State.ENCRYPT
 
         fin_path = path + ".crypt"
-        self.cmd = Command(self.MODE_CMD[self.mode] + "-e -iv " + self.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + fin_path + "'")
+        self.cmd.cmd = self.MODE_CMD[self.mode] + "-e -iv " + self.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + fin_path + "'"
         self.cmd.start()
 
         self.refresh()

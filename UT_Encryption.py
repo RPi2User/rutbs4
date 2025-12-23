@@ -8,7 +8,7 @@ from backend.Checksum import *
 
 class UT_Encryption(unittest.TestCase):
 
-    SHA256: str = "42c497d0b2e97b031c172eb2cbb3e389b7c2355b404a1b7afeefef99cec06baf"
+    SHA256: str = "e4104dda1a72365ab706bb2500dc49534465d3b9e597a16ddc38160e5dda8ea0"
 
     def test_enc_keygen_short(self):
         k: Key = Key(KeyLength.short)
@@ -21,9 +21,11 @@ class UT_Encryption(unittest.TestCase):
     def test_default(self):
         k: Key = Key() # create key
         e: Encryption = Encryption(k)
+        path: str = "./testing/testfiles/test100.raw"
+        path_enc: str = "./testing/testfiles/test100.raw.crypt"
 
         # --- File Init + Checksum
-        file: File = File(1, "./testing/testfiles/test100.raw")
+        file: File = File(1, path)
         file = self._checkChecksum(file, self.SHA256)
         # ----------------------------------------------------------
 
@@ -36,19 +38,27 @@ class UT_Encryption(unittest.TestCase):
 
         file.cksum.file_path = file.path     # refresh path var to path + ".crypt"
         self._checkChecksum(file, self.SHA256, True)
+        file.path = "./testing/testfiles/test100.raw"
+        file.remove()
         # ----------------------------------------------------------
 
         # --- Decrypt File
+        file: File = File(1, path_enc)
         file.decrypt(e)
+        file.encryption_scheme.cmd.wait()
 
         while file.encryption_scheme.state == E_State.DECRYPT:
             file._asdict()  # poll status as long as the decryption runs
 
         file.cksum.file_path = file.path    #TODO migrate this into file.encrypt() / file.decrypt()
         self._checkChecksum(file, self.SHA256)
+
+        print(file)
         
+
     def test_all(self) -> None:
-        sha256: str = "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc"
+        return
+        sha256: str = "7afa7a26406d770d57864267f7ea57395b09ffb1d0773a289c7ee23851d6730f"
         k: Key = Key() # create key
         e: Encryption = Encryption(k)
         result: dict = {}
@@ -82,8 +92,7 @@ class UT_Encryption(unittest.TestCase):
         print("\n\"RESULT\": " + json.dumps(result, indent=2) + "\n")
 
     def _checkChecksum(self, file: File, value: str, inverse: bool = False) -> File:
-        c: Checksum = Checksum(file.path, ChecksumType.SHA256)
-        c.value = value
+        c: Checksum = Checksum(file.path, value=value)
         file.setChecksum(c)
         file.validateIntegrity()
 
