@@ -8,6 +8,16 @@ from typing import List
 class Command:
 
     """
+    def cleanup(self):
+    "Schließt die Streams und sorgt dafür, dass keine Ressourcen hängen bleiben."
+    if self.process:
+        self.process.stdout.close()
+        self.process.stderr.close()
+        self.process.wait()  # Wartet darauf, dass der Prozess tatsächlich endet
+        self.state = CommandState.FINISHED
+    """
+
+    """
     # --------------------------------------------------------------
     pid: int = -1   # PID of cmd
     running: bool   # process running? -> TODO make ths a parameter!
@@ -27,7 +37,7 @@ class Command:
         self.raw: bool = raw
         self.running: bool = False
         self.clearCommand()
-        
+
     def wait(self, timeout: int = 100) -> None:
         self.status()
         
@@ -47,7 +57,7 @@ class Command:
             self.status()
 
     def clearCommand(self)-> None:
-        self.process: subprocess.Popen = None
+        self.process: subprocess.Popen = None # call subprocess.__exit__()
         self.pid: int = -1
         
         self.io: List[str] = []
