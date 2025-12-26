@@ -57,7 +57,7 @@ class File:
         - self.name                 filename, derived from path
         - self.size                 size in Bytes
         - self.path                 absolute path for further commands
-        - self.name                 file name (last substring with no slashes)
+        - self.name                 file name (last substring with no slashes)  
         - self.parent               parent dir of FILE
         - self.cmd                  Command object for any arb commands
         - self.cksum                Checksum object
@@ -76,13 +76,22 @@ class File:
         self.validatePath(path)
         self.id: int = id
         self.size : int
-        self.cksum : Checksum = Checksum(self.path) 
+        self.cksum: Checksum = Checksum(self.path)
         self.encryption_scheme: Encryption = None
 
         self.readSize()
         self.state = FileState.IDLE
 
     def _refresh(self):
+        match self.state:
+            case FileState.CHECKING:
+                pass
+            case FileState.ENCRYPT:
+                pass
+            case FileState.DECRYPT:
+                pass
+            case FileState.REMOVING:
+                pass
         self.cksum._status()    # get current status
 
     def wait(self):
@@ -197,5 +206,3 @@ class File:
     def encrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
         self.encryption_scheme = encryption_scheme
         self.path = encryption_scheme.encrypt(self.path)
-
-

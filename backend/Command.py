@@ -8,13 +8,17 @@ from typing import List
 class Command:
 
     """
-    def cleanup(self):
-    "Schließt die Streams und sorgt dafür, dass keine Ressourcen hängen bleiben."
-    if self.process:
-        self.process.stdout.close()
-        self.process.stderr.close()
-        self.process.wait()  # Wartet darauf, dass der Prozess tatsächlich endet
-        self.state = CommandState.FINISHED
+    Command
+    - Command.__init__             Needs:
+                                   - The command e.g. "cat foo.txt"
+                                   Supports:
+                                   - Filesize
+                                   - Binary / RAW output (0xa5 6a -> "a56a")
+    - Command.start                Starts the command in the background
+    - Command.wait                 Blocks until command has exited
+    - Command.kill                 Blocks until command is killed (SIGTERM, timeout 100ms)
+    - Command.cleanup              Get called before running ← false, does close STDOUT/STDERR
+    - Command.reset                Calls self.cleanup() and clears all params but keeps object
     """
 
     """
@@ -36,30 +40,9 @@ class Command:
         self.filesize: int = filesize
         self.raw: bool = raw
         self.running: bool = False
-        self.clearCommand()
-
-    def wait(self, timeout: int = 100) -> None:
-        self.status()
-        
-        if not self.running:
-            self.start()
-        
-        if timeout == 0:
-            while self.running:
-                sleep(.01)
-                self.status()
-        
-        if timeout != 0:
-            for n in range(timeout):
-                sleep(.01)
-                self.status()
-            self.kill()
-            self.status()
-
-    def clearCommand(self)-> None:
         self.process: subprocess.Popen = None # call subprocess.__exit__()
         self.pid: int = -1
-        
+
         self.io: List[str] = []
         self.io_path: str = ""
         self.stdout: List[str] = []
@@ -92,6 +75,30 @@ class Command:
         if not self.quiet:
             print("[EXEC] " + json.dumps(self._asdict(), indent=2))
 
+    def cleanup(self) -> None:
+        if self.process:
+            self.process.stdout.close()
+            self.process.stderr.close()
+            self.process.wait()
+
+    def wait(self, timeout: int = 100) -> None:
+        self.status()
+
+        if not self.running:
+            self.start()
+        
+        if timeout == 0:
+            while self.running:
+                sleep(.01)
+                self.status()
+        
+        if timeout != 0:
+            for n in range(timeout):
+                sleep(.01)
+                self.status()
+            self.kill()
+            self.status()
+
     def _read_stdout(self):
         # Some commands may print raw binary, those can't be interpreted as UTF-8
         _raw: str = ""
@@ -123,8 +130,7 @@ class Command:
             self.process.terminate()
             return self.process.wait()
         return 0
-        
-    
+
     # This populates all Vars
     def status(self) -> None:
         if self.process is None:
@@ -173,4 +179,4 @@ class Command:
         return data
 
     def __str__(self):
-        return json.dumps(self._asdict())
+        return json.dumps(self._asdict(), indent=2)
