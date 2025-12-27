@@ -7,43 +7,46 @@ from typing import List
 
 class Command:
 
-    """
-    Command
-    - Command.__init__             Needs:
-                                   - The command e.g. "cat foo.txt"
-                                   Supports:
-                                   - Filesize
-                                   - Binary / RAW output (0xa5 6a -> "a56a")
-    - Command.start                Starts the command in the background
-    - Command.wait                 Blocks until command has exited
-    - Command.kill                 Blocks until command is killed (SIGTERM, timeout 100ms)
-    - Command.cleanup              Get called before running ← false, does close STDOUT/STDERR
-    - Command.reset                Calls self.cleanup() and clears all params but keeps object
-    """
+    def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None:
+        """
+        Command
+        - Command.__init__             Needs:
+                                       - The command e.g. "cat foo.txt"
+                                       Supports:
+                                       - Filesize
+                                       - Binary / RAW output (0xa5 6a -> "a56a")
+        - Command.start                Starts the command in the background
+        - Command.wait                 Blocks until command has exited
+        - Command.kill                 Blocks until command is killed (SIGTERM, timeout 100ms)
+        - Command.cleanup              Get called before running ← false, does close STDOUT/STDERR
+        - Command.reset                Calls self.cleanup() and clears all params but keeps object
+        - Command.refresh              Refreshes all vars, always call this!
+        """
 
-    """
-    # --------------------------------------------------------------
-    pid: int = -1   # PID of cmd
-    running: bool   # process running? -> TODO make ths a parameter!
-    io : str        # contents of /proc/<PID>/io
-    io_path : str   # /proc/<PID>/io
-    raw: bool       # return stdout/stderr as hex
-    stdout: str     # current stdout of process
-    stderr: str     # current stderr of process
-    exitCode: int   # Exit-Code
-    status_msg: str # Additional Stuff like known Error Messages 
-    # --------------------------------------------------------------
-    """
-    def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None: 
+        """PARAMETERS
+        pid: int = -1   # PID of cmd
+        running: bool   # process running? -> TODO make ths a parameter!
+        io : str        # contents of /proc/<PID>/io
+        io_path : str   # /proc/<PID>/io
+        raw: bool       # return stdout/stderr as hex
+        stdout: str     # current stdout of process
+        stderr: str     # current stderr of process
+        exitCode: int   # Exit-Code
+        status_msg: str # Additional Stuff like known Error Messages 
+        """
+
+        self.pid: int = -1
+        self.running: bool = False
+        self.io: List[str] = []     # content of /proc/<PID>/io
+
+
         self.quiet: bool = True
         self.cmd: str = cmd
         self.filesize: int = filesize
         self.raw: bool = raw
-        self.running: bool = False
-        self.process: subprocess.Popen = None # call subprocess.__exit__()
-        self.pid: int = -1
+        self.process: subprocess.Popen = None
 
-        self.io: List[str] = []
+
         self.io_path: str = ""
         self.stdout: List[str] = []
         self.stderr: List[str] = []
@@ -75,12 +78,6 @@ class Command:
         if not self.quiet:
             print("[EXEC] " + json.dumps(self._asdict(), indent=2))
 
-    def cleanup(self) -> None:
-        if self.process:
-            self.process.stdout.close()
-            self.process.stderr.close()
-            self.process.wait()
-
     def wait(self, timeout: int = 100) -> None:
         self.status()
 
@@ -98,6 +95,70 @@ class Command:
                 self.status()
             self.kill()
             self.status()
+
+    # Retruns Exitcode of application
+    def kill(self) -> int:
+        self.status()
+        if (self.process):
+            self.process.terminate()
+            return self.process.wait()
+        return 0
+
+    def cleanup(self) -> None:
+        if self.process:
+            self.process.stdout.close()
+            self.process.stderr.close()
+            self.process.wait()
+
+    # This populates all Vars
+    def status(self) -> None:
+        if self.process is None:
+            return
+
+        # This kills the zombie process
+        try:
+            self.process.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            pass
+
+        if self.process.returncode is None:
+            self.running = True
+            # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
+
+            if not self.permError: 
+                self._pollIOfile()
+        else:
+            self.running = False
+            self.exitCode = self.process.returncode
+            self.process.kill()
+
+    def _asdict(self) -> dict:
+        self.status()
+        data = {
+            "cmd": self.cmd,
+            "pid": self.pid,
+            "running": self.running,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "filesize": self.filesize,
+            "io": self.io,
+            "exitCode": self.exitCode
+        }
+        return data
+
+    def __str__(self):
+        return json.dumps(self._asdict(), indent=2)
+
+# --- PRIVATE FUNCTIONS ---------------------------------------------------------------------------
+
+    def _pollIOfile(self) -> None:
+        if not self.permError:
+            try:
+                with open(self.io_path, "r") as f:
+                    self.io = [line.rstrip('\n') for line in f.readlines()]
+            except PermissionError:
+                print("[ERROR] Insufficient Permissions: Can't read file " + self.io_path, file=sys.stderr)
+                self.permError = True
 
     def _read_stdout(self):
         # Some commands may print raw binary, those can't be interpreted as UTF-8
@@ -121,62 +182,3 @@ class Command:
                 
         if self.raw: 
             self.stderr.append(_raw)
-        
-
-    # Retruns Exitcode of application
-    def kill(self) -> int:
-        self.status()
-        if (self.process):
-            self.process.terminate()
-            return self.process.wait()
-        return 0
-
-    # This populates all Vars
-    def status(self) -> None:
-        if self.process is None:
-            return
-
-        # This kills the zombie process
-        try:
-            self.process.wait(timeout=0.1)
-        except subprocess.TimeoutExpired:
-            pass
-
-        if self.process.returncode is None:
-            self.running = True
-            # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
-            
-            if not self.permError: 
-                self._pollIOfile()
-        
-        else:
-            self.running = False
-            self.exitCode = self.process.returncode
-            self.process.kill()
-
-    def _pollIOfile(self) -> None:
-        if not self.permError:
-            try:
-                with open(self.io_path, "r") as f:
-                    self.io = [line.rstrip('\n') for line in f.readlines()]
-            except PermissionError:
-                print("[ERROR] Insufficient Permissions: Can't read file " + self.io_path, file=sys.stderr)
-                self.permError = True
-
-    def _asdict(self) -> dict:
-        self.status()
-        data = {
-            "cmd": self.cmd,
-            "pid": self.pid,
-            "running": self.running,
-            "stdout": self.stdout,
-            "stderr": self.stderr,
-            "filesize": self.filesize,
-            "io": self.io,
-            "exitCode": self.exitCode
-        }
-
-        return data
-
-    def __str__(self):
-        return json.dumps(self._asdict(), indent=2)
