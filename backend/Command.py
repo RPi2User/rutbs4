@@ -20,7 +20,7 @@ class Command:
         - Command.kill                 Blocks until command is killed (SIGTERM, timeout 100ms)
         - Command.cleanup              Get called before running ← false, does close STDOUT/STDERR
         - Command.reset                Calls self.cleanup() and clears all params but keeps object
-        - Command.refresh              Refreshes all vars, always call this!
+        - Command.status               Refreshes all vars, always call this!
         """
 
         """
@@ -45,6 +45,7 @@ class Command:
         - self.status_msg: str                message string for error handling
         - self.permError: bool                Gets set if backend has no permission on reading a file
         - self.didRan: bool                   Did we start the command already?!
+        - self.closed: bool                   Watches if STDIN / STDOUT is closed
         """
 
         # Constructor logic
@@ -66,6 +67,7 @@ class Command:
             stderr=subprocess.PIPE,
             text=False
         )
+        self.closed = False
         self.pid = self.process.pid # BUG Wrong PID, only getting PID of "$ sh -c <exec>" cmd and NOT pid(<exec>)
         self.running = True
         self.didRan = True
@@ -105,10 +107,15 @@ class Command:
         return 0
 
     def cleanup(self) -> None:
-        if self.process:
+        if self.process and not self.closed:
             self.process.stdout.close()
             self.process.stderr.close()
             self.process.wait()
+            self.closed = True
+
+    def reset(self) -> None:
+        self.cleanup()
+        self._clear()
 
     # This populates all Vars
     def status(self) -> None:
@@ -173,6 +180,7 @@ class Command:
         self.permError: bool = False
 
         self.didRan: bool = False
+        self.closed: bool = True
 
     def _pollIOfile(self) -> None:
         if not self.permError:
