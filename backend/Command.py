@@ -9,7 +9,7 @@ class Command:
 
     def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None:
         """
-        Command
+        === COMMAND ===============================================================================
         - Command.__init__             Needs:
                                        - The command e.g. "cat foo.txt"
                                        Supports:
@@ -23,40 +23,39 @@ class Command:
         - Command.refresh              Refreshes all vars, always call this!
         """
 
-        """PARAMETERS
-        pid: int = -1   # PID of cmd
-        running: bool   # process running? -> TODO make ths a parameter!
-        io : str        # contents of /proc/<PID>/io
-        io_path : str   # /proc/<PID>/io
-        raw: bool       # return stdout/stderr as hex
-        stdout: str     # current stdout of process
-        stderr: str     # current stderr of process
-        exitCode: int   # Exit-Code
-        status_msg: str # Additional Stuff like known Error Messages 
+        """
+        --- PARAMETER -----------------------------------------------------------------------------
+        Core vars
+        - self.process: subprocess.Popen      MAIN INTERFACE, process instance for OS Comms
+        - self.cmd: str                       Main command string
+        - self.running: bool                  wait() or start() sets it, self.refresh() clears it
+        - self.pid: int                       Process ID given from self.process
+
+        Command results
+        - self.stdout: List[str]              ALL lines of STDOUT
+        - self.stderr: List[str]              ALL lines of STDERR
+        - self.exitCode: int                  ExitCode of self.process
+
+        Block I/O (disk or tape)
+        - self.io_path: str                   "/proc/<PID>/io"
+        - self.io: List[str]                  Content of /proc/<PID>/io file
+
+        Object related vars
+        - self.quiet: bool                    true: prints str(self) in pretty
+        - self.status_msg: str                message string for error handling
+        - self.permError: bool                Gets set if backend has no permission on reading a file
+        - self.didRan: bool                   Did we start the command already?!
         """
 
-        self.pid: int = -1
-        self.running: bool = False
-        self.io: List[str] = []     # content of /proc/<PID>/io
-
-
-        self.quiet: bool = True
+        # Constructor logic
         self.cmd: str = cmd
         self.filesize: int = filesize
         self.raw: bool = raw
-        self.process: subprocess.Popen = None
+        self._clear() # This defaults all vars :3
 
+# --- PUBLIC FUNCTIONS ----------------------------------------------------------------------------
 
-        self.io_path: str = ""
-        self.stdout: List[str] = []
-        self.stderr: List[str] = []
-        self.exitCode: int = -1
-        self.status_msg: str = ""
-        self.permError: bool = False
-
-    # This starts the process in the background
     def start(self):
-        #self.clearCommand() # TODO IMPLEMENT THIS !!!
         if self.cmd == "":
             raise ValueError("ERROR: Process cannot be initiated, command string empty")
 
@@ -69,6 +68,7 @@ class Command:
         )
         self.pid = self.process.pid # BUG Wrong PID, only getting PID of "$ sh -c <exec>" cmd and NOT pid(<exec>)
         self.running = True
+        self.didRan = True
         self.io_path = f"/proc/{self.pid}/io"
 
         # Get Status of Process after spawn
@@ -81,7 +81,7 @@ class Command:
     def wait(self, timeout: int = 100) -> None:
         self.status()
 
-        if not self.running:
+        if not self.didRan:
             self.start()
         
         if timeout == 0:
@@ -147,9 +147,32 @@ class Command:
         return data
 
     def __str__(self):
+        if self.quiet:
+            return json.dumps(self._asdict())
         return json.dumps(self._asdict(), indent=2)
 
 # --- PRIVATE FUNCTIONS ---------------------------------------------------------------------------
+
+    def _clear(self) -> None:
+        # This clears ALL VARIABLES to default
+        # ONLY if self.cleanup() was called!
+
+        self.pid: int = -1
+        self.running: bool = False
+        self.io: List[str] = []
+
+
+        self.quiet: bool = True
+        self.process: subprocess.Popen = None
+
+        self.io_path: str = ""
+        self.stdout: List[str] = []
+        self.stderr: List[str] = []
+        self.exitCode: int = -1
+        self.status_msg: str = ""
+        self.permError: bool = False
+
+        self.didRan: bool = False
 
     def _pollIOfile(self) -> None:
         if not self.permError:
