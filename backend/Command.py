@@ -56,7 +56,7 @@ class Command:
 
     # This starts the process in the background
     def start(self):
-        self.clearCommand()
+        #self.clearCommand() # TODO IMPLEMENT THIS !!!
         if self.cmd == "":
             raise ValueError("ERROR: Process cannot be initiated, command string empty")
 
