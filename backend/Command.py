@@ -19,7 +19,7 @@ class Command:
         - Command.wait                 Blocks until command has exited
         - Command.kill                 Blocks until command is killed (SIGTERM, timeout 100ms)
         - Command.cleanup              Get called before running ← false, does close STDOUT/STDERR
-        - Command.reset                Calls self.cleanup() and clears all params but keeps object
+        - Command.reset                Calls self.cleanup() and clears all vars EXCEPT cmd, filesize and raw
         - Command.status               Refreshes all vars, always call this!
         """
 
@@ -58,6 +58,7 @@ class Command:
 
     def start(self):
         if self.cmd == "":
+            # Constructor needs a string but a literal "" is valid, but not for me!
             raise ValueError("ERROR: Process cannot be initiated, command string empty")
 
         self.process = subprocess.Popen(
@@ -145,11 +146,22 @@ class Command:
             "cmd": self.cmd,
             "pid": self.pid,
             "running": self.running,
+            "quiet": self.quiet,
+
+            "process": str(type(self.process)),
+            "closed": self.closed,
+            "did_ran": self.didRan,
+            "status_msg": self.status_msg,
+
+            "filesize": self.filesize,
+            "permission_error": self.permError,
+            "io_path": self.io_path,
+            "io": self.io,
+
+            "raw": self.raw,
+            "exitCode": self.exitCode,
             "stdout": self.stdout,
             "stderr": self.stderr,
-            "filesize": self.filesize,
-            "io": self.io,
-            "exitCode": self.exitCode
         }
         return data
 
@@ -166,21 +178,20 @@ class Command:
 
         self.pid: int = -1
         self.running: bool = False
-        self.io: List[str] = []
-
-
         self.quiet: bool = True
         self.process: subprocess.Popen = None
 
+        self.closed: bool = True
+        self.didRan: bool = False
+        self.status_msg: str = ""
+
+        self.permError: bool = False
+        self.io: List[str] = []
         self.io_path: str = ""
+
+        self.exitCode: int = -1
         self.stdout: List[str] = []
         self.stderr: List[str] = []
-        self.exitCode: int = -1
-        self.status_msg: str = ""
-        self.permError: bool = False
-
-        self.didRan: bool = False
-        self.closed: bool = True
 
     def _pollIOfile(self) -> None:
         if not self.permError:
