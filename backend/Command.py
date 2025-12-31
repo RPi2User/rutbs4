@@ -44,8 +44,24 @@ class Command:
         - self.quiet: bool                    true: prints str(self) in pretty
         - self.status_msg: str                message string for error handling
         - self.permError: bool                Gets set if backend has no permission on reading a file
-        - self.didRan: bool                   Did we start the command already?!
+        - self.didRun: bool                   Did we start the command already?!
         - self.closed: bool                   Watches if STDIN / STDOUT is closed
+
+        Are self.didRun and self.closed equal?
+        - No!
+        When you run c multiple times you see:
+        1. iteration:
+            self.running == True: 
+                didRun := False, closed := False
+            Command complete:
+                didRun := True, closed := True
+        2. iteration:
+            self.running == True: 
+                didRun := True, closed := False
+            Command complete:
+                didRun := True, closed := True
+        
+        self.didRun is a "sticky bit" that shows if a cmd got exectuted AT LEAST ONCE
         """
 
         # Constructor logic
@@ -71,7 +87,7 @@ class Command:
         self.closed = False
         self.pid = self.process.pid # BUG Wrong PID, only getting PID of "$ sh -c <exec>" cmd and NOT pid(<exec>)
         self.running = True
-        self.didRan = True
+        self.didRun = True
         self.io_path = f"/proc/{self.pid}/io"
 
         # Get Status of Process after spawn
@@ -84,18 +100,18 @@ class Command:
     def wait(self, timeout: int = 100) -> None:
         self.status()
 
-        if not self.didRan:
+        if not self.didRun:
             self.start()
         
         if timeout == 0:
             while self.running:
-                sleep(.01)
                 self.status()
-        
+                sleep(.01)
+
         if timeout != 0:
             for n in range(timeout):
-                sleep(.01)
                 self.status()
+                sleep(.01)
             self.kill()
             self.status()
 
@@ -151,7 +167,7 @@ class Command:
 
             "process": str(type(self.process)),
             "closed": self.closed,
-            "did_ran": self.didRan,
+            "did_ran": self.didRun,
             "status_msg": self.status_msg,
 
             "filesize": self.filesize,
@@ -183,7 +199,7 @@ class Command:
         self.process: subprocess.Popen = None
 
         self.closed: bool = True
-        self.didRan: bool = False
+        self.didRun: bool = False
         self.status_msg: str = ""
 
         self.permError: bool = False
