@@ -58,7 +58,6 @@ class Command:
 
     def start(self):
         if self.cmd == "":
-            # Constructor needs a string but a literal "" is valid, but not for me!
             raise ValueError("ERROR: Process cannot be initiated, command string empty")
 
         self.process = subprocess.Popen(
@@ -168,6 +167,7 @@ class Command:
         self.pid: int = -1
         self.running: bool = False
         self.io: List[str] = []
+
 
         self.quiet: bool = True
         self.process: subprocess.Popen = None
