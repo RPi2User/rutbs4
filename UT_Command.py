@@ -11,12 +11,17 @@ class UT_Command(unittest.TestCase):
     AB_VAL: str = ""
     AC_START: str = "cd"
     AD_BACK: str = "ping localhost -c 2"
+    AE_WAIT: str = "ping localhost -c 2"
+    AF_STDOUT: str = "echo b32fea58-45ec-4276-a129-ee4f1ee441ae"
+    AG_STDERR: str = "echo b32fea58-45ec-4276-a129-ee4f1ee441ae 1>&2"
+    AH_DD128MIB: str = "dd if=/dev/urandom of=/dev/null bs=1M count=128"
 
     """_summary_
     Depdencies:
     - your favorite flavour of LINUX
     - cd
     - ping
+    - dd
     """
 
     def test_AA_create(self):
@@ -27,11 +32,11 @@ class UT_Command(unittest.TestCase):
             - c is cleaned successfully
         """
         c: Command = Command(self.AA_CREATE)    # Calls constructor
-        print("[CREATE] " + str(c)) # Tests c.toString()
+        str(c)                                  # Tests c.toString()
 
         self.assertEqual(type(c), Command)
         self.assertEqual(c.closed, True)
-        print("A")                  # Prompt User
+        print("A")
 
     def test_AB_validation(self):
         """
@@ -113,14 +118,19 @@ class UT_Command(unittest.TestCase):
 
         If 2. & 3. passes then we know the KERNEL did smth. for us
 
+        Expected Results:
+        - exitCode == 0
+        - running == False
+        - didRun == True
+        - cloesed == True
+
         Does NOT test:
-            - valid stdout/stderr
-            - c.wait() (Done in AE)
+            - validate stdout/stderr
+            - c.wait()
         """
 
         c: Command = Command(self.AD_BACK)
         c.start() # c.start() blocks until most vars are populated
-
 
         # Startup validation
         self.assertEqual(c.cmd, self.AD_BACK)
@@ -136,15 +146,109 @@ class UT_Command(unittest.TestCase):
 
         # Exit validation
         self.assertEqual(c.running, False)
-        self.assertEqual(c.didRan, True)
-        self.assertNotEqual(c.stdout, [])
-        self.assertEqual(c.stderr, [])
         self.assertEqual(c.exitCode, 0)
+        self.assertEqual(c.didRun, True)
+        self.assertEqual(c.closed, True)
 
+        print("D")
 
+    def test_AE_Wait(self) -> None:
+        """
+        Does the same as AD but instead of the while loop it uses c.wait()
+        """
 
-        c.cleanup()
+        c: Command = Command(self.AE_WAIT)
+        self.assertEqual(c.cmd, self.AE_WAIT)
+        c.wait()
 
+        # Exit validation
+        self.assertNotEqual(c.pid, 0)
+        self.assertEqual(c.running, False)
+        self.assertEqual(c.exitCode, 0)
+        self.assertEqual(c.didRun, True)
+        self.assertEqual(c.closed, True)
+
+        print("E")
+
+    def test_AF_STDOUT(self) -> None:
+        """
+        Test if command successfully writes test UUID to STDOUT
+        """
+
+        c: Command = Command(self.AF_STDOUT)
+        self.assertEqual(c.cmd, self.AF_STDOUT)
+        c.wait()
+
+        self.assertEqual(c.exitCode, 0)
+        self.assertEqual(c.stdout[0], "b32fea58-45ec-4276-a129-ee4f1ee441ae")
+        self.assertEqual(c.stderr, [])
+        print("F")
+
+    def test_AG_STDERR(self) -> None:
+        """
+        Test if command successfully writes test UUID to STDERR
+        """
+
+        c: Command = Command(self.AG_STDERR)
+        self.assertEqual(c.cmd, self.AG_STDERR)
+        c.wait()
+
+        self.assertEqual(c.exitCode, 0)
+        self.assertEqual(c.stdout, [])
+        self.assertEqual(c.stderr[0], "b32fea58-45ec-4276-a129-ee4f1ee441ae")
+        print("G")
+
+    def test_AH_IO(self) -> None:
+        """
+        In order to test the IO capabilities we need a command that read/writes some data
+        Hence I have some experience with dd I choose this dd command:
+
+            dd if=/dev/urandom of=/dev/null bs=1M count=128
+
+        So we expect like 130MB of data being read from /dev/urandom 
+        and ~130MB should be written to /dev/null
+
+        The I/O File should look like this:
+
+            rchar: 121647344
+            wchar: 121634816
+            syscr: 135
+            syscw: 116
+            read_bytes: 0
+            write_bytes: 0
+            cancelled_write_bytes: 0
+
+        rchar&wchar must be 
+        - greater than 100MiB (100000000)
+        - less than 150MiB (150000000)
+
+        rest is irrelevant.
+
+        Why do we check if less then 128MiB are written/read?
+        > Since we POLL the I/O-File there is only a couple of chances to read the file.
+        > The file is not available when the command is exited
+
+        """
+        c: Command = Command(self.AH_DD128MIB)
+        self.assertEqual(c.cmd, self.AH_DD128MIB)
+        c.wait()
+
+        self.assertEqual(c.exitCode, 0)
+        self.assertEqual(c.stdout, [])  # dd writes to stderr everything
+
+        UPPER: int = 150000000
+        LOWER: int = 100000000
+
+        rchar_val: int = int(c.io[0].split(":")[-1].strip())
+        wchar_val: int = int(c.io[1].split(":")[-1].strip())
+
+        self.assertGreater(rchar_val, LOWER)
+        self.assertGreater(wchar_val, LOWER)
+
+        self.assertLess(rchar_val, UPPER)
+        self.assertLess(wchar_val, UPPER)
+
+        print("H")
 
 if __name__ == '__main__':
     unittest.main()
