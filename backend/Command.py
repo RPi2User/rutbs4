@@ -139,6 +139,7 @@ class Command:
             self.running = False
             self.exitCode = self.process.returncode
             self.process.kill()
+            self.cleanup()
 
     def _asdict(self) -> dict:
         self.status()
