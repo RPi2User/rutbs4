@@ -15,6 +15,7 @@ class UT_Command(unittest.TestCase):
     AF_STDOUT: str = "echo b32fea58-45ec-4276-a129-ee4f1ee441ae"
     AG_STDERR: str = "echo b32fea58-45ec-4276-a129-ee4f1ee441ae 1>&2"
     AH_DD128MIB: str = "dd if=/dev/urandom of=/dev/null bs=1M count=128"
+    AI_WAITTIME: str = "sleep 10"
 
     """_summary_
     Depdencies:
@@ -249,6 +250,21 @@ class UT_Command(unittest.TestCase):
         self.assertLess(wchar_val, UPPER)
 
         print("H")
+
+    def test_AI_WaitTimeout(self) -> None:
+        """
+        This test does terminate cmd mid-way with the c.wait(timeout=xxx) (xxx in 10ms)
+        Default Value 100 -> 1sec / 1000ms
+        """
+
+        c: Command = Command(self.AI_WAITTIME)
+        self.assertEqual(c.cmd, self.AI_WAITTIME)
+        c.quiet = False
+        c.wait()
+        print(c)
+        print("I")
+
+    # TODO wait for timeout & kill
 
 if __name__ == '__main__':
     unittest.main()

@@ -102,7 +102,7 @@ class Command:
 
         if not self.didRun:
             self.start()
-        
+
         if timeout == 0:
             while self.running:
                 self.status()
@@ -112,7 +112,8 @@ class Command:
             for n in range(timeout):
                 self.status()
                 sleep(.01)
-            self.kill()
+            self.kill() # BUG
+            self.status_msg = Timeout reached, killed command
             self.status()
 
     # Retruns Exitcode of application
