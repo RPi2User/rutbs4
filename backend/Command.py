@@ -97,32 +97,55 @@ class Command:
         if not self.quiet:
             print("[EXEC] " + json.dumps(self._asdict(), indent=2))
 
-    def wait(self, timeout: int = 100) -> None:
-        self.status()
+    def wait(self, timeout: int = 0) -> None:
+        """
+        Command.wait(timeout=XXX)
+        This wait for Command to complete or terminates the process if Timeout is reached
+        - Does start the process if needed
+        - Timeout is N in 10ms
+        - Command.reset() needed when restarting a process
 
+        Command("sleep 10").wait(500) -> Does wait for 5000ms (5sec) until this process gets terminated
+        Command.status_msg will contain the "Timeout reached" string
+
+        Three Design scenarios:
+        1. Command finishes semi-instant (run time <10ms)
+        2. Command runs as long as it takes (like a dd process) -> timeout=0, inf. runtime, DEFAULT
+        3. Command needs to finish within n * 10 ms
+        """
+
+        # Start only if process did not run prior
         if not self.didRun:
             self.start()
 
-        if timeout == 0:
-            while self.running:
-                self.status()
-                sleep(.01)
+        sleep(.01)      # Wait 10ms for early completion
+        self.status()   # Fill status vars
 
-        if timeout != 0:
-            for n in range(timeout):
+        if not self.running:    # Case 1)   Process finishes semi-instant
+            return
+
+        if timeout == 0:        # Case 2)   inf. loop until process finishes
+            while self.running:
+                sleep(.01)
                 self.status()
+            return
+
+        if timeout != 0:        # Case 3)   Command.kill() on timeout reached
+            for n in range(timeout - 1):    # minus first one from 1)
+                self.status()
+                if not self.running:
+                    return
                 sleep(.01)
             self.kill() # BUG
-            self.status_msg = Timeout reached, killed command
+            self.status_msg = "Timeout reached, process killed" # This date gets over-written somehow...
             self.status()
 
-    # Retruns Exitcode of application
-    def kill(self) -> int:
+    def kill(self) -> None:
         self.status()
-        if (self.process):
+        if self.process:
             self.process.terminate()
-            return self.process.wait()
-        return 0
+            self.exitCode = self.process.wait()
+
 
     def cleanup(self) -> None:
         if self.process and not self.closed:
