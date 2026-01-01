@@ -92,7 +92,7 @@ class Command:
             raise ValueError("ERROR: Process cannot be initiated, command string empty")
 
         self.process = subprocess.Popen(
-            args=self.cmd,
+            args="exec " + self.cmd,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -160,6 +160,7 @@ class Command:
             try:
                 os.kill(self.pid, signal.SIGTERM)
                 self.exitCode = self.process.wait()
+                self.status()
             except Exception as e:
                 self.status_msg.append(f"[ERROR] killing process: {str(e)}")
 
