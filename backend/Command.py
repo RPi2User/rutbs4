@@ -7,64 +7,75 @@ from typing import List
 
 class Command:
 
+    """
+    #### === COMMAND ==============================================================================
+
+    - Command.__init__()
+        - Requires
+            - The command e.g. "cat foo.txt"
+        - Supports
+            - Filesize
+            - Binary / RAW output (0xa5 6a -> "a56a")
+    
+    | `Command.`             | Description                                                            |
+    |------------------------|------------------------------------------------------------------------|
+    | `Command.start()`      | Starts the command in the background                                   |
+    | `Command.wait()`       | Blocks until command has exited                                        |
+    | `Command.kill()`       | Blocks until command is killed (SIGTERM, timeout 100ms)                |
+    | `Command.cleanup()`    | Get called before running ← false, does close STDOUT/STDERR            |
+    | `Command.reset()`      | Calls self.cleanup() and clears all vars EXCEPT cmd, filesize and raw  |
+    | `Command.status()`     | Refreshes all vars, always call this!                                  |
+
+    ### --- VARIABLES -----------------------------------------------------------------------------
+
+    **Core Variables:**
+    | Var            | Type               | Description                                                |
+    |----------------|--------------------|------------------------------------------------------------|
+    | `self.process` | `subprocess.Popen` | MAIN INTERFACE, process instance for OS communication      |
+    | `self.cmd`     | `str`              | Main command string                                        |
+    | `self.running` | `bool`             | Set by `wait()` or `start()`, cleared by `self.refresh()`  |
+    | `self.pid`     | `int`              | Process ID provided by `self.process`                      |
+
+    **Command Results**
+    | Var              | Type         | Description                  |
+    |------------------|--------------|------------------------------|
+    | `self.stdout`    | `List[str]`  | All lines of STDOUT          |
+    | `self.stderr`    | `List[str]`  | All lines of STDERR          |
+    | `self.exitCode`  | `int`        | Exit code of `self.process`  |
+
+    **Block I/O (Disk or Tape)**
+    | Var              | Type         | Description                          |
+    |------------------|--------------|--------------------------------------|
+    | `self.io_path`   | `str`        | Path to the file: `"/proc/<PID>/io"` |
+    | `self.io`        | `List[str]`  | Content of the `/proc/<PID>/io` file |
+
+    **Object-Related Variables**
+    | Var               | Type   | Description                                         |
+    |-------------------|--------|-----------------------------------------------------|
+    | `self.quiet`      | `bool` | If `True`, prints `str(self)` in a pretty format    |
+    | `self.status_msg` | `str`  | Message string for error handling                   |
+    | `self.permError`  | `bool` | Set if the backend lacks permission to read a file  |
+    | `self.didRun`     | `bool` | Tracks whether the command has already been started |
+    | `self.closed`     | `bool` | Monitors whether STDIN or STDOUT streams are closed |
+
+    Are self.didRun and self.closed equal?
+    - No!
+    When you run c multiple times you see:
+    1. iteration:  
+        - self.running == True:  
+            - didRun := False, closed := False  
+        - Command complete:  
+            - didRun := True, closed := True  
+    2. iteration:
+        - self.running == True: 
+            - didRun := True, closed := False
+        - Command complete:
+            - didRun := True, closed := True
+    
+    self.didRun is a "sticky bit" that shows if a cmd got exectuted AT LEAST ONCE
+    """
+
     def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None:
-        """
-        === COMMAND ===============================================================================
-        - Command.__init__             Needs:
-                                       - The command e.g. "cat foo.txt"
-                                       Supports:
-                                       - Filesize
-                                       - Binary / RAW output (0xa5 6a -> "a56a")
-        - Command.start                Starts the command in the background
-        - Command.wait                 Blocks until command has exited
-        - Command.kill                 Blocks until command is killed (SIGTERM, timeout 100ms)
-        - Command.cleanup              Get called before running ← false, does close STDOUT/STDERR
-        - Command.reset                Calls self.cleanup() and clears all vars EXCEPT cmd, filesize and raw
-        - Command.status               Refreshes all vars, always call this!
-        """
-
-        """
-        --- PARAMETER -----------------------------------------------------------------------------
-        Core vars
-        - self.process: subprocess.Popen      MAIN INTERFACE, process instance for OS Comms
-        - self.cmd: str                       Main command string
-        - self.running: bool                  wait() or start() sets it, self.refresh() clears it
-        - self.pid: int                       Process ID given from self.process
-
-        Command results
-        - self.stdout: List[str]              ALL lines of STDOUT
-        - self.stderr: List[str]              ALL lines of STDERR
-        - self.exitCode: int                  ExitCode of self.process
-
-        Block I/O (disk or tape)
-        - self.io_path: str                   "/proc/<PID>/io"
-        - self.io: List[str]                  Content of /proc/<PID>/io file
-
-        Object related vars
-        - self.quiet: bool                    true: prints str(self) in pretty
-        - self.status_msg: str                message string for error handling
-        - self.permError: bool                Gets set if backend has no permission on reading a file
-        - self.didRun: bool                   Did we start the command already?!
-        - self.closed: bool                   Watches if STDIN / STDOUT is closed
-
-        Are self.didRun and self.closed equal?
-        - No!
-        When you run c multiple times you see:
-        1. iteration:
-            self.running == True: 
-                didRun := False, closed := False
-            Command complete:
-                didRun := True, closed := True
-        2. iteration:
-            self.running == True: 
-                didRun := True, closed := False
-            Command complete:
-                didRun := True, closed := True
-        
-        self.didRun is a "sticky bit" that shows if a cmd got exectuted AT LEAST ONCE
-        """
-
-        # Constructor logic
         self.cmd: str = cmd
         self.filesize: int = filesize
         self.raw: bool = raw
@@ -85,7 +96,7 @@ class Command:
             text=False
         )
         self.closed = False
-        self.pid = self.process.pid # BUG Wrong PID, only getting PID of "$ sh -c <exec>" cmd and NOT pid(<exec>)
+        self.pid = self.process.pid
         self.running = True
         self.didRun = True
         self.io_path = f"/proc/{self.pid}/io"
@@ -146,7 +157,6 @@ class Command:
             self.process.terminate()
             self.exitCode = self.process.wait()
 
-
     def cleanup(self) -> None:
         if self.process and not self.closed:
             self.process.stdout.close()
@@ -171,7 +181,7 @@ class Command:
 
         if self.process.returncode is None:
             self.running = True
-            # BUG zobie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
+            # BUG zombie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
 
             if not self.permError: 
                 self._pollIOfile()
