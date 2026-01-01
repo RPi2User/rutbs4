@@ -1,3 +1,5 @@
+import os
+import signal
 import sys
 import subprocess
 import json
@@ -50,22 +52,23 @@ class Command:
     | `self.io`        | `List[str]`  | Content of the `/proc/<PID>/io` file |
 
     **Object-Related Variables**
-    | Var               | Type   | Description                                         |
-    |-------------------|--------|-----------------------------------------------------|
-    | `self.quiet`      | `bool` | If `True`, prints `str(self)` in a pretty format    |
-    | `self.status_msg` | `str`  | Message string for error handling                   |
-    | `self.permError`  | `bool` | Set if the backend lacks permission to read a file  |
-    | `self.didRun`     | `bool` | Tracks whether the command has already been started |
-    | `self.closed`     | `bool` | Monitors whether STDIN or STDOUT streams are closed |
+    | Var               | Type        | Description                                         |
+    |-------------------|-------------|-----------------------------------------------------|
+    | `self.quiet`      | `bool`      | If `True`, prints `str(self)` in a pretty format    |
+    | `self.status_msg` | `List[str]` | Message string for error handling                   |
+    | `self.permError`  | `bool`      | Set if the backend lacks permission to read a file  |
+    | `self.didRun`     | `bool`      | Tracks whether the command has already been started |
+    | `self.closed`     | `bool`      | Monitors whether STDIN or STDOUT streams are closed |
 
     Are self.didRun and self.closed equal?
     - No!
+
     When you run c multiple times you see:
-    1. iteration:  
-        - self.running == True:  
-            - didRun := False, closed := False  
-        - Command complete:  
-            - didRun := True, closed := True  
+    1. iteration:
+        - self.running == True:
+            - didRun := False, closed := False
+        - Command complete:
+            - didRun := True, closed := True
     2. iteration:
         - self.running == True: 
             - didRun := True, closed := False
@@ -147,15 +150,18 @@ class Command:
                 if not self.running:
                     return
                 sleep(.01)
-            self.kill() # BUG
-            self.status_msg = "Timeout reached, process killed" # This date gets over-written somehow...
+            self.kill()
+            self.status_msg.append("Timeout reached, process killed")
             self.status()
 
     def kill(self) -> None:
         self.status()
         if self.process:
-            self.process.terminate()
-            self.exitCode = self.process.wait()
+            try:
+                os.kill(self.pid, signal.SIGTERM)
+                self.exitCode = self.process.wait()
+            except Exception as e:
+                self.status_msg.append(f"[ERROR] killing process: {str(e)}")
 
     def cleanup(self) -> None:
         if self.process and not self.closed:
@@ -173,22 +179,14 @@ class Command:
         if self.process is None:
             return
 
-        # This kills the zombie process
-        try:
-            self.process.wait(timeout=0.1)
-        except subprocess.TimeoutExpired:
-            pass
-
-        if self.process.returncode is None:
+        if self.process.poll() is None:
             self.running = True
-            # BUG zombie process wait(timeout=0.1) with exept subprocess.TimeoutExpired
 
             if not self.permError: 
                 self._pollIOfile()
         else:
             self.running = False
             self.exitCode = self.process.returncode
-            self.process.kill()
             self.cleanup()
 
     def _asdict(self) -> dict:
@@ -234,7 +232,7 @@ class Command:
 
         self.closed: bool = True
         self.didRun: bool = False
-        self.status_msg: str = ""
+        self.status_msg: List[str] = []
 
         self.permError: bool = False
         self.io: List[str] = []
@@ -250,7 +248,7 @@ class Command:
                 with open(self.io_path, "r") as f:
                     self.io = [line.rstrip('\n') for line in f.readlines()]
             except PermissionError:
-                print("[ERROR] Insufficient Permissions: Can't read file " + self.io_path, file=sys.stderr)
+                self.status_msg.append("[INFO] Insufficient Permissions: Can't read file " + self.io_path)
                 self.permError = True
 
     def _read_stdout(self):
