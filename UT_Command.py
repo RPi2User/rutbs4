@@ -1,5 +1,5 @@
 import unittest
-from time import sleep
+from time import sleep, time
 
 # Module imports
 from backend.Command import Command
@@ -9,18 +9,20 @@ class UT_Command(unittest.TestCase):
 
     AA_CREATE: str = ""
     AB_VAL: str = ""
-    AC_START: str = "cd"
+    AC_START: str = "pwd"
     AD_BACK: str = "ping localhost -c 2"
     AE_WAIT: str = "ping localhost -c 2"
     AF_STDOUT: str = "echo b32fea58-45ec-4276-a129-ee4f1ee441ae"
     AG_STDERR: str = "echo b32fea58-45ec-4276-a129-ee4f1ee441ae 1>&2"
     AH_DD128MIB: str = "dd if=/dev/urandom of=/dev/null bs=1M count=128"
-    AI_WAITTIME: str = "sleep 10"
+    AI_DD256MIB: str = "dd if=/dev/urandom of=/dev/null bs=1M count=256"
+    AJ_WAITTIME: str = "sleep 10"
+    AK_KILL: str = "ping localhost"
 
     """_summary_
     Depdencies:
     - your favorite flavour of LINUX
-    - cd
+    - pwd
     - ping
     - dd
     """
@@ -68,23 +70,21 @@ class UT_Command(unittest.TestCase):
 
     def test_AC_start(self) -> None:
         """
-        This will test if the "cd" command works on the machine.
-            - cd shall complete instant
+        This will test if the "pwd" command works on the machine.
+            - pwd shall complete instant
             - for un-godly slow Systems a 100ms sleep is included but always not needed
             - my premise is that the command is finished after c.start().status() get called
             - this does not test concurrency!
         Test flow:
-            1. create c with "cd"
+            1. create c with "pwd"
             2. start c
             3. sleep 100ms (for very slow systems)
             4. refresh all states from c
             5. Check Params:
-                - c.cmd == "cd"
+                - c.cmd == "pwd"
                 - c.pid != 0
                 - c.exitCode == 0
             6. cleanup
-
-        Why "cd"? Name a OS (that supports Python) were cd is NOT available! I wait for your merge request...
         """
 
         c: Command = Command(self.AC_START)
@@ -251,20 +251,86 @@ class UT_Command(unittest.TestCase):
 
         print("H")
 
-    def test_AI_WaitTimeout(self) -> None:
+    def test_AI_IO_256(self) -> None:
+        """
+        Test IO of 256 MiB File Transfer with 50 MByte of tolerance
+        """
+        c: Command = Command(self.AI_DD256MIB)
+        self.assertEqual(c.cmd, self.AI_DD256MIB)
+        c.wait()
+
+        self.assertEqual(c.exitCode, 0)
+        self.assertEqual(c.stdout, [])  # dd writes to stderr everything
+
+        UPPER: int = 275000000
+        LOWER: int = 225000000
+
+        rchar_val: int = int(c.io[0].split(":")[-1].strip())
+        wchar_val: int = int(c.io[1].split(":")[-1].strip())
+
+        try:
+            self.assertGreater(rchar_val, LOWER)
+            self.assertGreater(wchar_val, LOWER)
+
+            self.assertLess(rchar_val, UPPER)
+            self.assertLess(wchar_val, UPPER)
+
+        except AssertionError:
+            c.quiet = False
+            print(c)
+            raise
+
+        print("I")
+
+    def test_AJ_WaitTimeout(self) -> None:
         """
         This test does terminate cmd mid-way with the c.wait(timeout=xxx) (xxx in 10ms)
         Default Value 100 -> 1sec / 1000ms
         """
 
-        c: Command = Command(self.AI_WAITTIME)
-        self.assertEqual(c.cmd, self.AI_WAITTIME)
-        c.quiet = False
-        c.wait()
-        print(c)
-        print("I")
+        c: Command = Command(self.AJ_WAITTIME)
+        self.assertEqual(c.cmd, self.AJ_WAITTIME)
 
-    # TODO wait for timeout & kill
+        beg_time = int(time())
+        c.wait(100)
+        end_time = int(time())
+
+        try:
+            self.assertLess((end_time - beg_time), 2)   # sleep 10, timeout of 1sec -> should be max 2sec (rounding errors)
+            self.assertEqual(len(c.status_msg), 1)
+            self.assertEqual(c.status_msg[0], "Timeout reached, process killed")
+            self.assertNotEqual(c.exitCode, 0)
+        except AssertionError:
+            c.quiet = False
+            print(c)
+            raise
+
+        print("J")
+
+    def test_AK_Kill(self) -> None:
+        """
+        Spawns a endless ping on localhost and kills it
+        """
+
+        c: Command = Command(self.AK_KILL)
+        self.assertEqual(c.cmd, self.AK_KILL)
+
+        c.start()
+        sleep(2)
+        c.kill()
+
+        try:
+            self.assertNotEqual(c.exitCode, 0)
+            self.assertEqual(c.running, False)
+            self.assertEqual(c.closed, True)
+            self.assertEqual(len(c.status_msg), 0)
+            self.assertEqual(c.didRun, True)
+        except AssertionError:
+            c.quiet = False
+            print(c)
+            raise
+
+        print("K")
 
 if __name__ == '__main__':
     unittest.main()
