@@ -1,6 +1,5 @@
 import os
 import signal
-import sys
 import subprocess
 import json
 import threading
@@ -10,14 +9,14 @@ from typing import List
 class Command:
 
     """
-    #### === COMMAND ==============================================================================
+    #### === COMMAND ==========================================================
 
-    - Command.__init__()
-        - Requires
-            - The command e.g. "cat foo.txt"
-        - Supports
-            - Filesize
-            - Binary / RAW output (0xa5 6a -> "a56a")
+    Command.__init__(cmd: str, filesize: int = -1, raw: bool = False):
+    - Requires
+        - The command e.g. "cat foo.txt"
+    - Supports
+        - Filesize
+        - Binary / RAW output (0xa5 6a -> "a56a")
     
     | `Command.`             | Description                                                            |
     |------------------------|------------------------------------------------------------------------|
@@ -28,7 +27,7 @@ class Command:
     | `Command.reset()`      | Calls self.cleanup() and clears all vars EXCEPT cmd, filesize and raw  |
     | `Command.status()`     | Refreshes all vars, always call this!                                  |
 
-    ### --- VARIABLES -----------------------------------------------------------------------------
+    ### --- VARIABLES ---------------------------------------------------------
 
     **Core Variables:**
     | Var            | Type               | Description                                                |
@@ -82,7 +81,7 @@ class Command:
         self.cmd: str = cmd
         self.filesize: int = filesize
         self.raw: bool = raw
-        self._clear() # This defaults all vars :3
+        self._clear() # This defaults all vars
 
 # --- PUBLIC FUNCTIONS ----------------------------------------------------------------------------
 
@@ -253,24 +252,33 @@ class Command:
                 self.permError = True
 
     def _read_stdout(self):
-        # Some commands may print raw binary, those can't be interpreted as UTF-8
-        _raw: str = ""
         for element in self.process.stdout:
-            if self.raw:
-                _raw += f"{element.hex()}"
-            else:
+            try:
                 self.stdout.append(element.decode('utf-8').rstrip('\n'))
 
-        if self.raw: 
-            self.stdout.append(_raw)
+            except UnicodeDecodeError: # if $element can't be decoded as UTF8
+                if not self.raw:
+                    self.status_msg.append("[ERROR] String cannot be parsed, STDOUT stored as hex")
+                self.raw = True
+
+            except:
+                raise
+
+            if self.raw:
+                self.stdout.append(f"{element.hex()}")
 
     def _read_stderr(self):
-        _raw: str = ""
         for element in self.process.stderr:
-            if self.raw:
-                _raw += f"{element.hex()}"
-            else:
+            try:
                 self.stderr.append(element.decode('utf-8').rstrip('\n'))
-                
-        if self.raw: 
-            self.stderr.append(_raw)
+
+            except UnicodeDecodeError: # if $element can't be decoded as UTF8
+                if not self.raw:
+                    self.status_msg.append("[ERROR] String cannot be parsed, STDERR stored as hex")
+                self.raw = True
+
+            except:
+                raise
+
+            if self.raw:
+                self.stderr.append(f"{element.hex()}")

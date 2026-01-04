@@ -18,6 +18,7 @@ class UT_Command(unittest.TestCase):
     AI_DD256MIB: str = "dd if=/dev/urandom of=/dev/null bs=1M count=256"
     AJ_WAITTIME: str = "sleep 10"
     AK_KILL: str = "ping localhost"
+    AL_HEXOUT: str = "dd if=/dev/urandom bs=512 count=1 2>/dev/null"
 
     """_summary_
     Depdencies:
@@ -27,7 +28,7 @@ class UT_Command(unittest.TestCase):
     - dd
     """
 
-    def test_AA_create(self):
+    def test_AA_create(self) -> None:
         """
         Creates a Command object and tests:
             - c is a Object of "Command"
@@ -41,7 +42,7 @@ class UT_Command(unittest.TestCase):
         self.assertEqual(c.closed, True)
         print("A")
 
-    def test_AB_validation(self):
+    def test_AB_validation(self) -> None:
         """
         Creates a Command object and tests all of the above and:
             - c has all default parameters
@@ -291,12 +292,12 @@ class UT_Command(unittest.TestCase):
         c: Command = Command(self.AJ_WAITTIME)
         self.assertEqual(c.cmd, self.AJ_WAITTIME)
 
-        beg_time = int(time())
+        beg_time = time()
         c.wait(100)
-        end_time = int(time())
+        end_time = time()
 
         try:
-            self.assertLess((end_time - beg_time), 2)   # sleep 10, timeout of 1sec -> should be max 2sec (rounding errors)
+            self.assertLess((end_time - beg_time), 1.5)   # sleep 10, timeout of 1sec -> should be max 1500ms (rounding errors)
             self.assertEqual(len(c.status_msg), 1)
             self.assertEqual(c.status_msg[0], "Timeout reached, process killed")
             self.assertNotEqual(c.exitCode, 0)
@@ -331,6 +332,53 @@ class UT_Command(unittest.TestCase):
             raise
 
         print("K")
+
+    def test_AL_HEXOUT(self) -> None:
+        """
+        Tests if command supports hex output properly
+        """
+
+        c: Command = Command(self.AL_HEXOUT, raw=True)
+        c.wait()
+
+        try:
+            self.assertEqual(len(c.status_msg), 0)
+            self.assertEqual(c.cmd, self.AL_HEXOUT)
+            self.assertEqual(c.raw, True)
+            self.assertEqual(c.didRun, True)
+            self.assertNotEqual(len(c.stdout), 0)   # stdout shall not be empty
+            self.assertEqual(len(c.stderr), 0)      # stderr shall not have any data
+
+        except AssertionError:
+            c.quiet = False
+            print(c)
+            raise
+
+        print("L")
+
+    def test_AM_HEXERR(self) -> None:
+        """
+        Same as AL_HEXOUT but now looking if exception Handling is done properly
+        - c.status_msg must contain a error Message
+        """
+
+        c: Command = Command(self.AL_HEXOUT)
+        c.wait()
+
+        try:
+            self.assertNotEqual(len(c.status_msg), 0)
+            self.assertEqual(c.cmd, self.AL_HEXOUT)
+            self.assertEqual(c.raw, True)
+            self.assertEqual(c.didRun, True)
+            self.assertNotEqual(len(c.stdout), 0)   # stdout shall not be empty
+            self.assertEqual(len(c.stderr), 0)      # stderr shall not have any data
+
+        except AssertionError:
+            c.quiet = False
+            print(c)
+            raise
+
+        print("M")
 
 if __name__ == '__main__':
     unittest.main()
