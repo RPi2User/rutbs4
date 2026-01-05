@@ -19,6 +19,8 @@ class UT_Command(unittest.TestCase):
     AJ_WAITTIME: str = "sleep 10"
     AK_KILL: str = "ping localhost"
     AL_HEXOUT: str = "dd if=/dev/urandom bs=512 count=1 2>/dev/null"
+    AN_CLEANUP: str = "echo 0"
+    AN_CLEANUP1: str = "echo the quick brown fox jumps over the lazy dog"
 
     """_summary_
     Depdencies:
@@ -379,6 +381,24 @@ class UT_Command(unittest.TestCase):
             raise
 
         print("M")
+
+    def test_AN_cleanup(self) -> None:
+        # This tests Command.reset() clears stdout
+        c: Command = Command(self.AN_CLEANUP)
+        c.wait()
+        try:
+            self.assertEqual(c.stdout[0], "0")
+            c.reset()
+            c.cmd = self.AN_CLEANUP1
+            c.wait()
+            self.assertNotEqual(c.stdout[0], "0")
+
+        except AssertionError:
+            c.quiet = False
+            print(c)
+            raise
+
+        print("N")
 
 if __name__ == '__main__':
     unittest.main()
