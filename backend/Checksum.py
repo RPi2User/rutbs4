@@ -18,6 +18,27 @@ class ChecksumType(Enum):
 
 class Checksum:
 
+    """
+    #### === CHECKSUM =========================================================
+
+    Checksum.__init__(file_path: str, type: ChecksumType = ChecksumType.SHA256, value: str = "", target_value: str = ""):
+    - Requires
+        - file_path like "./foo/bar/baz/mreow.txt" OR "/opt/env/secret.txt"
+    - Accepts:
+        - Custom Checksum Type: 
+            - ChecksumType.SHA256
+            - ChecksumType.SHA512
+            - ChecksumType.MD5
+            - ChecksumType.NONE
+        - value: UNSAFE predefine value (useful to restore a known checksum)
+        - target_value: Target value (needed for file validation)
+
+    #### --- EXCEPTIONS -------------------------------------------------------
+
+    **SystemError**:  
+    Checksum validation. Raises a SystemError when target checksum value is empty.
+    """
+
     def __init__(self, file_path: str, type: ChecksumType = ChecksumType.SHA256, value: str = "", target_value: str = ""): # BUG If init with sha256 cant change to md5
         self.file_path: str = file_path
         self.value: str = value
@@ -26,6 +47,8 @@ class Checksum:
         # Set type and finish init.
         self.setType(type)
         self.state : ChecksumState = ChecksumState.IDLE
+
+    # --- PUBLIC FUNCTIONS ----------------------------------------------------
 
     def setType(self, target_type: ChecksumType) -> None:
         self.type = target_type
