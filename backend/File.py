@@ -2,6 +2,7 @@ import json
 import os
 from enum import Enum
 from pathlib import Path
+from typing import List
 
 from backend.Checksum import Checksum
 from backend.Command import Command
@@ -65,11 +66,12 @@ class File:
     Get raised if the input path invalid is and createFile == False.
 
     **PermissionError:**  
-    Get raised if the permissions are insufficient to touch FILE.
+    Get raised if the permissions are insufficient to touch/delete FILE.
 
     #### === PARAMETERS =======================================================
 
     - self.state                Current State of File Operation (CSFO)
+    - self.state_msg            (runtime dependend) Error Logging
     - self.id                   arb ID (user specified)
     - self.name                 filename, derived from path
     - self.size                 size in Bytes
@@ -79,11 +81,11 @@ class File:
     - self.cmd                  Command object for any arb commands
     - self.cksum                Checksum object
     - self.encryption_scheme    Encryption object for secrets and options
-
     """
 
     def __init__(self, id: int, path: str, createFile: bool = False) -> None:
         self.state: FileState = FileState.INIT
+        self.state_msg: List[str] = []
         self.cmd: Command = Command("")
         if createFile:
             self.touch(path)
@@ -99,7 +101,45 @@ class File:
 
 # === PUBLIC METHODS ==========================================================
 
-    def wait(self):
+# --- CORE FUNCTIONALITY ------------------------------------------------------
+
+    def touch(self, path: str) -> None:
+        try:
+            Path(path).touch(exist_ok=True)
+        except PermissionError:
+            self.state = FileState.ERROR
+            raise PermissionError("[ERROR] Insufficient permissions on '" + path + "'")
+        except Exception:
+            self.state = FileState.ERROR
+            raise
+
+    def remove(self) -> None:   # This removes FILE from filesystem
+        # This removes the file from the filesystem and resets `self`
+        try:
+            os.remove(self.path)    # TODO Check if this blocks!
+        except PermissionError:
+            self.state_msg.append("[ERROR] Deletion failed, permisson error occured '" + self.path + "'")
+            raise
+        except Exception as e:
+            self.state_msg.append("[ERROR] Deletion failed, unkown error" + str(self) + "   Exception: " + str(e))
+            raise
+
+    def append(self, text: str):
+        # Needed in order to append a given string to a file
+        # In order to create a txt file you shall do:
+        # text = File()
+        # text.touch()
+        # text.append("This is a wonderful text")
+        # cmd.cmd = "cat " + text.path
+        # cmd.wait()
+        # "This is a wonderful text" == cmd.stdout[0]
+        return
+        #try:
+        #    Path(path.)
+
+# --- OBJECT RELATED ----------------------------------------------------------
+
+    def wait(self) -> None:
 
         if self.state in {FileState.INIT, 
                           FileState.MISMATCH,
@@ -120,82 +160,6 @@ class File:
         if self.state is FileState.CHECKING:
             self.cksum.wait()
 
-
-    # === CHECKSUMMING ============================================================================
-
-    def setChecksum(self, c: Checksum) -> None:
-        self.cksum = c
-        self.cksum.cmd.filesize = self.size
-        self.cksum.file_path = self.path
-
-    def createChecksum(self) -> None:
-        self.cksum.create() # start the checksumming process
-
-    def validateIntegrity(self) -> None:
-        if len(self.cksum.value) == 0:
-            return
-        self.cksum.validate(self.cksum.value)
-
-    # === ENCRYPTION ==============================================================================
-
-    def decrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.decrypt(self.path)
-    
-    def encrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.encrypt(self.path)
-
-    # === BASIC I/O ===============================================================================
-
-    def touch(self, path: str) -> None:
-        try:
-            Path(path).touch(exist_ok=True)
-        except PermissionError:
-            self.state = FileState.ERROR
-            raise PermissionError("[ERROR] Insufficient permissions on '" + path + "'")
-        except Exception:
-            self.state = FileState.ERROR
-            raise
-
-    def validatePath(self, path: str) -> None:
-        self.cmd.cmd = "realpath '" + path +  "'"
-        self.cmd.wait()    # we currently in __init__ therefor self.path does not exist
-
-        if self.cmd.exitCode == 1:
-            self.state = FileState.ERROR
-            raise FileNotFoundError("[ERROR] Invalid Path given!") # This backend has no file-by-file interface
-
-        self.path = self.cmd.stdout[0]
-        self.name = path.split('/')[-1]
-        self.parent = path.split(self.name)[0][:-1]  # get parent dir, trim last char '/'
-
-
-    def readSize(self) -> None:
-        self.cmd.cmd = "stat -c %s '" + self.path + "'"
-        self.cmd.start()
-        try:
-            self.size = int(self.cmd.stdout[0])
-        except TypeError:
-            self.size = 0
-        except IndexError:
-            self.size = 0
-        except Exception as e:
-            print("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
-
-    def append(self, text: str):
-        # Needed in order to append a given string to a file
-        # In order to create a txt file you shall do:
-        # text = File()
-        # text.touch()
-        # text.append("This is a wonderful text")
-        # cmd.cmd = "cat " + text.path
-        # cmd.wait()
-        # "This is a wonderful text" == cmd.stdout[0]
-        return
-        #try:
-        #    Path(path.)
-
     def destroy(self) -> None:
         # This calles file.remove() and destroys object completely
         self.id = -1
@@ -205,16 +169,7 @@ class File:
         self.relative_path = ""
         self.cksum = Checksum("")    # Todo call "remove(File)" so this object is indeed gone
 
-    def remove(self) -> None:   # This removes FILE from filesystem
-        # This removes the file from the filesystem and resets `self`
-        try:
-            os.remove(self.path)    # TODO Check if this blocks!
-        except PermissionError:
-            raise PermissionError("[ERROR] Could not delete File '" + self.path + "'")
-        except:
-            raise
-
-    def _refresh(self):
+    def refresh(self) -> None:
         match self.state:
             case FileState.CHECKING:
                 pass
@@ -243,3 +198,54 @@ class File:
 
     def __str__(self) -> str:
         return "{\"FILE\" :" + json.dumps(self._asdict(), indent=2) + "}"
+
+# --- CHECKSUMMING ------------------------------------------------------------
+
+    def setChecksum(self, c: Checksum) -> None:
+        self.cksum = c
+        self.cksum.cmd.filesize = self.size
+        self.cksum.file_path = self.path
+
+    def createChecksum(self) -> None:
+        self.cksum.create() # start the checksumming process
+
+    def validateIntegrity(self) -> None: 
+        if len(self.cksum.value) == 0:
+            return # TODO Maybe raise a SystemError
+        self.cksum.validate(self.cksum.value)
+
+# --- ENCRYPTION --------------------------------------------------------------
+
+    def decrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
+        self.encryption_scheme = encryption_scheme
+        self.path = encryption_scheme.decrypt(self.path)
+
+    def encrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
+        self.encryption_scheme = encryption_scheme
+        self.path = encryption_scheme.encrypt(self.path)
+
+# === INTERNAL METHODS ========================================================
+
+    def validatePath(self, path: str) -> None:
+        self.cmd.cmd = "realpath '" + path +  "'"
+        self.cmd.wait()    # we currently in __init__ therefore self.path does not exist
+
+        if self.cmd.exitCode == 1:
+            self.state = FileState.ERROR
+            raise FileNotFoundError("[ERROR] Invalid Path given!") # This backend has no file-by-file interface
+
+        self.path = self.cmd.stdout[0]
+        self.name = path.split('/')[-1]
+        self.parent = path.split(self.name)[0][:-1]  # get parent dir, trim last char '/'
+
+    def readSize(self) -> None:
+        self.cmd.cmd = "stat -c %s '" + self.path + "'"
+        self.cmd.start()
+        try:
+            self.size = int(self.cmd.stdout[0])
+        except TypeError:
+            self.size = 0
+        except IndexError:
+            self.size = 0
+        except Exception as e:
+            self.state_msg.append("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
