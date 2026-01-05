@@ -22,52 +22,67 @@ class FileState(Enum):
 class File:
 
     """
-    File interface:
-    - File.__init__()           Needs: File-ID and path.
-                                Provides: 
-                                  - path integrity -> raises FileNotFoundError("…")
-                                  - absolute and relative path
-                                  - file size (in bytes)
-                                  - Checksum object
-                                  - Encryption object
-                                  - creates file on demand
+    #### === FILE =============================================================
+    File.__init__(id: int, path: str, createFile: bool = False)
+    - Needs:
+        - custom ID
+        - path
+    - Accepts:
+        - create File on call (touch non-existant file)
+    - Does:
+        - Path integrity -> raises FileNotFoundError
+        - Gets absolute and relative path
+        - Gets file size (in bytes)
+        - Creates Checksum object
+        - Creates Encryption object
+
+    #### --- METHODS ----------------------------------------------------------
+
+    Object related:
     - File._refresh()           Does process finalization and changes states accordingly
     - File._asdict()            Returns a JSON dict to caller
     - File.__str__()            Returns a pretty JSON string
     - File.wait()               waits until File.state == FileState.IDLE
-    -=== BASIC I/O ===============================================================================-
+
+    BASIC I/O:
     - File.touch()              Raises PermissonError if unsufficient perms are given
     - File.validatePath()       Does look for path and creates abs/rel path
     - File.readSize()           Gets File Size
-    -=== CHECKSUMMING ============================================================================-
+
+    Checksum:
     - File.setChecksum()        Overwrites default checksum object
     - File.createChecksum()     Starts checksumming process
     - File.validateIntegrity()  Starts a validation process (instead of JUST creating A checksum)
-    -=== ENCRYPTION ==============================================================================-
+
+    Encryption:
     - File.encrypt()            START the encryption process
                                 - keepOrig = False calls File.remove() after exit_code != 0
     - File.decrypt()            START the DECRYPTION process with encryption scheme "e"
+
+    #### --- EXCEPTIONS -------------------------------------------------------
+
+    **FileNotFoundError:**  
+    Get raised if the input path invalid is and createFile == False.
+
+    **PermissionError:**  
+    Get raised if the permissions are insufficient to touch FILE.
+
+    #### === PARAMETERS =======================================================
+
+    - self.state                Current State of File Operation (CSFO)
+    - self.id                   arb ID (user specified)
+    - self.name                 filename, derived from path
+    - self.size                 size in Bytes
+    - self.path                 absolute path for further commands
+    - self.name                 file name (last substring with no slashes)  
+    - self.parent               parent dir of FILE
+    - self.cmd                  Command object for any arb commands
+    - self.cksum                Checksum object
+    - self.encryption_scheme    Encryption object for secrets and options
+
     """
 
     def __init__(self, id: int, path: str, createFile: bool = False) -> None:
-        """
-        Vars:
-        - self.state                Current State of File Operation (CSFO)
-        - self.id                   arb ID (user specified)
-        - self.name                 filename, derived from path
-        - self.size                 size in Bytes
-        - self.path                 absolute path for further commands
-        - self.name                 file name (last substring with no slashes)  
-        - self.parent               parent dir of FILE
-        - self.cmd                  Command object for any arb commands
-        - self.cksum                Checksum object
-        - self.encryption_scheme    Encryption object for secrets and options
-
-        Raises:
-        - FileNotFoundError         If createFile != True AND input-path invalid
-        - PermissionError           Insufficient permissions in parent directory
-        """
-
         self.state: FileState = FileState.INIT
         self.cmd: Command = Command("")
         if createFile:
@@ -82,40 +97,57 @@ class File:
         self.readSize()
         self.state = FileState.IDLE
 
-    def _refresh(self):
-        match self.state:
-            case FileState.CHECKING:
-                pass
-            case FileState.ENCRYPT:
-                pass
-            case FileState.DECRYPT:
-                pass
-            case FileState.REMOVING:
-                pass
-        self.cksum._status()    # get current status
+# === PUBLIC METHODS ==========================================================
 
     def wait(self):
-        pass
 
-    def _asdict(self) -> dict:
-        self._refresh()
-        data = {
-            "id": self.id,
-            "size": self.size,
-            "name": self.name,
-            "path": self.path,
-            "rel_path": self.relative_path,
-            "last_command": self.cmd._asdict(),
-            "cksum": self.cksum._asdict(),
-        }
-        if self.encryption_scheme is not None:
-            data.update({"encryption": self.encryption_scheme._asdict()})
-        return data
+        if self.state in {FileState.INIT, 
+                          FileState.MISMATCH,
+                          FileState.IDLE,
+                          FileState.ERROR}:
+            return
 
-    def __str__(self) -> str:
-        return "{\"FILE\" :" + json.dumps(self._asdict(), indent=2) + "}"
+        if self.state is FileState.REMOVING:
+            self.cmd.wait()
+            self._refresh()
+            return
+
+        if self.state in {FileState.ENCRYPT, FileState.DECRYPT}:
+            self.encryption_scheme.cmd.wait()
+            self.encryption_scheme.refresh()
+            return
+
+        if self.state is FileState.CHECKING:
+            self.cksum.wait()
+
+
+    # === CHECKSUMMING ============================================================================
+
+    def setChecksum(self, c: Checksum) -> None:
+        self.cksum = c
+        self.cksum.cmd.filesize = self.size
+        self.cksum.file_path = self.path
+
+    def createChecksum(self) -> None:
+        self.cksum.create() # start the checksumming process
+
+    def validateIntegrity(self) -> None:
+        if len(self.cksum.value) == 0:
+            return
+        self.cksum.validate(self.cksum.value)
+
+    # === ENCRYPTION ==============================================================================
+
+    def decrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
+        self.encryption_scheme = encryption_scheme
+        self.path = encryption_scheme.decrypt(self.path)
+    
+    def encrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
+        self.encryption_scheme = encryption_scheme
+        self.path = encryption_scheme.encrypt(self.path)
 
     # === BASIC I/O ===============================================================================
+
     def touch(self, path: str) -> None:
         try:
             Path(path).touch(exist_ok=True)
@@ -176,33 +208,38 @@ class File:
     def remove(self) -> None:   # This removes FILE from filesystem
         # This removes the file from the filesystem and resets `self`
         try:
-            os.remove(self.path)
+            os.remove(self.path)    # TODO Check if this blocks!
         except PermissionError:
             raise PermissionError("[ERROR] Could not delete File '" + self.path + "'")
         except:
             raise
 
-    # === CHECKSUMMING ============================================================================
+    def _refresh(self):
+        match self.state:
+            case FileState.CHECKING:
+                pass
+            case FileState.ENCRYPT:
+                pass
+            case FileState.DECRYPT:
+                pass
+            case FileState.REMOVING:
+                pass
+        self.cksum._status()    # get current status
 
-    def setChecksum(self, c: Checksum) -> None:
-        self.cksum = c
-        self.cksum.cmd.filesize = self.size
-        self.cksum.file_path = self.path
+    def _asdict(self) -> dict:
+        self._refresh()
+        data = {
+            "id": self.id,
+            "size": self.size,
+            "name": self.name,
+            "path": self.path,
+            "rel_path": self.relative_path,
+            "last_command": self.cmd._asdict(),
+            "cksum": self.cksum._asdict(),
+        }
+        if self.encryption_scheme is not None:
+            data.update({"encryption": self.encryption_scheme._asdict()})
+        return data
 
-    def createChecksum(self) -> None:
-        self.cksum.create() # start the checksumming process
-
-    def validateIntegrity(self) -> None:
-        if len(self.cksum.value) == 0:
-            return
-        self.cksum.validate(self.cksum.value)
-
-    # === ENCRYPTION ==============================================================================
-
-    def decrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.decrypt(self.path)
-    
-    def encrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.encrypt(self.path)
+    def __str__(self) -> str:
+        return "{\"FILE\" :" + json.dumps(self._asdict(), indent=2) + "}"
