@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
-from backend.Checksum import Checksum
+from backend.Checksum import Checksum, ChecksumState
 from backend.Command import Command
 from backend.Encryption import Encryption
 
@@ -14,11 +14,13 @@ class FileState(Enum):
     INIT = 1
     ENCRYPT = 2
     DECRYPT = 3
-    CHECKING = 4
-    MISMATCH = 5
-    REMOVING = 6
-    IDLE = 7
-    ERROR = 8
+    CKSUM_CALC = 4
+    VALIDATING = 5
+    MISMATCH = 6
+    REMOVING = 7
+    IDLE = 8
+    REMOVED = 9
+    ERROR = 99
 
 class File:
 
@@ -37,6 +39,13 @@ class File:
         - Retrieves the size of the file in bytes
         - Initializes a Checksum object
         - Initializes an Encryption object
+
+
+    ### --- EXCEPTIONS ------------------------------------------------------
+
+    **FileNotFoundError:** Raised if the input path is invalid and createFile is False.  
+    **RuntimeError:** Raised if still in INIT state and smth gets called
+    **PermissionError:** Raised when filesystem operations (e.g., touch, remove) lack required permissions.
 
     **Core Functionality:**
     | `File.`         | Description                                                          |
@@ -71,7 +80,7 @@ class File:
     | Variable          | Type        | Description                                        |
     |-------------------|-------------|----------------------------------------------------|
     | `self.id`         | `int`       | Custom user-defined ID for the file                |
-    | `self.path`       | `str`       | Absolute file path                                 |
+    | `self.path`       | `str`       | Absolute and complete file path                    |
     | `self.name`       | `str`       | File name (derived from path)                      |
     | `self.size`       | `int`       | File size in bytes                                 |
     | `self.parent`     | `str`       | Parent directory of the file                       |
@@ -90,12 +99,6 @@ class File:
         - File encryption (`File.encrypt()`)
         - File decryption (`File.decrypt()`)
 
-    ### --- EXCEPTIONS ------------------------------------------------------
-
-    **FileNotFoundError:** Raised if the input path is invalid and createFile is False.
-
-    **PermissionError:** Raised when filesystem operations (e.g., touch, remove) lack required permissions.
-
     #### === DESIGN PRINCIPLES ==============================================
 
     The `File` class facilitates file system management operations, wrapping functionality for
@@ -108,16 +111,19 @@ class File:
         self.state: FileState = FileState.INIT
         self.state_msg: List[str] = []
         self.cmd: Command = Command("")
+
+        self.id: int = id
+        self.size : int
+
         if createFile:
             self.touch(path)
 
         self.validatePath(path)
-        self.id: int = id
-        self.size : int
+        self.readSize()
+
         self.cksum: Checksum = Checksum(self.path)
         self.encryption_scheme: Encryption = None
 
-        self.readSize()
         self.state = FileState.IDLE
 
 # === PUBLIC METHODS ==========================================================
@@ -125,17 +131,29 @@ class File:
 # --- CORE FUNCTIONALITY ------------------------------------------------------
 
     def touch(self, path: str) -> None:
+
+        if self.state not in {FileState.REMOVED, 
+                              FileState.IDLE, 
+                              FileState.INIT}:
+            return
+
         try:
-            Path(path).touch(exist_ok=True)
+            Path(path).touch(exist_ok=True) # Should be instant, no background command needed
+
         except PermissionError:
             self.state = FileState.ERROR
+            self.state_msg.append("[ERROR] Insufficient permissions on '" + path + "'")
             raise PermissionError("[ERROR] Insufficient permissions on '" + path + "'")
-        except Exception:
+
+        except Exception as e:
             self.state = FileState.ERROR
+            self.state_msg.append("[ERROR] unhandled error occured during creation of file '" + path + "'" + " Exception: " + str(e))
             raise
 
+        self.refresh()
+
     def remove(self) -> None:   # This removes FILE from filesystem
-        # This removes the file from the filesystem and resets `self`
+        # This removes the file from the filesystem
         try:
             os.remove(self.path)    # TODO Check if this blocks!
         except PermissionError:
@@ -161,10 +179,9 @@ class File:
 # --- OBJECT RELATED ----------------------------------------------------------
 
     def wait(self) -> None:
-
-        if self.state in {FileState.INIT, 
+        if self.state in {FileState.IDLE, 
                           FileState.MISMATCH,
-                          FileState.IDLE,
+                          FileState.REMOVED,
                           FileState.ERROR}:
             return
 
@@ -178,10 +195,10 @@ class File:
             self.encryption_scheme.refresh()
             return
 
-        if self.state is FileState.CHECKING:
+        if self.state in {FileState.VALIDATING, FileState.CKSUM_CALC}:
             self.cksum.wait()
 
-    def destroy(self) -> None:
+    def destroy(self, removeFileFrom) -> None:
         # This calles file.remove() and destroys object completely
         self.id = -1
         self.size = -1
@@ -191,6 +208,59 @@ class File:
         self.cksum = Checksum("")    # Todo call "remove(File)" so this object is indeed gone
 
     def refresh(self) -> None:
+
+        if self.state is FileState.INIT:
+            raise RuntimeError("[ERROR] FILE is still initializing but should be initialized by now!")
+
+        if self.state in {FileState.ERROR,
+                          FileState.INIT,
+                          FileState.IDLE,
+                          FileState.MISMATCH,
+                          FileState.REMOVED}:
+            return # Do nothing when in PERMANENT state
+
+        if self.state is FileState.CKSUM_CALC:
+            # We are currently calculating a Checksum on File (w/o validation).
+            self.cksum._status()
+
+            if self.cksum.state == ChecksumState.IDLE:
+                self.state = FileState.IDLE
+                return
+
+            if self.cksum.state == ChecksumState.ERROR:
+                self.state_msg.append("[ERROR] Checksum creation failed!")
+                self.state = FileState.ERROR
+                return
+
+        if self.state is FileState.VALIDATING:
+            # We are currently validating FILE to a known-good checksum
+            self.cksum._status()
+            match (self.cksum.state):
+                case ChecksumState.IDLE:
+                    self.state = FileState.IDLE
+                    return
+                case ChecksumState.MISMATCH:
+                    self.state_msg.append("[ERROR] Checksum mismatch!")
+                    self.state = FileState.MISMATCH
+                    return
+                case ChecksumState.ERROR:
+                    self.state_msg.append("[ERROR] Checksum validation failed with unkown error!")
+                    self.state = FileState.ERROR
+                    return
+
+        """TODO
+            INIT = 1
+            ENCRYPT = 2
+            DECRYPT = 3
+            CKSUM_CALC = 4
+            VALIDATING = 5
+            MISMATCH = 6
+            REMOVING = 7
+            IDLE = 8
+            REMOVED = 9
+            ERROR = 99
+        """
+
         match self.state:
             case FileState.CHECKING:
                 pass
@@ -199,6 +269,8 @@ class File:
             case FileState.DECRYPT:
                 pass
             case FileState.REMOVING:
+                self.cmd.wait() # FIXME
+                self.state = FileState.REMOVED
                 pass
         self.cksum._status()    # get current status
 
@@ -228,7 +300,9 @@ class File:
         self.cksum.file_path = self.path
 
     def createChecksum(self) -> None:
-        self.cksum.create() # start the checksumming process
+        if self.state is FileState.IDLE:
+            self.cksum.create() # start the checksumming process
+            self.state = FileState.CKSUM_CALC
 
     def validateIntegrity(self) -> None: 
         if len(self.cksum.value) == 0:
