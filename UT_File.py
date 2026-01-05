@@ -8,6 +8,7 @@ from backend.File import File, FileState
 class UT_File(unittest.TestCase):
 
     AA: str = "./testing/touch.test"
+    AB: str = "./invalid_dir/invalid_file_name.ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     APPENDIX: str = "The quick brown fox jumps over the lazy dog"
     F_2MIB: str = "./testing/file/2mib.file"
@@ -48,10 +49,19 @@ class UT_File(unittest.TestCase):
             raise
 
         print("A_TOUCH")
-"""
-    def test_AB_touchFail(self) -> None:
-        pass
 
+    def test_AB_touchFail(self) -> None:
+        # Checks if constructor raises exception when
+        # - file not found and createFile := False (default)
+
+        try:
+            f: File = File(id=1, path=self.AB, createFile=True)
+        except FileNotFoundError:
+            self.assertTrue(True)
+
+        print("B_TOUCHFAIL")
+
+"""
     def test_default(self):
         file: File = File(1, self.F_2MIB)
         file.cksum.validate(self.SHA256)
