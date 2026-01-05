@@ -87,7 +87,7 @@ class Checksum:
         if self.cmd.running:    # abort if running
             return
 
-        if self.cmd.exitCode != 0:  # Annoy user if error occured, be eff. write-protect
+        if self.cmd.exitCode != 0 or len(self.cmd.stdout) == 0:  # Annoy user if error occured, be eff. write-protect
             self.state = ChecksumState.ERROR
             return
 
