@@ -214,7 +214,6 @@ class File:
     def refresh(self) -> None:
 
         if self.state is FileState.INIT:
-            return
             raise RuntimeError("[ERROR] FILE is still initializing but should be initialized by now!")
 
         if self.state in {FileState.ERROR,
