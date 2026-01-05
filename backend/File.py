@@ -23,64 +23,85 @@ class FileState(Enum):
 class File:
 
     """
-    #### === FILE =============================================================
-    File.__init__(id: int, path: str, createFile: bool = False)
-    - Needs:
-        - custom ID
-        - path
+    ### === FILE =============================================================
+
+    File.__init__(id: int, path: str, createFile: bool = False):
+    - Requires:
+        - A unique ID (integer)
+        - File path (string)
     - Accepts:
-        - create File on call (touch non-existant file)
-    - Does:
-        - Path integrity -> raises FileNotFoundError
-        - Gets absolute and relative path
-        - Gets file size (in bytes)
-        - Creates Checksum object
-        - Creates Encryption object
+        - createFile (bool): Creates the file if it does not exist (optional)
+    - Responsibilities:
+        - Validates file path integrity → raises FileNotFoundError if invalid
+        - Generates absolute and relative file paths
+        - Retrieves the size of the file in bytes
+        - Initializes a Checksum object
+        - Initializes an Encryption object
 
-    #### --- METHODS ----------------------------------------------------------
+    **Core Functionality:**
+    | `File.`         | Description                                                          |
+    |-----------------|----------------------------------------------------------------------|
+    | `File.touch()`  | Creates an empty file on the filesystem if it does not already exist |
+    | `File.remove()` | Deletes the file from the filesystem                                 |
+    | `File.append()` | Appends a given String to current (text) file                        |
 
-    Object related:
-    - File._refresh()           Does process finalization and changes states accordingly
-    - File._asdict()            Returns a JSON dict to caller
-    - File.__str__()            Returns a pretty JSON string
-    - File.wait()               waits until File.state == FileState.IDLE
+    **Object Related:**
+    | `File.`          | Description                                                       |
+    |------------------|-------------------------------------------------------------------|
+    | `File.wait()`    | Waits for the state of the file operation to reach FileState.IDLE |
+    | `File.refresh()` | Refreshes the state of the file, processing associated variables  |
+    | `File.destroy()` | Removes the file and deallocates associated resources             |
+    | `File._asdict()` | Returns a JSON dictionary representation of the File object       |
+    | `File.__str__()` | Returns a pretty JSON string representation of the File object    |
 
-    BASIC I/O:
-    - File.touch()              Raises PermissonError if unsufficient perms are given
-    - File.validatePath()       Does look for path and creates abs/rel path
-    - File.readSize()           Gets File Size
+    **Checksumming:**
+    | `File.`                    | Description                                     |
+    |----------------------------|-------------------------------------------------|
+    | `File.createChecksum()`    | Computes a checksum for the file                |
+    | `File.validateIntegrity()` | Validates file integrity based on its checksum  |
 
-    Checksum:
-    - File.setChecksum()        Overwrites default checksum object
-    - File.createChecksum()     Starts checksumming process
-    - File.validateIntegrity()  Starts a validation process (instead of JUST creating A checksum)
+    **Encryption:**
+    | `File.`          | Description                                                         |
+    |------------------|---------------------------------------------------------------------|
+    | `File.encrypt()` | Encrypts the file and optionally removes the original after success |
+    | `File.decrypt()` | Decrypts the file using a specified encryption scheme               |
 
-    Encryption:
-    - File.encrypt()            START the encryption process
-                                - keepOrig = False calls File.remove() after exit_code != 0
-    - File.decrypt()            START the DECRYPTION process with encryption scheme "e"
+    ### === VARIABLES ======================================================
 
-    #### --- EXCEPTIONS -------------------------------------------------------
+    | Variable          | Type        | Description                                        |
+    |-------------------|-------------|----------------------------------------------------|
+    | `self.id`         | `int`       | Custom user-defined ID for the file                |
+    | `self.path`       | `str`       | Absolute file path                                 |
+    | `self.name`       | `str`       | File name (derived from path)                      |
+    | `self.size`       | `int`       | File size in bytes                                 |
+    | `self.parent`     | `str`       | Parent directory of the file                       |
+    | `self.cmd`        | `Command`   | Command object for executing subprocesses          |
+    | `self.cksum`      | `Checksum`  | Checksum object for file integrity verification    |
+    | `self.state`      | `FileState` | Current operational state of the file              |
+    | `self.state_msg`  | `List[str]` | Logs and messages corresponding to state or errors |
 
-    **FileNotFoundError:**  
-    Get raised if the input path invalid is and createFile == False.
+    **Checksum Handling**
+    - Initialize: Create a new Checksum instance for the file.
+    - Validate: Verify file consistency and integrity using checksums.
+    - Refresh: Refresh checksum-related status data during processes.
 
-    **PermissionError:**  
-    Get raised if the permissions are insufficient to touch/delete FILE.
+    **Encryption Handling**
+    - Integrates Encryption objects to provide:
+        - File encryption (`File.encrypt()`)
+        - File decryption (`File.decrypt()`)
 
-    #### === PARAMETERS =======================================================
+    ### --- EXCEPTIONS ------------------------------------------------------
 
-    - self.state                Current State of File Operation (CSFO)
-    - self.state_msg            (runtime dependend) Error Logging
-    - self.id                   arb ID (user specified)
-    - self.name                 filename, derived from path
-    - self.size                 size in Bytes
-    - self.path                 absolute path for further commands
-    - self.name                 file name (last substring with no slashes)  
-    - self.parent               parent dir of FILE
-    - self.cmd                  Command object for any arb commands
-    - self.cksum                Checksum object
-    - self.encryption_scheme    Encryption object for secrets and options
+    **FileNotFoundError:** Raised if the input path is invalid and createFile is False.
+
+    **PermissionError:** Raised when filesystem operations (e.g., touch, remove) lack required permissions.
+
+    #### === DESIGN PRINCIPLES ==============================================
+
+    The `File` class facilitates file system management operations, wrapping functionality for
+    encryption, checksums, and command execution. Its modular design ensures readability,
+    flexibility, and integration with additional backend tools for operational enhancements.
+
     """
 
     def __init__(self, id: int, path: str, createFile: bool = False) -> None:
