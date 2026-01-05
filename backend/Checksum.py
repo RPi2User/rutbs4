@@ -84,8 +84,11 @@ class Checksum:
     def _status(self) -> None:
         self.cmd.status()   # refresh current state
 
-        if self.cmd.running:    # abort if running
-            return
+        if self.cmd.running:
+            return      # abort if running
+
+        if not self.cmd.didRun:
+            return      # abort if we never started
 
         if self.cmd.exitCode != 0 or len(self.cmd.stdout) == 0:  # Annoy user if error occured, be eff. write-protect
             self.state = ChecksumState.ERROR

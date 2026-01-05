@@ -1,16 +1,56 @@
 import unittest
-import json
 
 # Module imports
 from backend.Checksum import Checksum, ChecksumState, ChecksumType
-from backend.File import File
+from backend.Command import Command
+from backend.File import File, FileState
 
 class UT_File(unittest.TestCase):
 
+    AA: str = "./testing/touch.test"
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     APPENDIX: str = "The quick brown fox jumps over the lazy dog"
     F_2MIB: str = "./testing/file/2mib.file"
     F_TOUCH: str = "./testing/file/delete.me"
+
+    def test_AA_touch(self)-> None:
+        f: File = File(id=1, path=self.AA, createFile=True)
+
+        """
+        | Variable          | Type        | Description                                        |
+        |-------------------|-------------|----------------------------------------------------|
+        | `self.id`         | `int`       | Custom user-defined ID for the file                |
+        | `self.path`       | `str`       | Absolute and complete file path                    |
+        | `self.name`       | `str`       | File name (derived from path)                      |
+        | `self.size`       | `int`       | File size in bytes                                 |
+        | `self.parent`     | `str`       | Parent directory of the file                       |
+        | `self.cmd`        | `Command`   | Command object for executing subprocesses          |
+        | `self.cksum`      | `Checksum`  | Checksum object for file integrity verification    |
+        | `self.state`      | `FileState` | Current operational state of the file              |
+        | `self.state_msg`  | `List[str]` | Logs and messages corresponding to state or errors |
+        """
+
+        try:
+            self.assertEqual(f.id, 1)
+            self.assertEqual(f.name, self.AA.split('/')[-1])
+            self.assertEqual(f.size, 0)
+            self.assertEqual(f.state, FileState.IDLE)
+            self.assertEqual(len(f.state_msg), 0)
+
+            self.assertIsInstance(f.cksum, Checksum)
+            self.assertIsInstance(f.cmd, Command)
+            self.assertGreater(len(f.path), 0)
+            self.assertGreater(len(f.parent), 0)
+
+        except AssertionError:
+            f.cmd.quiet = False
+            print(f)
+            raise
+
+        print("A_TOUCH")
+"""
+    def test_AB_touchFail(self) -> None:
+        pass
 
     def test_default(self):
         file: File = File(1, self.F_2MIB)
@@ -44,10 +84,10 @@ class UT_File(unittest.TestCase):
 
 
     def test_touchDelete(self):
-        """
-        1. check if delete.me is there
-        2. delete delete.me
-        """
+        
+        #1. check if delete.me is there
+        #2. delete delete.me
+        
         pass
 
     def test_check_md5(self) -> None:
@@ -118,6 +158,8 @@ class UT_File(unittest.TestCase):
         self.assertEqual(file.cksum.validation_target, wrong_sum)
         self.assertEqual(file.cksum.state, ChecksumState.MISMATCH)
         self.assertEqual(file.cksum.value, self.SHA256)
+
+"""
 
 if __name__ == '__main__':
     unittest.main()

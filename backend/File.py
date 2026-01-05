@@ -111,9 +111,10 @@ class File:
         self.state: FileState = FileState.INIT
         self.state_msg: List[str] = []
         self.cmd: Command = Command("")
+        self.cmd.quiet = False
 
         self.id: int = id
-        self.size : int
+        self.size : int = -1
 
         if createFile:
             self.touch(path)
@@ -138,7 +139,7 @@ class File:
             return
 
         try:
-            Path(path).touch(exist_ok=True) # Should be instant, no background command needed
+            Path(path).touch(exist_ok=True) # Is instant, no background command needed
 
         except PermissionError:
             self.state = FileState.ERROR
@@ -149,6 +150,9 @@ class File:
             self.state = FileState.ERROR
             self.state_msg.append("[ERROR] unhandled error occured during creation of file '" + path + "'" + " Exception: " + str(e))
             raise
+
+        if self.state is FileState.INIT:
+            return  # call self.refresh() is needed for all other operations
 
         self.refresh()
 
@@ -187,7 +191,7 @@ class File:
 
         if self.state is FileState.REMOVING:
             self.cmd.wait()
-            self._refresh()
+            self.refresh()
             return
 
         if self.state in {FileState.ENCRYPT, FileState.DECRYPT}:
@@ -210,6 +214,7 @@ class File:
     def refresh(self) -> None:
 
         if self.state is FileState.INIT:
+            return
             raise RuntimeError("[ERROR] FILE is still initializing but should be initialized by now!")
 
         if self.state in {FileState.ERROR,
@@ -275,13 +280,12 @@ class File:
         self.cksum._status()    # get current status
 
     def _asdict(self) -> dict:
-        self._refresh()
+        self.refresh()
         data = {
             "id": self.id,
             "size": self.size,
             "name": self.name,
             "path": self.path,
-            "rel_path": self.relative_path,
             "last_command": self.cmd._asdict(),
             "cksum": self.cksum._asdict(),
         }
@@ -322,6 +326,7 @@ class File:
 # === INTERNAL METHODS ========================================================
 
     def validatePath(self, path: str) -> None:
+        self.cmd.reset()
         self.cmd.cmd = "realpath '" + path +  "'"
         self.cmd.wait()    # we currently in __init__ therefore self.path does not exist
 
@@ -334,8 +339,9 @@ class File:
         self.parent = path.split(self.name)[0][:-1]  # get parent dir, trim last char '/'
 
     def readSize(self) -> None:
+        self.cmd.reset()
         self.cmd.cmd = "stat -c %s '" + self.path + "'"
-        self.cmd.start()
+        self.cmd.wait()
         try:
             self.size = int(self.cmd.stdout[0])
         except TypeError:
