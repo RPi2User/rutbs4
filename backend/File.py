@@ -10,6 +10,62 @@ from backend.Encryption import Encryption
 
 DEBUG: bool = True
 
+class FilePath():
+
+    """
+    #### === FILEPATH =========================================================
+    This Class has those different variables for dynamic path management.  
+    Example File: `/opt/project/to_tape/backup.img`  
+    Context: `/opt/project` (current "./" directory)
+
+    | Variable         | Description                        | Example                           |
+    |------------------|------------------------------------|-----------------------------------|
+    | FilePath.path    | Complete Path                      | `/opt/project/to_tape/backup.img` |
+    | FilePath.name    | File name with extension           | `backup.img`                      |
+    | FilePath.parent  | Parent directory of current file   | `/opt/project/to_tape`            |
+    | FilePath.context | current context in file system     | `/opt/project`                    |
+    | FilePath.relPath | path in relation to context        | `./to_tape/backup.img`            |
+    """
+
+    def __init__(self, path: str, context: str) -> None:
+        self.path: str = path
+        self.context: str = context
+        self._validate()    # Validate input path
+
+        self.relPath: str = os.path.relpath(path, context)
+        self.name: str = os.path.basename(path)
+        self.parent: str = os.path.dirname(path)
+
+
+    def _validate(self) -> None:
+
+        # Context validation
+        if not self.path.startswith(self.context):
+            raise FileNotFoundError("[ERROR] Invalid context path!")
+
+        # Full path validation
+        cmd: Command = Command("find " + self.path).wait()
+
+        if cmd.stdout[0] != self.path:
+            raise FileNotFoundError("[ERROR] Invalid Path given!")
+
+        if cmd.exitCode != 0:
+            raise SystemError("[ERROR] FIND command on path failed with unkown reason!")
+
+
+    def _asdict(self) -> dict:
+        return {
+            "path": self.path,
+            "context": self.context,
+            "relPath": self.relPath,
+            "name": self.name,
+            "parent": self.parent
+        }
+
+    def __str__(self) -> str:
+        return json.dumps(self._asdict(), indent=2)
+
+
 class FileState(Enum):
     INIT = 1
     ENCRYPT = 2
@@ -80,10 +136,8 @@ class File:
     | Variable          | Type        | Description                                        |
     |-------------------|-------------|----------------------------------------------------|
     | `self.id`         | `int`       | Custom user-defined ID for the file                |
-    | `self.path`       | `str`       | Absolute and complete file path                    |
-    | `self.name`       | `str`       | File name (derived from path)                      |
+    | `self.path`       | `FilePath`  | Absolute and complete file path                    |
     | `self.size`       | `int`       | File size in bytes                                 |
-    | `self.parent`     | `str`       | Parent directory of the file                       |
     | `self.cmd`        | `Command`   | Command object for executing subprocesses          |
     | `self.cksum`      | `Checksum`  | Checksum object for file integrity verification    |
     | `self.state`      | `FileState` | Current operational state of the file              |
@@ -107,14 +161,29 @@ class File:
 
     """
 
-    def __init__(self, id: int, path: str, createFile: bool = False) -> None:
+    """
+    | Variable          | Type        | Description                                        |
+    |-------------------|-------------|----------------------------------------------------|
+    | `self.id`         | `int`       | Custom user-defined ID for the file                |
+    | `self.path`       | `str`       | Absolute / complete file path                      |
+    | `self.name`       | `str`       | File name (derived from path)                      |
+    | `self.size`       | `int`       | File size in bytes                                 |
+    | `self.parent`     | `str`       | Parent directory of the file                       |
+    | `self.cmd`        | `Command`   | Command object for executing subprocesses          |
+    | `self.cksum`      | `Checksum`  | Checksum object for file integrity verification    |
+    | `self.state`      | `FileState` | Current operational state of the file              |
+    | `self.state_msg`  | `List[str]` | Logs and messages corresponding to state or errors |
+    """
+
+    def __init__(self, id: int, path: str, path_context: str,createFile: bool = False) -> None:
         self.state: FileState = FileState.INIT
         self.state_msg: List[str] = []
         self.cmd: Command = Command("")
-        self.cmd.quiet = False
 
         self.id: int = id
         self.size : int = -1
+
+        self.path: FilePath = FilePath(path, path_context)
 
         if createFile:
             self.touch(path)
@@ -202,22 +271,14 @@ class File:
         if self.state in {FileState.VALIDATING, FileState.CKSUM_CALC}:
             self.cksum.wait()
 
-    def destroy(self, removeFileFrom) -> None:
-        # This calles file.remove() and destroys object completely
-        self.id = -1
-        self.size = -1
-        self.name = ""
-        self.path = ""
-        self.relative_path = ""
-        self.cksum = Checksum("")    # Todo call "remove(File)" so this object is indeed gone
-
     def refresh(self) -> None:
 
-        if self.state is FileState.INIT:
+        # NOTE after File.append() a calcFileSize() needs to be called
+
+        if self.state is FileState.INIT:    # this is purely a error that shall not occur in prod
             raise RuntimeError("[ERROR] FILE is still initializing but should be initialized by now!")
 
         if self.state in {FileState.ERROR,
-                          FileState.INIT,
                           FileState.IDLE,
                           FileState.MISMATCH,
                           FileState.REMOVED}:
@@ -323,19 +384,6 @@ class File:
         self.path = encryption_scheme.encrypt(self.path)
 
 # === INTERNAL METHODS ========================================================
-
-    def validatePath(self, path: str) -> None:
-        self.cmd.reset()
-        self.cmd.cmd = "realpath '" + path +  "'"
-        self.cmd.wait()    # we currently in __init__ therefore self.path does not exist
-
-        if self.cmd.exitCode == 1:
-            self.state = FileState.ERROR
-            raise FileNotFoundError("[ERROR] Invalid Path given!") # This backend has no file-by-file interface
-
-        self.path = self.cmd.stdout[0]
-        self.name = path.split('/')[-1]
-        self.parent = path.split(self.name)[0][:-1]  # get parent dir, trim last char '/'
 
     def readSize(self) -> None:
         self.cmd.reset()

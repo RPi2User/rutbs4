@@ -3,11 +3,11 @@ import unittest
 # Module imports
 from backend.Checksum import Checksum, ChecksumState, ChecksumType
 from backend.Command import Command
-from backend.File import File, FileState
+from backend.File import File, FileState, FilePath
 
 class UT_File(unittest.TestCase):
 
-    AA: str = "./testing/touch.test"
+    AA: str = "./testing/touch.test"" # TDODO REWRITE PATH HANDLING IN THIS UT!
     AB: str = "./invalid_dir/invalid_file_name.ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     APPENDIX: str = "The quick brown fox jumps over the lazy dog"
@@ -33,14 +33,15 @@ class UT_File(unittest.TestCase):
 
         try:
             self.assertEqual(f.id, 1)
-            self.assertEqual(f.name, self.AA.split('/')[-1])
             self.assertEqual(f.size, 0)
             self.assertEqual(f.state, FileState.IDLE)
             self.assertEqual(len(f.state_msg), 0)
+            self.assertEqual(f.path.name, "touch.test")
+            self.assertEqual(f.path.)
 
+            self.assertIsInstance(f.path, FilePath)
             self.assertIsInstance(f.cksum, Checksum)
             self.assertIsInstance(f.cmd, Command)
-            self.assertGreater(len(f.path), 0)
             self.assertGreater(len(f.parent), 0)
 
         except AssertionError:
@@ -51,8 +52,8 @@ class UT_File(unittest.TestCase):
         print("A_TOUCH")
 
     def test_AB_touchFail(self) -> None:
-        # Checks if constructor raises exception when
-        # - file not found and createFile := False (default)
+        # Checks if constructor raises FileNotFoundError when createFile := False (default)
+        # and file (indeed) not avaiable
 
         try:
             f: File = File(id=1, path=self.AB, createFile=True)
