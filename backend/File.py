@@ -30,14 +30,14 @@ class FilePath():
     def __init__(self, path: str, context: str) -> None:
         self.path: str = path
         self.context: str = context
-        self._validate()    # Validate input path
+        self.validate()    # Validate input path
 
         self.relPath: str = os.path.relpath(path, context)
         self.name: str = os.path.basename(path)
         self.parent: str = os.path.dirname(path)
 
 
-    def _validate(self) -> None:
+    def validate(self) -> None:
 
         # Context validation
         if not self.path.startswith(self.context):
@@ -47,7 +47,10 @@ class FilePath():
         cmd: Command = Command("find " + self.path)
         cmd.wait()
 
-        if cmd.stdout[0] != self.path:
+        try:
+            if cmd.stdout[0] != self.path:
+                raise FileNotFoundError("[ERROR] Invalid Path given!")
+        except IndexError: # if len(stdout) == 0...
             raise FileNotFoundError("[ERROR] Invalid Path given!")
 
         if cmd.exitCode != 0:
@@ -162,7 +165,7 @@ class File:
 
     """
 
-    """
+    """PARAMETER
     | Variable          | Type        | Description                                        |
     |-------------------|-------------|----------------------------------------------------|
     | `self.id`         | `int`       | Custom user-defined ID for the file                |
@@ -226,7 +229,7 @@ class File:
         self.refresh()
 
     def remove(self) -> None:   # This removes FILE from filesystem
-        # This removes the file from the filesystem
+        self.state = FileState.REMOVING
         try:
             os.remove(self.path.path)    # TODO Check if this blocks!
         except PermissionError:
@@ -283,6 +286,14 @@ class File:
                           FileState.MISMATCH,
                           FileState.REMOVED}:
             return # Do nothing when in PERMANENT state
+
+        if self.state is FileState.REMOVING:
+            try:
+                self.path.validate()    # Validate Path
+            except FileNotFoundError:   # Set flags
+                self.size = -1
+                self.state = FileState.REMOVED
+                return
 
         if self.state is FileState.CKSUM_CALC:
             # We are currently calculating a Checksum on File (w/o validation).
