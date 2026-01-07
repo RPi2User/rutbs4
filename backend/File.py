@@ -184,10 +184,10 @@ class File:
         self.id: int = id
         self.size : int = -1
 
-        self.path: FilePath = FilePath(path, path_context)
-
         if createFile:
             self.touch(path)
+
+        self.path: FilePath = FilePath(path, path_context)
 
         self.readSize()
 

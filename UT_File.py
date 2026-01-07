@@ -7,17 +7,21 @@ from backend.File import File, FileState, FilePath
 
 class UT_File(unittest.TestCase):
 
-    AA_PATH: str = "/mnt/daten/testfiles/rutbs4/file/2mib.file"
-    AA_CONTEXT: str = "/mnt/daten/testfiles/rutbs4"
+    CONTEXT: str = "/mnt/daten/testfiles/rutbs4"
 
-    AB: str = "./invalid_dir/invalid_file_name.ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
+    AA_PATH: str = "/mnt/daten/testfiles/rutbs4/file/2mib.file"
+    AB_TOUCH: str = "/mnt/daten/testfiles/rutbs4/file/delete.me"
+
+    AC_TOUCHFAIL: str = "/mnt/daten/testfiles/rutbs/invalid_dir/invalid_file_name.ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
+    AD_DELETE: str = AB_TOUCH
+
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     APPENDIX: str = "The quick brown fox jumps over the lazy dog"
     F_2MIB: str = "./testing/file/2mib.file"
     F_TOUCH: str = "./testing/file/delete.me"
 
     def test_AA_sanity(self)-> None:
-        f: File = File(1, self.AA_PATH, self.AA_CONTEXT)
+        f: File = File(1, self.AA_PATH, self.CONTEXT)
 
         try:
             self.assertEqual(f.id, 1)
@@ -26,7 +30,7 @@ class UT_File(unittest.TestCase):
             self.assertEqual(len(f.state_msg), 0)
             self.assertEqual(f.path.path, "/mnt/daten/testfiles/rutbs4/file/2mib.file")
             self.assertEqual(f.path.name, "2mib.file")
-            self.assertEqual(f.path.context, "/mnt/daten/testfiles/rutbs4")
+            self.assertEqual(f.path.context, self.CONTEXT)
             self.assertEqual(f.path.parent, "/mnt/daten/testfiles/rutbs4/file")
 
             self.assertIsInstance(f.path, FilePath)
@@ -40,7 +44,20 @@ class UT_File(unittest.TestCase):
 
         print("A_SANITY")
 
-    def test_AB_touchFail(self) -> None:
+    def test_AB_touch(self) -> None:
+        f: File = File(1, self.AB_TOUCH, self.CONTEXT, True)
+        try:
+            self.assertEqual(f.size, 0)
+            self.assertEqual(f.state, FileState.IDLE)
+            self.assertEqual(len(f.state_msg), 0)
+        except AssertionError:
+            f.cmd.quiet = False
+            print(f)
+            raise
+
+        print("B_TOUCH")
+
+    def test_AC_touchFail(self) -> None:
         # Checks if constructor raises FileNotFoundError when createFile := False (default)
         # and file (indeed) not avaiable
 
@@ -50,7 +67,7 @@ class UT_File(unittest.TestCase):
         except FileNotFoundError:
             self.assertTrue(True)
 
-        print("B_TOUCHFAIL")
+        print("C_TOUCHFAIL")
 
 """
     def test_default(self):
