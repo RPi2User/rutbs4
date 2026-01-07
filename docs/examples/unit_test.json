@@ -1,0 +1,262 @@
+{
+  "AES128CBC": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9012,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "summary": {
+        "mismatch": false,
+        "old_value": "afe3458dcc8b81a54446841a4cf01f771a6caffad6a492dc7ad634941dd45d52"
+      },
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9027,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": -1,
+        "io": [],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES128CBC",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-128-cbc -pbkdf2 -d -iv 09733973c7b6d9447f53643e8736b730 -k 25135bb373f8cad988e71e100000b7b7f8c10a6be622f021d2845e6fb284f233 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9024,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 55379225",
+          "wchar: 55336960",
+          "syscr: 13543",
+          "syscw: 13510",
+          "read_bytes: 0",
+          "write_bytes: 55336960",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  },
+  "AES256CBC": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9012,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "summary": {
+        "mismatch": false,
+        "old_value": "daa6e972556677ef1532c555cfee187afb5483c09445c3a66b2da1601dfd055e"
+      },
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9043,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": -1,
+        "io": [],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES256CBC",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-256-cbc -pbkdf2 -d -iv 09733973c7b6d9447f53643e8736b730 -k 25135bb373f8cad988e71e100000b7b7f8c10a6be622f021d2845e6fb284f233 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9040,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 51758361",
+          "wchar: 51712000",
+          "syscr: 12659",
+          "syscw: 12625",
+          "read_bytes: 0",
+          "write_bytes: 51712000",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  },
+  "AES128CTR": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9012,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "summary": {
+        "mismatch": false,
+        "old_value": "af8c8e004891881872f59d9d665a75f90337bc32e167122f0c1983696981d3ef"
+      },
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9055,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": -1,
+        "io": [],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES128CTR",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-128-ctr -pbkdf2 -d -iv 09733973c7b6d9447f53643e8736b730 -k 25135bb373f8cad988e71e100000b7b7f8c10a6be622f021d2845e6fb284f233 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9052,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 57881881",
+          "wchar: 57839616",
+          "syscr: 14154",
+          "syscw: 14121",
+          "read_bytes: 0",
+          "write_bytes: 57839616",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  },
+  "AES256CTR": {
+    "id": 1,
+    "size": 104857600,
+    "name": "test100_all.raw",
+    "path": "./testing/testfiles/test100_all.raw",
+    "rel_path": "",
+    "last_command": {
+      "cmd": "stat -c %s './testing/testfiles/test100_all.raw'",
+      "pid": 9012,
+      "running": false,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": [],
+      "filesize": -1,
+      "io": [],
+      "exitCode": 0
+    },
+    "cksum": {
+      "type": "SHA256",
+      "value": "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc",
+      "summary": {
+        "mismatch": false,
+        "old_value": "4bd6ba89897c95dd34c67e6727f9988bfb931660766c618fa737fa8835629b52"
+      },
+      "command": {
+        "cmd": "openssl sha256 -r './testing/testfiles/test100_all.raw'",
+        "pid": 9067,
+        "running": false,
+        "stdout": [
+          "a1a5c4ca77b72f457ebaa9e8d7231ed488b021c2a886b6e14715b1da5684b3cc *./testing/testfiles/test100_all.raw"
+        ],
+        "stderr": [],
+        "filesize": -1,
+        "io": [],
+        "exitCode": 0
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES256CTR",
+      "key": {
+        "length": "medium",
+        "value": "<redacted>"
+      },
+      "cmd": {
+        "cmd": "openssl aes-256-ctr -pbkdf2 -d -iv 09733973c7b6d9447f53643e8736b730 -k 25135bb373f8cad988e71e100000b7b7f8c10a6be622f021d2845e6fb284f233 -in './testing/testfiles/test100_all.raw.crypt' -out './testing/testfiles/test100_all.raw'",
+        "pid": 9064,
+        "running": false,
+        "stdout": [],
+        "stderr": [],
+        "filesize": -1,
+        "io": [
+          "rchar: 55362841",
+          "wchar: 55320576",
+          "syscr: 13539",
+          "syscw: 13506",
+          "read_bytes: 0",
+          "write_bytes: 55324672",
+          "cancelled_write_bytes: 0"
+        ],
+        "exitCode": 0
+      }
+    }
+  }
+}
