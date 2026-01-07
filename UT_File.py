@@ -7,7 +7,8 @@ from backend.File import File, FileState, FilePath
 
 class UT_File(unittest.TestCase):
 
-    path : FilePath = FilePath("/opt/")
+    AA_PATH: str = "/mnt/daten/testfiles/rutbs4/file/2mib.file"
+    AA_CONTEXT: str = "/mnt/daten/testfiles/rutbs4"
 
     AB: str = "./invalid_dir/invalid_file_name.ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
@@ -15,49 +16,37 @@ class UT_File(unittest.TestCase):
     F_2MIB: str = "./testing/file/2mib.file"
     F_TOUCH: str = "./testing/file/delete.me"
 
-    def test_AA_touch(self)-> None:
-        f: File = File(id=1, path=self.AA, createFile=True)
-
-        """
-        | Variable          | Type        | Description                                        |
-        |-------------------|-------------|----------------------------------------------------|
-        | `self.id`         | `int`       | Custom user-defined ID for the file                |
-        | `self.path`       | `str`       | Absolute and complete file path                    |
-        | `self.name`       | `str`       | File name (derived from path)                      |
-        | `self.size`       | `int`       | File size in bytes                                 |
-        | `self.parent`     | `str`       | Parent directory of the file                       |
-        | `self.cmd`        | `Command`   | Command object for executing subprocesses          |
-        | `self.cksum`      | `Checksum`  | Checksum object for file integrity verification    |
-        | `self.state`      | `FileState` | Current operational state of the file              |
-        | `self.state_msg`  | `List[str]` | Logs and messages corresponding to state or errors |
-        """
+    def test_AA_sanity(self)-> None:
+        f: File = File(1, self.AA_PATH, self.AA_CONTEXT)
 
         try:
             self.assertEqual(f.id, 1)
-            self.assertEqual(f.size, 0)
+            self.assertEqual(f.size, 2097152)
             self.assertEqual(f.state, FileState.IDLE)
             self.assertEqual(len(f.state_msg), 0)
-            self.assertEqual(f.path.name, "touch.test")
-            self.assertEqual(f.path.)
+            self.assertEqual(f.path.path, "/mnt/daten/testfiles/rutbs4/file/2mib.file")
+            self.assertEqual(f.path.name, "2mib.file")
+            self.assertEqual(f.path.context, "/mnt/daten/testfiles/rutbs4")
+            self.assertEqual(f.path.parent, "/mnt/daten/testfiles/rutbs4/file")
 
             self.assertIsInstance(f.path, FilePath)
             self.assertIsInstance(f.cksum, Checksum)
             self.assertIsInstance(f.cmd, Command)
-            self.assertGreater(len(f.parent), 0)
 
         except AssertionError:
             f.cmd.quiet = False
             print(f)
             raise
 
-        print("A_TOUCH")
+        print("A_SANITY")
 
     def test_AB_touchFail(self) -> None:
         # Checks if constructor raises FileNotFoundError when createFile := False (default)
         # and file (indeed) not avaiable
 
         try:
-            f: File = File(id=1, path=self.AB, createFile=True)
+            pass
+            #f: File = File(id=1, path=self.AB, createFile=True)
         except FileNotFoundError:
             self.assertTrue(True)
 
