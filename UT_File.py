@@ -7,7 +7,8 @@ from backend.File import File, FileState, FilePath
 
 class UT_File(unittest.TestCase):
 
-    AA: str = "./testing/touch.test"" # TDODO REWRITE PATH HANDLING IN THIS UT!
+    path : FilePath = FilePath("/opt/")
+
     AB: str = "./invalid_dir/invalid_file_name.ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     APPENDIX: str = "The quick brown fox jumps over the lazy dog"

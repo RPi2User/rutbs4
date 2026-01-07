@@ -44,7 +44,8 @@ class FilePath():
             raise FileNotFoundError("[ERROR] Invalid context path!")
 
         # Full path validation
-        cmd: Command = Command("find " + self.path).wait()
+        cmd: Command = Command("find " + self.path)
+        cmd.wait()
 
         if cmd.stdout[0] != self.path:
             raise FileNotFoundError("[ERROR] Invalid Path given!")
@@ -188,11 +189,10 @@ class File:
         if createFile:
             self.touch(path)
 
-        self.validatePath(path)
         self.readSize()
 
-        self.cksum: Checksum = Checksum(self.path)
-        self.encryption_scheme: Encryption = None
+        self.cksum: Checksum = Checksum(self.path.path)
+        self.encryption_scheme: Encryption
 
         self.state = FileState.IDLE
 
@@ -228,9 +228,9 @@ class File:
     def remove(self) -> None:   # This removes FILE from filesystem
         # This removes the file from the filesystem
         try:
-            os.remove(self.path)    # TODO Check if this blocks!
+            os.remove(self.path.path)    # TODO Check if this blocks!
         except PermissionError:
-            self.state_msg.append("[ERROR] Deletion failed, permisson error occured '" + self.path + "'")
+            self.state_msg.append("[ERROR] Deletion failed, permisson error occured '" + str(self.path) + "'")
             raise
         except Exception as e:
             self.state_msg.append("[ERROR] Deletion failed, unkown error" + str(self) + "   Exception: " + str(e))
@@ -327,7 +327,7 @@ class File:
         """
 
         match self.state:
-            case FileState.CHECKING:
+            case FileState.CKSUM_CALC:
                 pass
             case FileState.ENCRYPT:
                 pass
@@ -344,8 +344,7 @@ class File:
         data = {
             "id": self.id,
             "size": self.size,
-            "name": self.name,
-            "path": self.path,
+            "path": self.path._asdict(),
             "last_command": self.cmd._asdict(),
             "cksum": self.cksum._asdict(),
         }
@@ -361,7 +360,8 @@ class File:
     def setChecksum(self, c: Checksum) -> None:
         self.cksum = c
         self.cksum.cmd.filesize = self.size
-        self.cksum.file_path = self.path
+        if len(self.cksum.file_path) == 0:
+            self.cksum.file_path = self.path.path
 
     def createChecksum(self) -> None:
         if self.state is FileState.IDLE:
@@ -377,17 +377,17 @@ class File:
 
     def decrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
         self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.decrypt(self.path)
+        self.path.path = encryption_scheme.decrypt(self.path.path)
 
     def encrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
         self.encryption_scheme = encryption_scheme
-        self.path = encryption_scheme.encrypt(self.path)
+        self.path.path = encryption_scheme.encrypt(self.path.path)
 
 # === INTERNAL METHODS ========================================================
 
     def readSize(self) -> None:
         self.cmd.reset()
-        self.cmd.cmd = "stat -c %s '" + self.path + "'"
+        self.cmd.cmd = "stat -c %s '" + self.path.path + "'"
         self.cmd.wait()
         try:
             self.size = int(self.cmd.stdout[0])
