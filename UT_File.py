@@ -38,11 +38,10 @@ class UT_File(unittest.TestCase):
             self.assertIsInstance(f.cmd, Command)
 
         except AssertionError:
-            f.cmd.quiet = False
             print(f)
             raise
 
-        print("A_SANITY")
+        print(".A_SANITY")
 
     def test_AB_touch(self) -> None:
         f: File = File(1, self.AB_TOUCH, self.CONTEXT, True)
@@ -51,7 +50,6 @@ class UT_File(unittest.TestCase):
             self.assertEqual(f.state, FileState.IDLE)
             self.assertEqual(len(f.state_msg), 0)
         except AssertionError:
-            f.cmd.quiet = False
             print(f)
             raise
 
@@ -61,13 +59,25 @@ class UT_File(unittest.TestCase):
         # Checks if constructor raises FileNotFoundError when createFile := False (default)
         # and file (indeed) not avaiable
 
-        try:
-            pass
-            #f: File = File(id=1, path=self.AB, createFile=True)
-        except FileNotFoundError:
-            self.assertTrue(True)
+        with self.assertRaises(FileNotFoundError):
+            f: File = File(1, self.AC_TOUCHFAIL, self.CONTEXT)
 
         print("C_TOUCHFAIL")
+
+    def test_AD_Delete(self) -> None:
+        f: File = File(1, self.AD_DELETE, self.CONTEXT) # file currently avail @ f.path.path
+
+        try:
+            f.remove()
+            str(f)      # TODO Currently deletion is blocking so an external refresh is necessary
+
+            self.assertEqual(f.size, -1)
+            self.assertEqual(f.state, FileState.REMOVED)
+        except AssertionError:
+            print(f)
+            raise
+        print(f)
+        print("D_DELETE")
 
 """
     def test_default(self):
