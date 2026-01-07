@@ -6,7 +6,7 @@ from typing import List
 
 from backend.Checksum import Checksum, ChecksumState
 from backend.Command import Command
-from backend.Encryption import Encryption
+from backend.Encryption import Encryption, Key
 
 DEBUG: bool = True
 
@@ -192,7 +192,7 @@ class File:
         self.readSize()
 
         self.cksum: Checksum = Checksum(self.path.path)
-        self.encryption_scheme: Encryption
+        self.encryption_scheme: Encryption = Encryption(Key())
 
         self.state = FileState.IDLE
 
