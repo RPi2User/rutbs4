@@ -14,9 +14,11 @@ class UT_File(unittest.TestCase):
 
     AC_TOUCHFAIL: str = "/mnt/daten/testfiles/rutbs/invalid_dir/invalid_file_name.ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     AD_DELETE: str = AB_TOUCH
+    AE_APPEND: str = CONTEXT + "/file/append.txt"
+
 
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
-    APPENDIX: str = "The quick brown fox jumps over the lazy dog"
+    FOX: str = "The quick brown fox jumps over the lazy dog"
     F_2MIB: str = "./testing/file/2mib.file"
     F_TOUCH: str = "./testing/file/delete.me"
 
@@ -76,8 +78,41 @@ class UT_File(unittest.TestCase):
         except AssertionError:
             print(f)
             raise
-        print(f)
+
         print("D_DELETE")
+
+    def test_AE_Append(self) -> None:
+        """
+        This tests File.append(str). During this test a append.txt will be created on FS.
+        One Pangram (the quick brown fox...) and a "TESTSTRING".
+        This tests validates 
+        - file-size change after appending
+        - no errors occur during append
+
+        """
+        f: File = File(1, self.AE_APPEND, self.CONTEXT, True)
+
+        try:
+            self.assertEqual(f.size, 0)
+            f.append(self.FOX)
+
+            self.assertEqual(f.size, len(self.FOX))
+            self.assertEqual(f.state, FileState.IDLE)
+
+            f.append("\nTESTSTRING")
+            self.assertEqual(f.size, len(self.FOX) + 11)
+
+            f.remove()
+            str(f)
+
+            self.assertEqual(f.size, -1)
+            self.assertEqual(f.state, FileState.REMOVED)
+            self.assertEqual(len(f.state_msg), 0)
+
+        except AssertionError:
+            print(f)
+            raise
+        print("E_APPEND")
 
 """
     def test_default(self):
