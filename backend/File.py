@@ -69,7 +69,6 @@ class FilePath():
     def __str__(self) -> str:
         return json.dumps(self._asdict(), indent=2)
 
-
 class FileState(Enum):
     INIT = 1
     ENCRYPT = 2
@@ -169,10 +168,8 @@ class File:
     | Variable          | Type        | Description                                        |
     |-------------------|-------------|----------------------------------------------------|
     | `self.id`         | `int`       | Custom user-defined ID for the file                |
-    | `self.path`       | `str`       | Absolute / complete file path                      |
-    | `self.name`       | `str`       | File name (derived from path)                      |
+    | `self.path`       | `FilePath`  | Absolute / complete file path                      |
     | `self.size`       | `int`       | File size in bytes                                 |
-    | `self.parent`     | `str`       | Parent directory of the file                       |
     | `self.cmd`        | `Command`   | Command object for executing subprocesses          |
     | `self.cksum`      | `Checksum`  | Checksum object for file integrity verification    |
     | `self.state`      | `FileState` | Current operational state of the file              |
@@ -224,7 +221,7 @@ class File:
             raise
 
         if self.state is FileState.INIT:
-            return  # call self.refresh() is needed for all other operations
+            return  # returns early bc we are still initializing
 
         self.refresh()
 
@@ -240,17 +237,12 @@ class File:
             raise
 
     def append(self, text: str):
-        # Needed in order to append a given string to a file
-        # In order to create a txt file you shall do:
-        # text = File()
-        # text.touch()
-        # text.append("This is a wonderful text")
-        # cmd.cmd = "cat " + text.path
-        # cmd.wait()
-        # "This is a wonderful text" == cmd.stdout[0]
-        return
-        #try:
-        #    Path(path.)
+        if self.state in {FileState.IDLE}:
+            with open(self.path.path, "a") as file:
+                file.write(text)
+
+            self.readSize()
+
 
 # --- OBJECT RELATED ----------------------------------------------------------
 
@@ -324,18 +316,7 @@ class File:
                     self.state = FileState.ERROR
                     return
 
-        """TODO
-            INIT = 1
-            ENCRYPT = 2
-            DECRYPT = 3
-            CKSUM_CALC = 4
-            VALIDATING = 5
-            MISMATCH = 6
-            REMOVING = 7
-            IDLE = 8
-            REMOVED = 9
-            ERROR = 99
-        """
+    # OLD CODE FOLLOWS:
 
         match self.state:
             case FileState.CKSUM_CALC:
@@ -354,13 +335,14 @@ class File:
         self.refresh()
         data = {
             "id": self.id,
+            "state": self.state.name,
+            "messages": self.state_msg,
             "size": self.size,
             "path": self.path._asdict(),
             "last_command": self.cmd._asdict(),
             "cksum": self.cksum._asdict(),
+            "encryption": self.encryption_scheme._asdict()
         }
-        if self.encryption_scheme is not None:
-            data.update({"encryption": self.encryption_scheme._asdict()})
         return data
 
     def __str__(self) -> str:
