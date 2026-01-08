@@ -1,16 +1,18 @@
 {"FILE" :{
   "id": 1,
-  "size": -1,
+  "state": "IDLE",
+  "messages": [],
+  "size": 104857600,
   "path": {
-    "path": "/mnt/daten/testfiles/rutbs4/file/delete.me",
+    "path": "/mnt/daten/testfiles/rutbs4/cksum/test100.raw",
     "context": "/mnt/daten/testfiles/rutbs4",
-    "relPath": "file/delete.me",
-    "name": "delete.me",
-    "parent": "/mnt/daten/testfiles/rutbs4/file"
+    "relPath": "cksum/test100.raw",
+    "name": "test100.raw",
+    "parent": "/mnt/daten/testfiles/rutbs4/cksum"
   },
   "last_command": {
-    "cmd": "stat -c %s '/mnt/daten/testfiles/rutbs4/file/delete.me'",
-    "pid": 7592,
+    "cmd": "stat -c %s '/mnt/daten/testfiles/rutbs4/cksum/test100.raw'",
+    "pid": 309452,
     "running": false,
     "quiet": true,
     "process": "<class 'subprocess.Popen'>",
@@ -19,11 +21,11 @@
     "status_msg": [],
     "filesize": -1,
     "permission_error": false,
-    "io_path": "/proc/7592/io",
+    "io_path": "/proc/309452/io",
     "io": [
-      "rchar: 5924",
+      "rchar: 4868",
       "wchar: 0",
-      "syscr: 10",
+      "syscr: 9",
       "syscw: 0",
       "read_bytes: 0",
       "write_bytes: 0",
@@ -32,30 +34,40 @@
     "raw": false,
     "exitCode": 0,
     "stdout": [
-      "0"
+      "104857600"
     ],
     "stderr": []
   },
   "cksum": {
-    "type": "SHA256",
+    "type": "MD5",
     "state": "IDLE",
-    "value": "",
+    "value": "07f9b8f14c23725624cb0745e24e1f98",
     "command": {
-      "cmd": "openssl sha256 -r '/mnt/daten/testfiles/rutbs4/file/delete.me'",
-      "pid": -1,
+      "cmd": "openssl md5 -r '/mnt/daten/testfiles/rutbs4/cksum/test100.raw'",
+      "pid": 309461,
       "running": false,
       "quiet": true,
-      "process": "<class 'NoneType'>",
+      "process": "<class 'subprocess.Popen'>",
       "closed": true,
-      "did_ran": false,
+      "did_ran": true,
       "status_msg": [],
-      "filesize": -1,
+      "filesize": 104857600,
       "permission_error": false,
-      "io_path": "",
-      "io": [],
+      "io_path": "/proc/309461/io",
+      "io": [
+        "rchar: 99626491",
+        "wchar: 0",
+        "syscr: 12190",
+        "syscw: 0",
+        "read_bytes: 0",
+        "write_bytes: 0",
+        "cancelled_write_bytes: 0"
+      ],
       "raw": false,
-      "exitCode": -1,
-      "stdout": [],
+      "exitCode": 0,
+      "stdout": [
+        "07f9b8f14c23725624cb0745e24e1f98 */mnt/daten/testfiles/rutbs4/cksum/test100.raw"
+      ],
       "stderr": []
     }
   },
@@ -68,7 +80,7 @@
     },
     "cmd": {
       "cmd": "openssl rand -hex 16",
-      "pid": 7598,
+      "pid": 309458,
       "running": false,
       "quiet": true,
       "process": "<class 'subprocess.Popen'>",
@@ -77,11 +89,11 @@
       "status_msg": [],
       "filesize": -1,
       "permission_error": false,
-      "io_path": "/proc/7598/io",
+      "io_path": "/proc/309458/io",
       "io": [
-        "rchar: 5924",
+        "rchar: 4868",
         "wchar: 0",
-        "syscr: 10",
+        "syscr: 9",
         "syscw: 0",
         "read_bytes: 0",
         "write_bytes: 0",
@@ -90,7 +102,7 @@
       "raw": false,
       "exitCode": 0,
       "stdout": [
-        "652b98ce57135f69a87a3274ac00ad1a"
+        "ddb30c5fec5e7cac7ed6db0f753d056f"
       ],
       "stderr": []
     }
