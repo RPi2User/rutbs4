@@ -16,11 +16,8 @@ class UT_File(unittest.TestCase):
     AD_DELETE: str = AB_TOUCH
     AE_APPEND: str = CONTEXT + "/file/append.txt"
 
-
     SHA256: str = "ee4097576b5b6fbace743b2532eda18b0fe08763ce3611c535534ac3a9208ddc"
     FOX: str = "The quick brown fox jumps over the lazy dog"
-    F_2MIB: str = "./testing/file/2mib.file"
-    F_TOUCH: str = "./testing/file/delete.me"
 
     def test_AA_sanity(self)-> None:
         f: File = File(1, self.AA_PATH, self.CONTEXT)
