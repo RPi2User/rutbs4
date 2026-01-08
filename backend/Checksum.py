@@ -125,7 +125,7 @@ class Checksum:
         if len(self.validation_target) != 0: # add target value if necessary
             data.update({"target_value": self.validation_target}) 
 
-        data.update({"command": self.cmd._asdict()}) # type: ignore
+        data.update({"command": self.cmd._asdict()})
         return data
 
     def __str__(self):

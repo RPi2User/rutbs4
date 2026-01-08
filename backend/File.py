@@ -176,7 +176,7 @@ class File:
     | `self.state_msg`  | `List[str]` | Logs and messages corresponding to state or errors |
     """
 
-    def __init__(self, id: int, path: str, path_context: str, createFile: bool = False) -> None:
+    def __init__(self, id: int, path: str, path_context: str,createFile: bool = False) -> None:
         self.state: FileState = FileState.INIT
         self.state_msg: List[str] = []
         self.cmd: Command = Command("")
@@ -188,10 +188,11 @@ class File:
             self.touch(path)
 
         self.path: FilePath = FilePath(path, path_context)
-        self.cksum: Checksum = Checksum(self.path.path)
-        self.encryption_scheme: Encryption = Encryption(Key())
 
         self.readSize()
+
+        self.cksum: Checksum = Checksum(self.path.path)
+        self.encryption_scheme: Encryption = Encryption(Key())
 
         self.state = FileState.IDLE
 
@@ -259,15 +260,15 @@ class File:
 
         if self.state in {FileState.ENCRYPT, FileState.DECRYPT}:
             self.encryption_scheme.cmd.wait()
-            self.encryption_scheme.refresh() # BUG MOVE to self.refresh()!!!
+            self.encryption_scheme.refresh()
             return
 
         if self.state in {FileState.VALIDATING, FileState.CKSUM_CALC}:
             self.cksum.wait()
-            self.refresh()
-            return
 
     def refresh(self) -> None:
+
+        # NOTE after File.append() a calcFileSize() needs to be called
 
         if self.state is FileState.INIT:    # this is purely a error that shall not occur in prod
             raise RuntimeError("[ERROR] FILE is still initializing but should be initialized by now!")
@@ -315,6 +316,21 @@ class File:
                     self.state = FileState.ERROR
                     return
 
+    # OLD CODE FOLLOWS:
+
+        match self.state:
+            case FileState.CKSUM_CALC:
+                pass
+            case FileState.ENCRYPT:
+                pass
+            case FileState.DECRYPT:
+                pass
+            case FileState.REMOVING:
+                self.cmd.wait() # FIXME
+                self.state = FileState.REMOVED
+                pass
+        self.cksum._status()    # get current status
+
     def _asdict(self) -> dict:
         self.refresh()
         data = {
@@ -345,9 +361,10 @@ class File:
             self.cksum.create() # start the checksumming process
             self.state = FileState.CKSUM_CALC
 
-    def validateIntegrity(self, validationTarget: str) -> None: 
-        self.state = FileState.VALIDATING
-        self.cksum.validate(validationTarget)
+    def validateIntegrity(self) -> None: 
+        if len(self.cksum.value) == 0:
+            return # TODO Maybe raise a SystemError
+        self.cksum.validate(self.cksum.value)
 
 # --- ENCRYPTION --------------------------------------------------------------
 
@@ -365,7 +382,6 @@ class File:
         self.cmd.reset()
         self.cmd.cmd = "stat -c %s '" + self.path.path + "'"
         self.cmd.wait()
-
         try:
             self.size = int(self.cmd.stdout[0])
         except TypeError:
@@ -374,7 +390,3 @@ class File:
             self.size = 0
         except Exception as e:
             self.state_msg.append("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
-            raise
-
-        self.cksum.cmd.filesize = self.size
-        self.encryption_scheme.cmd.filesize = self.size
