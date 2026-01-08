@@ -1,0 +1,98 @@
+{"FILE" :{
+  "id": 1,
+  "size": -1,
+  "path": {
+    "path": "/mnt/daten/testfiles/rutbs4/file/delete.me",
+    "context": "/mnt/daten/testfiles/rutbs4",
+    "relPath": "file/delete.me",
+    "name": "delete.me",
+    "parent": "/mnt/daten/testfiles/rutbs4/file"
+  },
+  "last_command": {
+    "cmd": "stat -c %s '/mnt/daten/testfiles/rutbs4/file/delete.me'",
+    "pid": 7592,
+    "running": false,
+    "quiet": true,
+    "process": "<class 'subprocess.Popen'>",
+    "closed": true,
+    "did_ran": true,
+    "status_msg": [],
+    "filesize": -1,
+    "permission_error": false,
+    "io_path": "/proc/7592/io",
+    "io": [
+      "rchar: 5924",
+      "wchar: 0",
+      "syscr: 10",
+      "syscw: 0",
+      "read_bytes: 0",
+      "write_bytes: 0",
+      "cancelled_write_bytes: 0"
+    ],
+    "raw": false,
+    "exitCode": 0,
+    "stdout": [
+      "0"
+    ],
+    "stderr": []
+  },
+  "cksum": {
+    "type": "SHA256",
+    "state": "IDLE",
+    "value": "",
+    "command": {
+      "cmd": "openssl sha256 -r '/mnt/daten/testfiles/rutbs4/file/delete.me'",
+      "pid": -1,
+      "running": false,
+      "quiet": true,
+      "process": "<class 'NoneType'>",
+      "closed": true,
+      "did_ran": false,
+      "status_msg": [],
+      "filesize": -1,
+      "permission_error": false,
+      "io_path": "",
+      "io": [],
+      "raw": false,
+      "exitCode": -1,
+      "stdout": [],
+      "stderr": []
+    }
+  },
+  "encryption": {
+    "state": "IDLE",
+    "mode": "AES256CBC",
+    "key": {
+      "length": "medium",
+      "value": "<redacted>"
+    },
+    "cmd": {
+      "cmd": "openssl rand -hex 16",
+      "pid": 7598,
+      "running": false,
+      "quiet": true,
+      "process": "<class 'subprocess.Popen'>",
+      "closed": true,
+      "did_ran": true,
+      "status_msg": [],
+      "filesize": -1,
+      "permission_error": false,
+      "io_path": "/proc/7598/io",
+      "io": [
+        "rchar: 5924",
+        "wchar: 0",
+        "syscr: 10",
+        "syscw: 0",
+        "read_bytes: 0",
+        "write_bytes: 0",
+        "cancelled_write_bytes: 0"
+      ],
+      "raw": false,
+      "exitCode": 0,
+      "stdout": [
+        "652b98ce57135f69a87a3274ac00ad1a"
+      ],
+      "stderr": []
+    }
+  }
+}}
