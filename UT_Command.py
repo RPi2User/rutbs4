@@ -42,7 +42,7 @@ class UT_Command(unittest.TestCase):
 
         self.assertEqual(type(c), Command)
         self.assertEqual(c.closed, True)
-        print("A")
+        print(".A")
 
     def test_AB_validation(self) -> None:
         """
