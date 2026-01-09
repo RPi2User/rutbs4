@@ -26,6 +26,9 @@ class Key:
         }
         return data
 
+    def __str__(self) -> str:
+        return json.dumps(self._asdict(), indent=2)
+
 class E_State(Enum):
     IDLE = 0,
     ENCRYPT = 1,
