@@ -251,33 +251,63 @@ class Command:
                 self.permError = True
 
     def _read_stdout(self):
+        _current : str = ""
         for element in self.process.stdout: # type: ignore
-            try:
-                self.stdout.append(element.decode('utf-8').rstrip('\n'))
-
-            except UnicodeDecodeError: # if $element can't be decoded as UTF8
-                if not self.raw:
-                    self.status_msg.append("[ERROR] String cannot be parsed, STDOUT stored as hex")
-                self.raw = True
-
-            except:
-                raise
 
             if self.raw:
-                self.stdout.append(f"{element.hex()}")
+                _current = ''.join(format(byte, '02x') for byte in element)
+                if len(self.stdout) == 0:
+                    self.stdout.append("")
+                self.stdout[0] += _current
+
+            else:
+                try:
+                    _current = element.decode('utf-8').rstrip('\n')
+                    self.stdout.append(_current)
+
+                except UnicodeDecodeError:
+                    self.status_msg.append("[ERROR] String cannot be parsed, STDOUT converted to hex")
+                    self.raw = True
+                    self._convertToRaw(element)
 
     def _read_stderr(self):
+        _current : str = ""
         for element in self.process.stderr: # type: ignore
-            try:
-                self.stderr.append(element.decode('utf-8').rstrip('\n'))
-
-            except UnicodeDecodeError: # if $element can't be decoded as UTF8
-                if not self.raw:
-                    self.status_msg.append("[ERROR] String cannot be parsed, STDERR stored as hex")
-                self.raw = True
-
-            except:
-                raise
 
             if self.raw:
-                self.stderr.append(f"{element.hex()}")
+                _current = ''.join(format(byte, '02x') for byte in element)
+                if len(self.stderr) == 0:
+                    self.stderr.append("")
+                self.stderr[0] += _current
+
+            else:
+                try:
+                    _current = element.decode('utf-8').rstrip('\n')
+                    self.stderr.append(_current)
+
+                except UnicodeDecodeError:
+                    self.status_msg.append("[ERROR] String cannot be parsed, STDERR converted to hex")
+                    self.raw = True
+                    self._convertToRaw(element, stderr=True)
+                
+    def _convertToRaw(self, element: bytes, stderr: bool = False) -> None:
+        _tmp: List[str] = []
+        _current: str = ""
+
+        if not stderr:
+            _tmp = self.stdout
+        else:
+            _tmp = self.stderr
+
+        for line in _tmp:
+            _current += ''.join(format(char, '02x') for char in line.encode('utf-8'))
+            _current += "0a"   # this adds the line terminator, which was prior the list seperator
+        _current += ''.join(format(byte, '02x') for byte in element)
+
+        _tmp.clear()    # delete all encoded data
+        _tmp.append(_current)   # append all data
+
+        if not stderr:
+            self.stdout = _tmp
+        else:
+            self.stderr = _tmp
