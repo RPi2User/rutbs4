@@ -165,8 +165,8 @@ class Command:
 
     def cleanup(self) -> None:
         if self.process and not self.closed:
-            self.process.stdout.close()
-            self.process.stderr.close()
+            self.process.stdout.close() # type: ignore
+            self.process.stderr.close() # type: ignore
             self.process.wait()
             self.closed = True
 
@@ -174,7 +174,6 @@ class Command:
         self.cleanup()
         self._clear()
 
-    # This populates all Vars
     def status(self) -> None:
         if self.process is None:
             return
@@ -228,7 +227,7 @@ class Command:
         self.pid: int = -1
         self.running: bool = False
         self.quiet: bool = True
-        self.process: subprocess.Popen = None
+        self.process: subprocess.Popen = None # type: ignore
 
         self.closed: bool = True
         self.didRun: bool = False
@@ -252,7 +251,7 @@ class Command:
                 self.permError = True
 
     def _read_stdout(self):
-        for element in self.process.stdout:
+        for element in self.process.stdout: # type: ignore
             try:
                 self.stdout.append(element.decode('utf-8').rstrip('\n'))
 
@@ -268,7 +267,7 @@ class Command:
                 self.stdout.append(f"{element.hex()}")
 
     def _read_stderr(self):
-        for element in self.process.stderr:
+        for element in self.process.stderr: # type: ignore
             try:
                 self.stderr.append(element.decode('utf-8').rstrip('\n'))
 
