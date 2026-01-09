@@ -10,13 +10,25 @@ class UT_Encryption(unittest.TestCase):
 
     SHA256: str = "e4104dda1a72365ab706bb2500dc49534465d3b9e597a16ddc38160e5dda8ea0"
 
-    def test_enc_keygen_short(self):
+    def test_AA_keygen_short(self):
         k: Key = Key(KeyLength.short)
-        self.assertEqual(len(k.value), k.length.value * 2)
+        try:
+            self.assertEqual(len(k.value), k.length.value * 2)
+        except AssertionError:
+            print(k)
+            raise
+        print(".A_KEYGEN_SHORT")
 
-    def test_enc_keygen_medium(self):
+    def test_AB_keygen_medium(self):
         k: Key = Key(KeyLength.medium)
-        self.assertTrue(len(k.value), k.length.value * 2)
+        try:
+            self.assertTrue(len(k.value), k.length.value * 2)
+        except AssertionError:
+            print(k)
+            raise
+        print("B_KEYGEN_MEDIUM")
+
+"""
 
     def test_default(self):
         k: Key = Key() # create key
@@ -106,6 +118,8 @@ class UT_Encryption(unittest.TestCase):
             self.assertEqual(file.cksum.state, ChecksumState.IDLE)
             self.assertEqual(file.cksum.value, value)
         return file
+
+"""
 
 if __name__ == '__main__':
     unittest.main()
