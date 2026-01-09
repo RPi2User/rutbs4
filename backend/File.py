@@ -99,7 +99,6 @@ class File:
         - Initializes a Checksum object
         - Initializes an Encryption object
 
-
     ### --- EXCEPTIONS ------------------------------------------------------
 
     **FileNotFoundError:** Raised if the input path is invalid and createFile is False.  
@@ -162,18 +161,6 @@ class File:
     encryption, checksums, and command execution. Its modular design ensures readability,
     flexibility, and integration with additional backend tools for operational enhancements.
 
-    """
-
-    """PARAMETER
-    | Variable          | Type        | Description                                        |
-    |-------------------|-------------|----------------------------------------------------|
-    | `self.id`         | `int`       | Custom user-defined ID for the file                |
-    | `self.path`       | `FilePath`  | Absolute / complete file path                      |
-    | `self.size`       | `int`       | File size in bytes                                 |
-    | `self.cmd`        | `Command`   | Command object for executing subprocesses          |
-    | `self.cksum`      | `Checksum`  | Checksum object for file integrity verification    |
-    | `self.state`      | `FileState` | Current operational state of the file              |
-    | `self.state_msg`  | `List[str]` | Logs and messages corresponding to state or errors |
     """
 
     def __init__(self, id: int, path: str, path_context: str, createFile: bool = False) -> None:
