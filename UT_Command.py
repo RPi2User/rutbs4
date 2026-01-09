@@ -23,6 +23,7 @@ class UT_Command(unittest.TestCase):
     AN_CLEANUP1: str = "echo the quick brown fox jumps over the lazy dog"
     AO_RAW_NL: str = "cat /mnt/daten/testfiles/rutbs4/cmd/00_0f.txt" 
     AP_RAW_EXTREME: str = "cat /mnt/daten/testfiles/rutbs4/cmd/00_ff.txt"
+    AR_RAW_ALLERR: str = ">&2 cat /mnt/daten/testfiles/rutbs4/cmd/00_ff.txt"
 
     """_summary_
     Depdencies:
@@ -45,7 +46,7 @@ class UT_Command(unittest.TestCase):
 
         self.assertEqual(type(c), Command)
         self.assertEqual(c.closed, True)
-        print(".A")
+        print(".A_CREATE")
 
     def test_AB_validation(self) -> None:
         """
@@ -72,7 +73,7 @@ class UT_Command(unittest.TestCase):
             self.assertEqual(type(e), ValueError)
             self.assertEqual(e.args[0], "ERROR: Process cannot be initiated, command string empty")
 
-        print("B")
+        print("B_VAL")
 
     def test_AC_start(self) -> None:
         """
@@ -104,7 +105,7 @@ class UT_Command(unittest.TestCase):
         self.assertEqual(c.exitCode, 0)
 
         c.cleanup()
-        print("C")
+        print("C_START")
 
     def test_AD_start(self) -> None:
         """
@@ -157,7 +158,7 @@ class UT_Command(unittest.TestCase):
         self.assertEqual(c.didRun, True)
         self.assertEqual(c.closed, True)
 
-        print("D")
+        print("D_START_WAIT")
 
     def test_AE_Wait(self) -> None:
         """
@@ -175,7 +176,7 @@ class UT_Command(unittest.TestCase):
         self.assertEqual(c.didRun, True)
         self.assertEqual(c.closed, True)
 
-        print("E")
+        print("E_WAIT")
 
     def test_AF_STDOUT(self) -> None:
         """
@@ -189,7 +190,7 @@ class UT_Command(unittest.TestCase):
         self.assertEqual(c.exitCode, 0)
         self.assertEqual(c.stdout[0], "b32fea58-45ec-4276-a129-ee4f1ee441ae")
         self.assertEqual(c.stderr, [])
-        print("F")
+        print("F_STDOUT")
 
     def test_AG_STDERR(self) -> None:
         """
@@ -203,7 +204,7 @@ class UT_Command(unittest.TestCase):
         self.assertEqual(c.exitCode, 0)
         self.assertEqual(c.stdout, [])
         self.assertEqual(c.stderr[0], "b32fea58-45ec-4276-a129-ee4f1ee441ae")
-        print("G")
+        print("G_STDERR")
 
     def test_AH_IO(self) -> None:
         """
@@ -255,7 +256,7 @@ class UT_Command(unittest.TestCase):
         self.assertLess(rchar_val, UPPER)
         self.assertLess(wchar_val, UPPER)
 
-        print("H")
+        print("H_IO")
 
     def test_AI_IO_256(self) -> None:
         """
@@ -286,7 +287,7 @@ class UT_Command(unittest.TestCase):
             print(c)
             raise
 
-        print("I")
+        print("I_IO_256")
 
     def test_AJ_WaitTimeout(self) -> None:
         """
@@ -311,7 +312,7 @@ class UT_Command(unittest.TestCase):
             print(c)
             raise
 
-        print("J")
+        print("J_WAITTIMEOUT")
 
     def test_AK_Kill(self) -> None:
         """
@@ -336,7 +337,7 @@ class UT_Command(unittest.TestCase):
             print(c)
             raise
 
-        print("K")
+        print("K_KILL")
 
     def test_AL_HEXOUT(self) -> None:
         """
@@ -359,7 +360,7 @@ class UT_Command(unittest.TestCase):
             print(c)
             raise
 
-        print("L")
+        print("L_HEXOUT")
 
     def test_AM_HEXERR(self) -> None:
         """
@@ -383,7 +384,7 @@ class UT_Command(unittest.TestCase):
             print(c)
             raise
 
-        print("M")
+        print("M_HEXERR")
 
     def test_AN_cleanup(self) -> None:
         # This tests Command.reset() clears stdout
@@ -401,7 +402,7 @@ class UT_Command(unittest.TestCase):
             print(c)
             raise
 
-        print("N")
+        print("N_CLEAN")
 
     def test_AO_rawWithNewLines(self) -> None:
         c: Command = Command(self.AO_RAW_NL, raw=True)
@@ -451,6 +452,21 @@ class UT_Command(unittest.TestCase):
             raise
         print("Q_RAW_ALLFAIL")
 
+    def test_AR_rawAllFail(self) -> None:
+        c: Command = Command(self.AR_RAW_ALLERR, raw=False)
+
+        c.wait()
+
+        try:
+            self.assertEqual(len(c.stdout), 0)
+            self.assertEqual(len(c.stderr), 1)
+            self.assertEqual(c.exitCode, 0)
+            self.assertEqual(c.stderr[0], "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
+        except:
+            c.quiet = False
+            print(c)
+            raise
+        print("R_RAW_ALLERR")
 
 if __name__ == '__main__':
     unittest.main()
