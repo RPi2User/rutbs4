@@ -8,7 +8,20 @@ from backend.Checksum import *
 
 class UT_Encryption(unittest.TestCase):
 
-    SHA256: str = "e4104dda1a72365ab706bb2500dc49534465d3b9e597a16ddc38160e5dda8ea0"
+    SHA256: str =   "e4104dda1a72365ab706bb2500dc49534465d3b9e597a16ddc38160e5dda8ea0"
+    PATH: str =     "/mnt/daten/testfiles/rutbs4/encryption/test100.raw"
+    CONTEXT: str =  "/mnt/daten/testfiles/rutbs4"
+
+    AES128CBC: str = "PUT SHA256 HERE"
+    AES256CBC: str = "PUT SHA256 HERE"
+    AES128CTR: str = "PUT SHA256 HERE"
+    AES256CTR: str = "PUT SHA256 HERE"
+
+    KEY_SHORT: str =    "7b3cb4de93854612e9b376bad4911832"
+    KEY_MEDIUM: str =   "9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be"
+    IV: str =           "524121a28c0c9d6282176f99c13798e5"
+
+# --- A KEYGEN ----------------------------------------------------------------
 
     def test_AA_keygen_short(self):
         k: Key = Key(KeyLength.short)
@@ -17,7 +30,7 @@ class UT_Encryption(unittest.TestCase):
         except AssertionError:
             print(k)
             raise
-        print(".A_KEYGEN_SHORT")
+        print(".AA_KEYGEN_SHORT")
 
     def test_AB_keygen_medium(self):
         k: Key = Key(KeyLength.medium)
@@ -26,7 +39,53 @@ class UT_Encryption(unittest.TestCase):
         except AssertionError:
             print(k)
             raise
-        print("B_KEYGEN_MEDIUM")
+        print("AB_KEYGEN_MEDIUM")
+
+# --- B ENCRYPTION ------------------------------------------------------------
+
+    def test_BA_enc_aes128cbc(self) -> None:
+        f: File = File(1, self.PATH, self.CONTEXT)
+
+        try:
+            self.assertIsInstance(f.encryption_scheme, File)
+        except AssertionError:
+            print(f)
+            raise
+
+        print("BA_ENC_AES128CBC")
+
+    def test_BB_enc_aes128ctr(self) -> None:
+        f: File = File(1, self.PATH, self.CONTEXT)
+
+        try:
+            self.assertIsInstance(f.encryption_scheme, Encryption)
+        except AssertionError:
+            print(f)
+            raise
+
+        print("BB_ENC_AES128CTR")
+
+    def test_BC_enc_aes256cbc(self) -> None:
+        f: File = File(1, self.PATH, self.CONTEXT)
+
+        try:
+            self.assertIsInstance(f.encryption_scheme, Encryption)
+        except AssertionError:
+            print(f)
+            raise
+
+        print("BC_ENC_AES256CBC")
+
+    def test_BD_enc_aes256ctr(self) -> None:
+        f: File = File(1, self.PATH, self.CONTEXT)
+
+        try:
+            self.assertIsInstance(f.encryption_scheme, Encryption)
+        except AssertionError:
+            print(f)
+            raise
+
+        print("BD_ENC_AES256CTR")
 
 """
 
@@ -68,40 +127,7 @@ class UT_Encryption(unittest.TestCase):
         print(file)
         
 
-    def test_all(self) -> None:
-        return
-        sha256: str = "7afa7a26406d770d57864267f7ea57395b09ffb1d0773a289c7ee23851d6730f"
-        k: Key = Key() # create key
-        e: Encryption = Encryption(k)
-        result: dict = {}
 
-        # --- File Init + Checksum
-        file: File = File(1, "./testing/testfiles/test100_all.raw")
-        file = self._checkChecksum(file, sha256)
-        # ----------------------------------------------------------
-
-
-        for mode in E_Mode:
-            e.mode = mode
-            print("Testing Encryption: " + e.mode.name)
-            # --- ENCRYPT
-            file.encrypt(e)
-            while file.encryption_scheme.state == E_State.ENCRYPT:
-                file._asdict()  # poll status as long as the encryption runs
-            file.cksum.file_path = file.path     # refresh path var to path + ".crypt"
-            self._checkChecksum(file, sha256, True)
-            # ----------------------------------------------------------
-
-            # --- DECRYPT
-            file.decrypt(e)
-            while file.encryption_scheme.state == E_State.DECRYPT:
-                file._asdict()  # poll status as long as the decryption runs
-            file.cksum.file_path = file.path
-            self._checkChecksum(file, sha256)
-
-            result.update({mode.name: file._asdict()})
-
-        print("\n\"RESULT\": " + json.dumps(result, indent=2) + "\n")
 
     def _checkChecksum(self, file: File, value: str, inverse: bool = False) -> File:
         c: Checksum = Checksum(file.path, value=value)
