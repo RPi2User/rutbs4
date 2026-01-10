@@ -150,6 +150,7 @@ class UT_Checksum(unittest.TestCase):
             self.assertEqual(file.cksum.state, ChecksumState.MISMATCH)
             self.assertEqual(file.state_msg[0], "[ERROR] Checksum mismatch!")
             self.assertNotEqual(file.cksum.value, file.cksum.validation_target)
+            self.assertEqual(file.cksum.value, self.MD5)
 
         except AssertionError:
             print(file)
@@ -172,6 +173,7 @@ class UT_Checksum(unittest.TestCase):
             self.assertEqual(file.cksum.state, ChecksumState.MISMATCH)
             self.assertEqual(file.state_msg[0], "[ERROR] Checksum mismatch!")
             self.assertNotEqual(file.cksum.value, file.cksum.validation_target)
+            self.assertEqual(file.cksum.value, self.SHA256)
 
         except AssertionError:
             print(file)
@@ -192,9 +194,10 @@ class UT_Checksum(unittest.TestCase):
             file.wait()
 
             self.assertEqual(file.state, FileState.MISMATCH)
-            self.assertEqual(file.cksum.state, ChecksumState.IDLE)
+            self.assertEqual(file.cksum.state, ChecksumState.MISMATCH)
             self.assertEqual(file.state_msg[0], "[ERROR] Checksum mismatch!")
             self.assertNotEqual(file.cksum.value, file.cksum.validation_target)
+            self.assertEqual(file.cksum.value, self.SHA512)
 
         except AssertionError:
             print(file)
