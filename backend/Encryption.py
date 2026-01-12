@@ -12,17 +12,29 @@ class KeyLength(Enum):
 class Key:
 
     def __init__(self, length: KeyLength = KeyLength.medium):
+        # Generate Key
         self.cmd = Command("openssl rand " + str(length.value), raw=True)
         self.cmd.wait()
         self.length: KeyLength = length
         self.value: str = self.cmd.stdout[0]
 
+        if len(self.value) != self.length.value * 2:
+            self.iv = "CRASHED"
+            print(self)
+            raise SystemError("[ERROR] Keylength wrong, check logs!")
+
+        # Generate Init. Vektor
+        self.cmd.reset()
+        self.cmd.cmd = "openssl rand 16"
+        self.cmd.wait()
+        self.iv: str = self.cmd.stdout[0]
+
     def _asdict(self) -> dict:
-        if len(self.value) != 0:
-            value_exist: str = "<redacted>"
         data = {
             "length": self.length.name,
-            "value": value_exist
+            "value": self.value,
+            "iv": self.iv,
+            "cmd": self.cmd._asdict()
         }
         return data
 
