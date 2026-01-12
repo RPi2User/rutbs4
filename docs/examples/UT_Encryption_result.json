@@ -1,0 +1,566 @@
+{
+  "AES128CBC": {
+    "id": 1,
+    "state": "IDLE",
+    "messages": [],
+    "size": 104857600,
+    "path": {
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "context": "/mnt/daten/testfiles/rutbs4",
+      "relPath": "encryption/test100.raw",
+      "name": "test100.raw",
+      "parent": "/mnt/daten/testfiles/rutbs4/encryption"
+    },
+    "last_command": {
+      "cmd": "stat -c %s '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+      "pid": 526359,
+      "running": false,
+      "quiet": true,
+      "process": "<class 'subprocess.Popen'>",
+      "closed": true,
+      "did_ran": true,
+      "status_msg": [],
+      "filesize": -1,
+      "permission_error": false,
+      "io_path": "/proc/526359/io",
+      "io": [
+        "rchar: 4868",
+        "wchar: 0",
+        "syscr: 9",
+        "syscw: 0",
+        "read_bytes: 0",
+        "write_bytes: 0",
+        "cancelled_write_bytes: 0"
+      ],
+      "raw": false,
+      "exitCode": 0,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": []
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "target_value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "command": {
+        "cmd": "openssl sha256 -r '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526362,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526362/io",
+        "io": [
+          "rchar: 89894395",
+          "wchar: 0",
+          "syscr: 11002",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [
+          "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0 */mnt/daten/testfiles/rutbs4/encryption/test100.raw"
+        ],
+        "stderr": []
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES128CBC",
+      "keepOrigFile": false,
+      "newFilePath": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "key": {
+        "length": "medium",
+        "value": "9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be",
+        "iv": "524121a28c0c9d6282176f99c13798e5",
+        "cmd": {
+          "cmd": "openssl rand 16",
+          "pid": 526326,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/526326/io",
+          "io": [
+            "rchar: 2468",
+            "wchar: 0",
+            "syscr: 6",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": true,
+          "exitCode": 0,
+          "stdout": [
+            "9d647f32691670066195e93460656e75"
+          ],
+          "stderr": []
+        }
+      },
+      "cmd": {
+        "cmd": "openssl aes-128-cbc -pbkdf2 -d -iv 524121a28c0c9d6282176f99c13798e5 -k 9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be -in '/mnt/daten/testfiles/rutbs4/encryption/test100.raw.crypt' -out '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526347,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526347/io",
+        "io": [
+          "rchar: 101617147",
+          "wchar: 101576704",
+          "syscr: 24834",
+          "syscw: 24799",
+          "read_bytes: 0",
+          "write_bytes: 101576704",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [],
+        "stderr": []
+      }
+    }
+  },
+  "AES256CBC": {
+    "id": 1,
+    "state": "IDLE",
+    "messages": [],
+    "size": 104857600,
+    "path": {
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "context": "/mnt/daten/testfiles/rutbs4",
+      "relPath": "encryption/test100.raw",
+      "name": "test100.raw",
+      "parent": "/mnt/daten/testfiles/rutbs4/encryption"
+    },
+    "last_command": {
+      "cmd": "stat -c %s '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+      "pid": 526396,
+      "running": false,
+      "quiet": true,
+      "process": "<class 'subprocess.Popen'>",
+      "closed": true,
+      "did_ran": true,
+      "status_msg": [],
+      "filesize": -1,
+      "permission_error": false,
+      "io_path": "/proc/526396/io",
+      "io": [
+        "rchar: 4868",
+        "wchar: 0",
+        "syscr: 9",
+        "syscw: 0",
+        "read_bytes: 0",
+        "write_bytes: 0",
+        "cancelled_write_bytes: 0"
+      ],
+      "raw": false,
+      "exitCode": 0,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": []
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "target_value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "command": {
+        "cmd": "openssl sha256 -r '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526399,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526399/io",
+        "io": [
+          "rchar: 90500603",
+          "wchar: 0",
+          "syscr: 11076",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [
+          "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0 */mnt/daten/testfiles/rutbs4/encryption/test100.raw"
+        ],
+        "stderr": []
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES256CBC",
+      "keepOrigFile": false,
+      "newFilePath": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "key": {
+        "length": "medium",
+        "value": "9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be",
+        "iv": "524121a28c0c9d6282176f99c13798e5",
+        "cmd": {
+          "cmd": "openssl rand 16",
+          "pid": 526326,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/526326/io",
+          "io": [
+            "rchar: 2468",
+            "wchar: 0",
+            "syscr: 6",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": true,
+          "exitCode": 0,
+          "stdout": [
+            "9d647f32691670066195e93460656e75"
+          ],
+          "stderr": []
+        }
+      },
+      "cmd": {
+        "cmd": "openssl aes-256-cbc -pbkdf2 -d -iv 524121a28c0c9d6282176f99c13798e5 -k 9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be -in '/mnt/daten/testfiles/rutbs4/encryption/test100.raw.crypt' -out '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526384,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526384/io",
+        "io": [
+          "rchar: 101547515",
+          "wchar: 101502976",
+          "syscr: 24817",
+          "syscw: 24781",
+          "read_bytes: 0",
+          "write_bytes: 101507072",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [],
+        "stderr": []
+      }
+    }
+  },
+  "AES128CTR": {
+    "id": 1,
+    "state": "IDLE",
+    "messages": [],
+    "size": 104857600,
+    "path": {
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "context": "/mnt/daten/testfiles/rutbs4",
+      "relPath": "encryption/test100.raw",
+      "name": "test100.raw",
+      "parent": "/mnt/daten/testfiles/rutbs4/encryption"
+    },
+    "last_command": {
+      "cmd": "stat -c %s '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+      "pid": 526432,
+      "running": false,
+      "quiet": true,
+      "process": "<class 'subprocess.Popen'>",
+      "closed": true,
+      "did_ran": true,
+      "status_msg": [],
+      "filesize": -1,
+      "permission_error": false,
+      "io_path": "/proc/526432/io",
+      "io": [
+        "rchar: 2468",
+        "wchar: 0",
+        "syscr: 6",
+        "syscw: 0",
+        "read_bytes: 0",
+        "write_bytes: 0",
+        "cancelled_write_bytes: 0"
+      ],
+      "raw": false,
+      "exitCode": 0,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": []
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "target_value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "command": {
+        "cmd": "openssl sha256 -r '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526435,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526435/io",
+        "io": [
+          "rchar: 89673211",
+          "wchar: 0",
+          "syscr: 10975",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [
+          "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0 */mnt/daten/testfiles/rutbs4/encryption/test100.raw"
+        ],
+        "stderr": []
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES128CTR",
+      "keepOrigFile": false,
+      "newFilePath": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "key": {
+        "length": "medium",
+        "value": "9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be",
+        "iv": "524121a28c0c9d6282176f99c13798e5",
+        "cmd": {
+          "cmd": "openssl rand 16",
+          "pid": 526326,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/526326/io",
+          "io": [
+            "rchar: 2468",
+            "wchar: 0",
+            "syscr: 6",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": true,
+          "exitCode": 0,
+          "stdout": [
+            "9d647f32691670066195e93460656e75"
+          ],
+          "stderr": []
+        }
+      },
+      "cmd": {
+        "cmd": "openssl aes-128-ctr -pbkdf2 -d -iv 524121a28c0c9d6282176f99c13798e5 -k 9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be -in '/mnt/daten/testfiles/rutbs4/encryption/test100.raw.crypt' -out '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526420,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526420/io",
+        "io": [
+          "rchar: 104463867",
+          "wchar: 104423424",
+          "syscr: 25529",
+          "syscw: 25494",
+          "read_bytes: 0",
+          "write_bytes: 104427520",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [],
+        "stderr": []
+      }
+    }
+  },
+  "AES256CTR": {
+    "id": 1,
+    "state": "IDLE",
+    "messages": [],
+    "size": 104857600,
+    "path": {
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "context": "/mnt/daten/testfiles/rutbs4",
+      "relPath": "encryption/test100.raw",
+      "name": "test100.raw",
+      "parent": "/mnt/daten/testfiles/rutbs4/encryption"
+    },
+    "last_command": {
+      "cmd": "stat -c %s '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+      "pid": 526468,
+      "running": false,
+      "quiet": true,
+      "process": "<class 'subprocess.Popen'>",
+      "closed": true,
+      "did_ran": true,
+      "status_msg": [],
+      "filesize": -1,
+      "permission_error": false,
+      "io_path": "/proc/526468/io",
+      "io": [
+        "rchar: 4868",
+        "wchar: 0",
+        "syscr: 9",
+        "syscw: 0",
+        "read_bytes: 0",
+        "write_bytes: 0",
+        "cancelled_write_bytes: 0"
+      ],
+      "raw": false,
+      "exitCode": 0,
+      "stdout": [
+        "104857600"
+      ],
+      "stderr": []
+    },
+    "cksum": {
+      "type": "SHA256",
+      "state": "IDLE",
+      "path": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "target_value": "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0",
+      "command": {
+        "cmd": "openssl sha256 -r '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526471,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526471/io",
+        "io": [
+          "rchar: 89714171",
+          "wchar: 0",
+          "syscr: 10980",
+          "syscw: 0",
+          "read_bytes: 0",
+          "write_bytes: 0",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [
+          "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0 */mnt/daten/testfiles/rutbs4/encryption/test100.raw"
+        ],
+        "stderr": []
+      }
+    },
+    "encryption": {
+      "state": "IDLE",
+      "mode": "AES256CTR",
+      "keepOrigFile": false,
+      "newFilePath": "/mnt/daten/testfiles/rutbs4/encryption/test100.raw",
+      "key": {
+        "length": "medium",
+        "value": "9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be",
+        "iv": "524121a28c0c9d6282176f99c13798e5",
+        "cmd": {
+          "cmd": "openssl rand 16",
+          "pid": 526326,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/526326/io",
+          "io": [
+            "rchar: 2468",
+            "wchar: 0",
+            "syscr: 6",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": true,
+          "exitCode": 0,
+          "stdout": [
+            "9d647f32691670066195e93460656e75"
+          ],
+          "stderr": []
+        }
+      },
+      "cmd": {
+        "cmd": "openssl aes-256-ctr -pbkdf2 -d -iv 524121a28c0c9d6282176f99c13798e5 -k 9b406f953ba4591ce394f6a88b4bf365cf521b27db932a8fd07231a2a2b2b9be -in '/mnt/daten/testfiles/rutbs4/encryption/test100.raw.crypt' -out '/mnt/daten/testfiles/rutbs4/encryption/test100.raw'",
+        "pid": 526456,
+        "running": false,
+        "quiet": true,
+        "process": "<class 'subprocess.Popen'>",
+        "closed": true,
+        "did_ran": true,
+        "status_msg": [],
+        "filesize": 104857600,
+        "permission_error": false,
+        "io_path": "/proc/526456/io",
+        "io": [
+          "rchar: 98082299",
+          "wchar: 98037760",
+          "syscr: 23971",
+          "syscw: 23935",
+          "read_bytes: 0",
+          "write_bytes: 98037760",
+          "cancelled_write_bytes: 0"
+        ],
+        "raw": false,
+        "exitCode": 0,
+        "stdout": [],
+        "stderr": []
+      }
+    }
+  }
+}
