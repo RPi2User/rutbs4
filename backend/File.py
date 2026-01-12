@@ -30,12 +30,11 @@ class FilePath():
     def __init__(self, path: str, context: str) -> None:
         self.path: str = path
         self.context: str = context
-        self.validate()    # Validate input path
+        self.update()
 
-        self.relPath: str = os.path.relpath(path, context)
-        self.name: str = os.path.basename(path)
-        self.parent: str = os.path.dirname(path)
-
+    def update(self) -> None:
+        self.validate()
+        self.refresh() 
 
     def validate(self) -> None:
 
@@ -56,6 +55,10 @@ class FilePath():
         if cmd.exitCode != 0:
             raise SystemError("[ERROR] FIND command on path failed with unkown reason!")
 
+    def refresh(self) -> None:
+        self.relPath: str = os.path.relpath(self.path, self.context)
+        self.name: str = os.path.basename(self.path)
+        self.parent: str = os.path.dirname(self.path)
 
     def _asdict(self) -> dict:
         return {
