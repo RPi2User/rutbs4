@@ -55,13 +55,14 @@ class Checksum:
         if not hasattr(self, "cmd"):
             self.cmd: Command = Command("openssl " + self.type.name.lower() + " -r '" + self.file_path + "'")
             return
-        self.cmd.cmd = "openssl " + self.type.name.lower() + " -r '" + self.file_path + "'"
 
     def create(self):
         if self.state != ChecksumState.IDLE or self.type == ChecksumType.NONE:
             return
 
         self.state = ChecksumState.CREATE
+        self.cmd.reset()
+        self.cmd.cmd = "openssl " + self.type.name.lower() + " -r '" + self.file_path + "'"
         self.cmd.start()
 
     def validate(self, target: str) -> None:
