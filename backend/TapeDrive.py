@@ -3,7 +3,6 @@ from time import sleep
 from enum import Enum
 import uuid
 
-from tbk.TableOfContent import TableOfContent
 from backend.File import File
 from backend.Command import Command
 
@@ -410,13 +409,13 @@ class TapeDrive:
 
     def _asdict(self) -> dict:
         self._refresh()
-        
-        override = {
+
+        override: dict = {
             "active": self.drive_override
         }
 
         if self.rewindCommand is not None:
-            override.update({"rewindCommand" : self.rewindCommand._asdict()})    
+            override.update({"rewindCommand": self.rewindCommand._asdict()})
 
         if self.ejectCommand is not None:
             override.update({"ejectCommand" : self.ejectCommand._asdict()})
@@ -500,14 +499,14 @@ class TapeDrive:
 
         self.state = TD_State.WRITE
         self.command = Command(
-            "dd if='" + self.file.path + "' of='" + self.path + "' " +
+            "dd if='" + self.file.path.path + "' of='" + self.path + "' " +
             "iflag=fullblock status=none bs=" + self.blocksize, 
             filesize=self.file.size)
         
         self.command.start()
         self.tape.begin_of_tape = False
 
-    def writeTOC(self, tableOfContent: TableOfContent):
+    def writeTOC(self, tableOfContent: str):
         # This writes TOC as first File on Tape
         self._refresh()
         
@@ -519,18 +518,19 @@ class TapeDrive:
         toc_uuid : str = str(uuid.uuid4())
         toc_filename : str = "toc_" + toc_uuid + ".json"
         toc_path: str = "/tmp/" + toc_filename
-        tocfile: File = File(0, toc_path)
+        tocfile: File = File(0, toc_path, "CONTEXT")
         
         try:
-            with open(tocfile.path, 'w') as f:
-                f.write(json.dumps(tableOfContent._asdict(), indent=2))
+            with open(tocfile.path.path, 'w') as f:
+                pass
+                #f.write(json.dumps(tableOfContent._asdict(), indent=2))
         except PermissionError:
            raise PermissionError("Cannot write Temporary file into /tmp!")
         except:
             raise
 
         self.command = Command(
-            "dd if='" + self.file.path + "' of='" + self.path + "' " +
+            "dd if='" + self.file.path.path + "' of='" + self.path + "' " +
             "iflag=fullblock status=none bs=" + self.blocksize, 
             filesize=tocfile.size)
 
@@ -540,7 +540,7 @@ class TapeDrive:
             self.state = TD_State.ERROR
             return
         
-        tocfile.delete()
+        tocfile.remove()
         self.tape.begin_of_tape = False
 
     def read(self, file: File) -> None:
@@ -557,7 +557,7 @@ class TapeDrive:
         
         self.state = TD_State.READ
         self.command = Command(
-            "dd if='" + self.path + "' " + "of='" + file.path + "' " +
+            "dd if='" + self.path + "' " + "of='" + file.path.path + "' " +
             "bs='" + self.blocksize + "' " + "iflag=fullblock status=none")
 
         self.command.start()
