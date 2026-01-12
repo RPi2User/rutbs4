@@ -66,7 +66,7 @@ class Checksum:
         self.cmd.start()
 
     def validate(self, target: str) -> None:
-        if self.state != ChecksumState.IDLE:
+        if self.state not in {ChecksumState.IDLE, ChecksumState.MISMATCH}:
             return
 
         if len(target) == 0:
