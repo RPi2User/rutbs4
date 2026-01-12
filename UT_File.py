@@ -68,7 +68,7 @@ class UT_File(unittest.TestCase):
 
         try:
             f.remove()
-            str(f)      # TODO Currently deletion is blocking so an external refresh is necessary
+            #str(f)      # TODO Currently deletion is blocking so an external refresh was necessary
 
             self.assertEqual(f.size, -1)
             self.assertEqual(f.state, FileState.REMOVED)
