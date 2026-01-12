@@ -54,7 +54,7 @@ class E_Mode(Enum):
     AES256CTR = 4
 
 class Encryption:
-    
+
     MODE_CMD = {
         E_Mode.AES128CBC: "openssl aes-128-cbc -pbkdf2 ",
         E_Mode.AES256CBC: "openssl aes-256-cbc -pbkdf2 ",
@@ -62,21 +62,21 @@ class Encryption:
         E_Mode.AES256CTR: "openssl aes-256-ctr -pbkdf2 ",
     }
 
-    def __init__(self, key: Key, mode: E_Mode = E_Mode.AES256CBC):
+    def __init__(self, key: Key, mode: E_Mode = E_Mode.AES256CBC, keepOrig: bool = True):
         self.key = key
         self.mode = mode
-        self.cmd = Command("openssl rand -hex 16")
-        self.cmd.wait()
-        self.iv: str = self.cmd.stdout[0]
+        self.cmd = Command("")
         self.state: E_State = E_State.IDLE
-        
+        self.targetPath = ""
+        self.keepOrig: bool = keepOrig
+
     def refresh(self) -> None:
         self.cmd.status()
 
         if self.cmd.running:    # do nothing if status still same
             return
 
-        if self.state in [E_State.ENCRYPT, E_State.DECRYPT ] :
+        if self.state in [E_State.ENCRYPT, E_State.DECRYPT ]:
             if self.cmd.exitCode != 0:
                 self.state = E_State.ERROR
             else:
@@ -84,39 +84,41 @@ class Encryption:
 
         # Continue IDLEing
 
-    def decrypt(self, path: str) -> str:
+    def decrypt(self, path: str) -> None:
         if self.state != E_State.IDLE:
-            return path # DO NOTHING
+            return
 
-        self.state = E_State.ENCRYPT
+        self.state = E_State.DECRYPT
 
-        fin_path = ".".join([part for part in path.split('.')[:-1]]) # removes ".tail"
-        self.cmd.cmd = self.MODE_CMD[self.mode] + "-d -iv " + self.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + fin_path + "'"
+        self.targetPath = ".".join([part for part in path.split('.')[:-1]]) # removes ".tail"
+
+        self.cmd.reset()
+        self.cmd.cmd = self.MODE_CMD[self.mode] + "-d -iv " + self.key.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + self.targetPath + "'"
         self.cmd.start()
 
         self.refresh()
-        return fin_path
 
-    def encrypt(self, path: str) -> str:
-        # returns new path!
-        # We dont need any path validation, its done in File.validatePath()
+    def encrypt(self, path: str) -> None:
         if self.state != E_State.IDLE:
-            return path # DO NOTHING
+            return
 
         self.state = E_State.ENCRYPT
 
-        fin_path = path + ".crypt"
-        self.cmd.cmd = self.MODE_CMD[self.mode] + "-e -iv " + self.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + fin_path + "'"
+        self.targetPath = path + ".crypt"
+
+        self.cmd.reset()
+        self.cmd.cmd = self.MODE_CMD[self.mode] + "-e -iv " + self.key.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + self.targetPath + "'"
         self.cmd.start()
 
         self.refresh()
-        return fin_path
 
     def _asdict(self) -> dict:
         self.refresh()
         data = {
             "state": self.state.name,
             "mode": self.mode.name,
+            "keepOrigFile": self.keepOrig,
+            "newFilePath": self.targetPath,
             "key": self.key._asdict(),
             "cmd": self.cmd._asdict()
         }
