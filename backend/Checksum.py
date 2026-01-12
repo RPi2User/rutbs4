@@ -57,7 +57,7 @@ class Checksum:
             return
 
     def create(self):
-        if self.state != ChecksumState.IDLE or self.type == ChecksumType.NONE:
+        if self.state not in {ChecksumState.IDLE, ChecksumState.MISMATCH} or self.type is ChecksumType.NONE:
             return
 
         self.state = ChecksumState.CREATE
@@ -120,6 +120,7 @@ class Checksum:
         data = {
             "type" : self.type.name,
             "state" : self.state.name,
+            "path": self.file_path,
             "value" : self.value,
         }
 
