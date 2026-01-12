@@ -6,7 +6,7 @@ from typing import List
 
 from backend.Checksum import Checksum, ChecksumState
 from backend.Command import Command
-from backend.Encryption import Encryption, Key
+from backend.Encryption import E_State, Encryption, Key
 
 DEBUG: bool = True
 
@@ -218,6 +218,7 @@ class File:
         self.state = FileState.REMOVING
         try:
             os.remove(self.path.path)    # TODO Check if this blocks!
+            self.refresh()
         except PermissionError:
             self.state_msg.append("[ERROR] Deletion failed, permisson error occured '" + str(self.path) + "'")
             raise
@@ -249,7 +250,7 @@ class File:
 
         if self.state in {FileState.ENCRYPT, FileState.DECRYPT}:
             self.encryption_scheme.cmd.wait()
-            self.encryption_scheme.refresh() # BUG MOVE to self.refresh()!!!
+            self.refresh()
             return
 
         if self.state in {FileState.VALIDATING, FileState.CKSUM_CALC}:
@@ -272,8 +273,14 @@ class File:
             try:
                 self.path.validate()    # Validate Path
             except FileNotFoundError:   # Set flags
-                self.size = -1
                 self.state = FileState.REMOVED
+                self.size = -1
+
+                if not self.encryption_scheme.keepOrig:
+                    self.state = FileState.IDLE
+                    self.path.path = self.encryption_scheme.targetPath
+                    self.path.update()
+                    self.readSize()
                 return
 
         if self.state is FileState.CKSUM_CALC:
@@ -305,6 +312,26 @@ class File:
                     self.state = FileState.ERROR
                     return
 
+        if self.state in {FileState.ENCRYPT, FileState.DECRYPT}:
+            self.encryption_scheme._asdict()
+
+            match self.encryption_scheme.state:
+                case E_State.IDLE:
+                    self.state = FileState.IDLE
+                    self.readSize()
+
+                case E_State.ERROR:
+                    self.state = FileState.ERROR
+                    self.state_msg.append("[ERROR] Encrypt/Decrypt failed with unkown reason")
+                    return
+
+            if self.encryption_scheme.keepOrig:
+                self.path.path = self.encryption_scheme.targetPath
+                self.path.update()
+                self.readSize()
+            else:
+                self.remove()
+
     def _asdict(self) -> dict:
         self.refresh()
         data = {
@@ -327,29 +354,35 @@ class File:
     def setChecksum(self, c: Checksum) -> None:
         self.cksum = c
         self.cksum.cmd.filesize = self.size
-        if len(self.cksum.file_path) == 0:
-            self.cksum.file_path = self.path.path
 
     def createChecksum(self) -> None:
+        if self.cksum.file_path != self.path.path:
+            self.cksum.file_path = self.path.path
+
         if self.state is FileState.IDLE:
-            self.cksum.create() # start the checksumming process
             self.state = FileState.CKSUM_CALC
+            self.cksum.create() # start the checksumming process
 
     def validateIntegrity(self, validationTarget: str) -> None: 
+        if self.cksum.file_path != self.path.path:
+            self.cksum.file_path = self.path.path
+
         self.state = FileState.VALIDATING
         self.cksum.validate(validationTarget)
 
 # --- ENCRYPTION --------------------------------------------------------------
 
-    def decrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path.path = encryption_scheme.decrypt(self.path.path)
+    def decrypt(self) -> None:
+        if self.state is FileState.IDLE:
+            self.state = FileState.DECRYPT
+            self.encryption_scheme.decrypt(self.path.path)
 
-    def encrypt(self, encryption_scheme: Encryption, keepOrig: bool = True) -> None:
-        self.encryption_scheme = encryption_scheme
-        self.path.path = encryption_scheme.encrypt(self.path.path)
+    def encrypt(self) -> None:
+        if self.state is FileState.IDLE:
+            self.state = FileState.ENCRYPT
+            self.encryption_scheme.encrypt(self.path.path)
 
-# === INTERNAL METHODS ========================================================
+# === INTERNAL METHOD =========================================================
 
     def readSize(self) -> None:
         self.cmd.reset()
