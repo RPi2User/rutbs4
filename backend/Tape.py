@@ -73,21 +73,21 @@ class Tape():
 
     #### === PARAMETER ========================================================
 
-    | Tape.            | Type      | Description                                    |
-    |------------------|-----------|------------------------------------------------|
-    | lto_version      | E_LTOv    | Enum for the LTO Version, use NONE for Custom  |
-    | native_capacity  | E_LTO_Cap | Enum for current Capacity, NONE for Custom     |
-    | write_protect    | bool      | Prevents tape of being over-written            |
-    | begin_of_tape    | bool      | runtime parameter to keep track of rewinding   |
-    | state            | E_Tape    | Enum for basic state machine                   |
-    | blocksize        | str       | Allows different blocksizes                    |
+    | Tape.            | Type   | Description                                    |
+    |------------------|--------|------------------------------------------------|
+    | lto_version      | E_LTOv | Enum for the LTO Version, use NONE for Custom  |
+    | native_capacity  | int    | Enum for current Capacity, NONE for Custom     |
+    | write_protect    | bool   | Prevents tape of being over-written            |
+    | begin_of_tape    | bool   | runtime parameter to keep track of rewinding   |
+    | state            | E_Tape | Enum for basic state machine                   |
+    | blocksize        | str    | Allows different blocksizes                    |
 
     """
 
     def __init__(self, hardware_id: str, blocksize: str = "256K")-> None:
 
         self.lto_version: E_LTOv = E_LTOv.NONE
-        self.native_capacity: E_LTO_Cap | int = E_LTO_Cap.NONE
+        self.native_capacity: int = 0
         self.write_protect: bool = True
         self.begin_of_tape: bool = False
         self.state: E_Tape = E_Tape.NO_TAPE
@@ -108,7 +108,7 @@ class Tape():
                 self.state = E_Tape.ONLINE
 
         self.lto_version = E_LTOv(_lto_version)
-        self.native_capacity = E_LTO_Cap[self.lto_version.name]
+        self.native_capacity = E_LTO_Cap[self.lto_version.name].value
 
     def _asdict(self) -> dict:
         data = {

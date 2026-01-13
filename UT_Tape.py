@@ -1,7 +1,7 @@
 import unittest
 
 # Module imports
-from backend.Tape import E_LTO_Cap, E_LTOv, E_Tape, Tape
+from backend.Tape import E_LTOv, E_Tape, Tape
 
 class UT_Tape(unittest.TestCase):
 
@@ -15,16 +15,14 @@ class UT_Tape(unittest.TestCase):
 
         try:
             self.assertEqual(t.lto_version, E_LTOv.LTO_3)
-            self.assertEqual(t.native_capacity, E_LTO_Cap.LTO_3)
+            self.assertEqual(t.native_capacity, 300000000000)
             self.assertEqual(t.write_protect, False)
             self.assertEqual(t.begin_of_tape, False)
             self.assertEqual(t.state, E_Tape.ONLINE)
-            self.assertEqual(t.native_capacity.value, 300000000000) # type: ignore
             self.assertEqual(t.blocksize, "256K")
 
             self.assertIsInstance(t, Tape)
             self.assertIsInstance(t.lto_version, E_LTOv)
-            self.assertIsInstance(t.native_capacity, E_LTO_Cap)
             self.assertIsInstance(t.state, E_Tape)
 
         except AssertionError:
@@ -39,15 +37,13 @@ class UT_Tape(unittest.TestCase):
 
         try:
             self.assertEqual(t.lto_version, E_LTOv.LTO_8)
-            self.assertEqual(t.native_capacity, E_LTO_Cap.LTO_8)
+            self.assertEqual(t.native_capacity, 12000000000000)
             self.assertEqual(t.write_protect, True)
             self.assertEqual(t.state, E_Tape.WRITE_PROTECT)
-            self.assertEqual(t.native_capacity.value, 12000000000000) # type: ignore
             self.assertEqual(t.blocksize, "1G")
 
             self.assertIsInstance(t, Tape)
             self.assertIsInstance(t.lto_version, E_LTOv)
-            self.assertIsInstance(t.native_capacity, E_LTO_Cap)
             self.assertIsInstance(t.state, E_Tape)
 
         except AssertionError:
@@ -70,7 +66,6 @@ class UT_Tape(unittest.TestCase):
 
             self.assertIsInstance(t, Tape)
             self.assertIsInstance(t.lto_version, E_LTOv)
-            self.assertIsInstance(t.native_capacity, int)
             self.assertIsInstance(t.state, E_Tape)
 
         except AssertionError:
