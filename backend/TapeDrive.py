@@ -311,7 +311,7 @@ class TapeDrive:
         self.path = path
         self.generic_path = generic_path
         self.drive_override = drive_override
-        self.blocksize = blocksize      # TODO: (if i create a config file...) Make default blocksize parameter
+        self.blocksize = blocksize
         self.file = None
         self._refresh()
 
