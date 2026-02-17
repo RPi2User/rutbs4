@@ -12,8 +12,7 @@ DEBUG: bool = True
 
 class FilePath():
 
-    """
-    #### === FILEPATH =========================================================
+    """#### === FILEPATH =========================================================
     This Class has those different variables for dynamic path management.  
     Example File: `/opt/project/to_tape/backup.img`  
     Context: `/opt/project` (current "./" directory)

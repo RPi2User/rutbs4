@@ -48,6 +48,7 @@ class E_State(Enum):
     ERROR = 3
 
 class E_Mode(Enum):
+    NONE = 0        # TODO Implement UnitTest for this option (so nothing breaks >.<)
     AES128CBC = 1
     AES256CBC = 2
     AES128CTR = 3

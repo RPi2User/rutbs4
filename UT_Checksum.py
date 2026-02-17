@@ -1,7 +1,7 @@
 import unittest
 
 # Module imports
-from backend.Checksum import Checksum, ChecksumState, ChecksumType
+from backend.Checksum import ChecksumState, ChecksumType
 from backend.File import File, FileState
 
 class UT_Checksum(unittest.TestCase):
