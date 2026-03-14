@@ -3,6 +3,49 @@ A Process can Schedule a Job just by providing the Command Object.
 Each Job will get wrapped automagically.
 When the first Job gets queried the Scheduler will start the worker thread.
 
+## Dependency Handling:
+
+TODO: Translate / Refactor
+
+Idee ist, dass man erstmal alle Entries soweit der Queue hinzufügt.
+Beim Aufruf von Job.Add() muss spezifiziert werden, ob dieser Eintrag eine Abhängigkeit hat.
+Standartmäßig hat ein Befehl keine Abhängikeit.
+
+Wenn der Entry eine Dependency hat, so ist der Job erstmal noch nicht vollständig initialisiert.
+
+Der Job ist dann initialisiert, wenn ein Entry angefügt wird welcher keine Abhängigkeit hat, aber eine Abhängigkeit für einen anderen Prozess darstellt.
+Also wenn der Entry ein Blatt des Abhängigkeitbaums darstellt.
+
+Kurz zum Baum:
+
+Prozess A: Stammprozess. Dieser wird als erstes initialisiert
+
+_entryA  :str = Job.Add(Command("echo A"), needsDependency = True)
+_entryB  :str = Job.Add(Command("echo B"), needsDependency = True, fulfills = _entryA)
+_entryC1 :str = Job.Add(Command("echo c1"), needsDependency = True, fulfills = _entryB)
+_entryC2 :str = Job.Add(Command("echo c2"), needsDependency = True, fulfills = _entryB)
+_entryC3 :str = Job.Add(Command("echo c3"), needsDependency = True, fulfills = _entryB)
+_entryD : str = Job.Add(Command("echo D"), needsDependency = False, fulfills = {_entryC1, _entryC2, _entryC3})
+
+Problem: Wir wollen A ausühren.
+
+Ausführung:
+
+START(D)
+WAIT(D) -> D ist fertig
+
+START(C1)
+START(C2)
+START(C3) -> C* läuft parallel
+WAIT(C1, C2, C3)
+
+START(B)
+WAIT(B)
+
+START(A)
+IDLE.
+
+
 ## ThreadLimit := 1
 
 Job works on "First Come, First Serve" unless a Childprocess can be started.

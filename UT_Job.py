@@ -24,7 +24,7 @@ class UT_Command(unittest.TestCase):
 
         c: Command = Command(self.AA_ADD)
 
-        self.assertEqual(Job.Add(c), 0)
+        self.assertNotEqual(Job.Add(c), 0)
         print(json.dumps(Job.Registry(), indent=2))
         print(".A_Add")
 

@@ -8,21 +8,31 @@ import uuid
 from backend.Command import Command
 
 class EntryState(Enum):
+    INIT = -1
     RUNNING = 0
     COMPLETED = 1
     QUEUED = 2
-    WAITING_FOR_PARENT = 3
+    READY4EXEC = 3
+    WAITING_FOR_PARENT = 4
 
 class Entry():
 
-    def __init__(self, command: Command):
+    def __init__(self, command: Command, needsDependency: bool = False, fulfills: str = ""):
         self.command: Command = command
         self.id: str = str(uuid.uuid4())
-        self.state: EntryState = EntryState.QUEUED
-        self.dependsOn: str = ""
+        self.state: EntryState = EntryState.INIT
+        self.needsDependency: bool = needsDependency
+        self.fulfills: str = fulfills
 
     def _asdict(self) -> dict:
-        return {self.id: self.command._asdict()}
+        _out : dict = {
+            "id": self.id,
+            "state": str(self.state.name),
+            "dependsOnProcess" : str(self.needsDependency),
+            "fulfills" : self.fulfills,
+            "command": self.command._asdict(),
+        }
+        return {"Entry": _out}
 
 class Job():
 
@@ -31,12 +41,25 @@ class Job():
     queue: List[Entry] = []
     limit: int = DEFAULT_THREADLIMIT
 
-    
-
     @staticmethod
-    def Add(_cmd: Command) -> str:
-        Job.queue.append(Entry(_cmd))
+    def Add(_cmd: Command, needsDependency: bool = False, fulfills: str = "") -> str:
+        _e: Entry = Entry(_cmd, needsDependency, fulfills)
+        Job.queue.append(_e)
+        if not needsDependency:
+            _e.state = EntryState.READY4EXEC
+            if fulfills != "":
+                Job._checkDepTree(fulfills)
+
+        # This exception is purely optional, might fuck up the code at some point
+        if Job.queue[-1].id != _e.id:
+            raise RuntimeError("[ERROR] JOB: - DATA CORRUPTION - Queue malformed, flush required!")
+
         return Job.queue[-1].id
+
+    @staticmethod # private
+    def _checkDepTree(fulfillant: str) -> None:
+        # this clears INIT state for dependency tree
+        pass
 
     @staticmethod
     def Get(uuid: str) -> dict:
