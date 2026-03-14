@@ -1,4 +1,5 @@
 from enum import Enum
+import json
 import threading
 import os
 import time
@@ -22,17 +23,21 @@ class Entry():
         self.id: str = str(uuid.uuid4())
         self.state: EntryState = EntryState.INIT
         self.needsDependency: bool = needsDependency
+        self.dependsOn: str = ""
         self.fulfills: str = fulfills
 
     def _asdict(self) -> dict:
         _out : dict = {
             "id": self.id,
             "state": str(self.state.name),
-            "dependsOnProcess" : str(self.needsDependency),
+            "dependsOn" : self.dependsOn,
             "fulfills" : self.fulfills,
             "command": self.command._asdict(),
         }
         return {"Entry": _out}
+
+    def __str__(self) -> str:
+        return json.dumps(self._asdict(), indent=2)
 
 class Job():
 
@@ -44,11 +49,15 @@ class Job():
     @staticmethod
     def Add(_cmd: Command, needsDependency: bool = False, fulfills: str = "") -> str:
         _e: Entry = Entry(_cmd, needsDependency, fulfills)
-        Job.queue.append(_e)
+
         if not needsDependency:
             _e.state = EntryState.READY4EXEC
             if fulfills != "":
                 Job._checkDepTree(fulfills)
+
+
+        # --- END ----------------
+        Job.queue.append(_e)
 
         # This exception is purely optional, might fuck up the code at some point
         if Job.queue[-1].id != _e.id:
@@ -62,10 +71,10 @@ class Job():
         pass
 
     @staticmethod
-    def Get(uuid: str) -> dict:
+    def Get(uuid: str) -> Entry:
         for entry in Job.queue:
             if entry.id == uuid:
-                return entry._asdict()
+                return entry
         return {}
 
     @staticmethod
@@ -74,6 +83,7 @@ class Job():
 
     @staticmethod
     def Registry() -> dict:
+        FIXME
         data = {}
         for entry in Job.queue:
             data.update(entry._asdict())
