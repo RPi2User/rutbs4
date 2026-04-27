@@ -159,9 +159,9 @@ class Command:
             try:
                 os.kill(self.pid, signal.SIGTERM)
                 self.exitCode = self.process.wait()
-                self.status()
             except Exception as e:
                 self.status_msg.append(f"[ERROR] killing process: {str(e)}")
+        self.status()
 
     def cleanup(self) -> None:
         if self.process and not self.closed:
