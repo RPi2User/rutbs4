@@ -39,15 +39,44 @@ class Entry():
     def __str__(self) -> str:
         return json.dumps(self._asdict(), indent=2)
 
+class JobState(Enum):
+    ERROR = -3
+    FLUSH = -2
+    EMPTY = -1
+    IDLE = 0
+    WORKING = 1
+
 class Job():
 
+    """
+    This class does all Scheduling in a List type.
+    Each List Entry / Job Entry can have a dependency Tree.
+    This Scheduler prioritizes Entry without Dependencies more than Entry with Dependencies.
+    This Scheduler prioritizes Entries that fulfills dependency for completed Entries.
+    When all Entries are atomic, this scheduler works after "first come, first serve"
+    """
+
     DEFAULT_THREADLIMIT: int = os.cpu_count() or 1
+    state: JobState = JobState.EMPTY
 
     queue: List[Entry] = []
     limit: int = DEFAULT_THREADLIMIT
 
     @staticmethod
     def Add(_cmd: Command, needsDependency: bool = False, fulfills: str = "") -> str:
+        """
+        This adds an Entry `e` to Job.queue.
+        If `fulfills=q` is specified e gets noted in q.dependsOn=e.  
+        """
+
+        if Job.state is JobState.FLUSH:     # flush gets set when Job.flush(killRunning=False) gets called 
+            Job.Flush(killRunning=False)    # remove old & completed jobs
+            if Job.state is JobState.FLUSH:
+                return                      # prevent appending when queue still needs to be flushed
+
+        if len(Job.queue) == 0:
+            Job.state = JobState.EMPTY      # this will clear any error States
+
         _e: Entry = Entry(_cmd, needsDependency, fulfills)
 
         if not needsDependency:
@@ -61,13 +90,18 @@ class Job():
 
         # This exception is purely optional, might fuck up the code at some point
         if Job.queue[-1].id != _e.id:
+            Job.state = JobState.ERROR
             raise RuntimeError("[ERROR] JOB: - DATA CORRUPTION - Queue malformed, flush required!")
+
+        Job.state = JobState.IDLE
 
         return Job.queue[-1].id
 
     @staticmethod # private
     def _checkDepTree(fulfillant: str) -> None:
-        # this clears INIT state for dependency tree
+        if Job.state in {JobState.ERROR, JobState.FLUSH}:
+            return
+
         pass
 
     @staticmethod
@@ -75,18 +109,28 @@ class Job():
         for entry in Job.queue:
             if entry.id == uuid:
                 return entry
-        return {}
+        raise LookupError("Entry not found!")
 
     @staticmethod
     def Flush(killRunning: bool = True) -> None:
-        pass
+        Job.state = JobState.FLUSH
+
+        if killRunning:
+            for entry in Job.queue:
+                entry.command.kill()
+            Job.queue.clear()
+            Job.state = JobState.EMPTY 
+            return
+
+        for e in Job.queue:
+            if e.state is not EntryState.RUNNING:
+                Job.queue.remove(e)
 
     @staticmethod
     def Registry() -> dict:
-        FIXME
         data = {}
         for entry in Job.queue:
-            data.update(entry._asdict())
+            data.update({entry.id: entry._asdict()})
         return data
 
     @staticmethod

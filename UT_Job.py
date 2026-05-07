@@ -25,18 +25,27 @@ class UT_Command(unittest.TestCase):
         self.assertGreater(Job.limit, 0)
 
         c: Command = Command(self.AA_ADD)
+        
+        p1: str = Job.Add(c)
+        p2: str = Job.Add(c)
 
-        self.assertNotEqual(Job.Add(c), 0)
-        self.assertNotEqual(Job.Add(c), 0)
-        #self.assertNotEqual(Job.Add(c), 0)
+        self.assertNotEqual(p1, 0)
+        self.assertNotEqual(p2, 0)
+        self.assertNotEqual(p1, p2)
 
-        sleep(.1)
+        try:
+            Job.Get("---")
+        except LookupError:
+            self.assertTrue(True)
 
+        self.assertEqual(len(Job.Registry()), 2)
+        Job.Flush()
         print(json.dumps(Job.Registry(), indent=2))
+        self.assertEqual(len(Job.Registry()), 0)
+
         print(".A_Add")
 
     def test_AB_DEP1_1(self) -> None:
-        return
         """
         This checks a 1:1 dependency tree.
         Process A can only be executed if B is done.
