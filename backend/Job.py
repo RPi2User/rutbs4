@@ -15,6 +15,7 @@ class EntryState(Enum):
     QUEUED = 2
     READY4EXEC = 3
     WAITING_FOR_PARENT = 4
+    ORPHAN = 5
 
 class Entry():
 
@@ -66,7 +67,8 @@ class Job():
     def Add(_cmd: Command, needsDependency: bool = False, fulfills: str = "") -> str:
         """
         This adds an Entry `e` to Job.queue.
-        If `fulfills=q` is specified e gets noted in q.dependsOn=e.  
+        If `fulfills` is specified e gets noted in dependent.dependsOn=e.fullfills  
+        Idea is that you can first add all your entries and then it'll solve the tree automatically
         """
 
         if Job.state is JobState.FLUSH:     # flush gets set when Job.flush(killRunning=False) gets called 
@@ -78,31 +80,65 @@ class Job():
             Job.state = JobState.EMPTY      # this will clear any error States
 
         _e: Entry = Entry(_cmd, needsDependency, fulfills)
+        _e.state = EntryState.QUEUED    # if all fine queue this thing
 
-        if not needsDependency:
-            _e.state = EntryState.READY4EXEC
-            if fulfills != "":
-                Job._checkDepTree(fulfills)
+        if len(_e.fulfills) > 0:
+            Job._adopt(_e)              # if this asks for an child, it'll get one :3
 
+        if needsDependency:
+            _e.state = EntryState.ORPHAN    # if someone needs a parent it needs to be adopted
+
+        if len(fulfills) > 0 and not needsDependency:
+            Job._checkDepTree(fulfills)     # this is the last element from that dependency list
 
         # --- END ----------------
         Job.queue.append(_e)
 
-        # This exception is purely optional, might fuck up the code at some point
         if Job.queue[-1].id != _e.id:
             Job.state = JobState.ERROR
             raise RuntimeError("[ERROR] JOB: - DATA CORRUPTION - Queue malformed, flush required!")
 
-        Job.state = JobState.IDLE
-
         return Job.queue[-1].id
 
     @staticmethod # private
-    def _checkDepTree(fulfillant: str) -> None:
+    def _adopt(parent: Entry):
+        orphan: Entry = Job.Get(parent.fulfills)    # this returns the orphan
+
+        if orphan.state is not EntryState.ORPHAN:
+            raise RuntimeError("[ERROR] JOB QUEUE MALFORMED, Orphan-Process already adopted by " + orphan.dependsOn)
+
+        orphan.dependsOn = parent.id
+        orphan.state = EntryState.WAITING_FOR_PARENT
+
+    @staticmethod # private
+    def _checkDepTree(fulfills: str) -> None:
         if Job.state in {JobState.ERROR, JobState.FLUSH}:
             return
 
-        pass
+        return
+        """
+        Also:
+        - evtl muss ich den müll rekursiv lösen ...
+
+        Wir kommen rein mit:
+            - _e ist die LETZTE dependency für ???
+            - _e zeigt auf das vorletzte element in der Kette
+
+        Nun müssen wir die Dependencies auflösen.
+            1. wir suchen nach der UUID von dem String 
+            2. 
+        """
+
+
+        dependent: Entry = Entry(Command(""))
+
+
+        try:
+            dependent.dependsOn = Job.Get(fulfillant).id    # this is handled THAT (weird) way to check whether the fulfillant is known (-good)
+        except LookupError:
+            raise LookupError("ERROR: Cannot solve dependency, fulfillant " + fulfillant + " not found!")
+
+        dependent.state = EntryState.WAITING_FOR_PARENT
 
     @staticmethod
     def Get(uuid: str) -> Entry:

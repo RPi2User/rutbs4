@@ -11,7 +11,8 @@ Idee ist, dass man erstmal alle Entries soweit der Queue hinzufügt.
 Beim Aufruf von Job.Add() muss spezifiziert werden, ob dieser Eintrag eine Abhängigkeit hat.
 Standartmäßig hat ein Befehl keine Abhängikeit.
 
-Wenn der Entry eine Dependency hat, so ist der Job erstmal noch nicht vollständig initialisiert.
+Wenn der Entry eine Dependency hat, so kann dieser Job noch nicht ausgeführt werden (state ← ORPHAN).
+Der Entry ist solange ein Waise bis es einen Job gibt welcher ein Elternteil wird / fulfills
 
 Der Job ist dann initialisiert, wenn ein Entry angefügt wird welcher keine Abhängigkeit hat, aber eine Abhängigkeit für einen anderen Prozess darstellt.
 Also wenn der Entry ein Blatt des Abhängigkeitbaums darstellt.
