@@ -498,52 +498,52 @@ class TapeDrive:
         self._refresh()
         if self.state != TD_State.IDLE:
             return
-        
+
         self.file = file
 
         self.state = TD_State.WRITE
         self.command = Command(
             "dd if='" + self.file.path.path + "' of='" + self.path + "' " +
-            "iflag=fullblock status=none bs=" + self.blocksize, 
+            "iflag=fullblock status=none bs=" + self.blocksize,
             filesize=self.file.size)
-        
-        self.command.start()
+
         self.tape.begin_of_tape = False
 
-    def writeTOC(self, tableOfContent: str):
+    def writeTOC(self, tableOfContent: "TableOfContent"):
         # This writes TOC as first File on Tape
         self._refresh()
-        
+
         if self.state != TD_State.IDLE or not self.tape.begin_of_tape:
             return
-        
+
         self.state = TD_State.WRITE_TOC
 
         toc_uuid : str = str(uuid.uuid4())
         toc_filename : str = "toc_" + toc_uuid + ".json"
         toc_path: str = "/tmp/" + toc_filename
-        tocfile: File = File(0, toc_path, "CONTEXT")
-        
+        tocfile: File = File(0, toc_path, "/tmp", createFile=True)
+
         try:
             with open(tocfile.path.path, 'w') as f:
-                pass
-                #f.write(json.dumps(tableOfContent._asdict(), indent=2))
+                f.write(json.dumps(tableOfContent._asdict(), indent=2))
         except PermissionError:
            raise PermissionError("Cannot write Temporary file into /tmp!")
         except:
             raise
 
+        tocfile.readSize()   # the file was empty at construction time, refresh after writing content
+
         self.command = Command(
-            "dd if='" + self.file.path.path + "' of='" + self.path + "' " +
-            "iflag=fullblock status=none bs=" + self.blocksize, 
+            "dd if='" + tocfile.path.path + "' of='" + self.path + "' " +
+            "iflag=fullblock status=none bs=" + self.blocksize,
             filesize=tocfile.size)
 
         self.command.wait()
-        
+
         if(self.command.exitCode != 0):
             self.state = TD_State.ERROR
             return
-        
+
         tocfile.remove()
         self.tape.begin_of_tape = False
 
