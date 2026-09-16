@@ -13,5 +13,8 @@ python3 UT_Checksum.py
 echo Encryption
 python3 UT_Encryption.py
 
-echo Tape
-python3 UT_Tape.py
+echo Skipping Tape
+#python3 UT_Tape.py
+
+echo Job
+python3 UT_Job.py

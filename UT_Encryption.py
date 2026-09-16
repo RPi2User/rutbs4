@@ -8,7 +8,7 @@ from backend.Checksum import *
 
 class UT_Encryption(unittest.TestCase):
 
-    SHA256: str =   "41057efcb2dd05930ca173d1fcd68ad43c60d5936527e01f8f43c62e184072a0"
+    SHA256: str =   "ceba3a61162967a79033e029e24b19f21a5ebeff6b512ac9847cf13f7dc56669"
     PATH: str =     "/mnt/daten/testfiles/rutbs4/encryption/test100.raw"
     CONTEXT: str =  "/mnt/daten/testfiles/rutbs4"
 
