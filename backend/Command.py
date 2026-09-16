@@ -1,5 +1,3 @@
-import os
-import signal
 import subprocess
 import json
 import threading
@@ -36,6 +34,7 @@ class Command:
     | `self.cmd`     | `str`              | Main command string                                        |
     | `self.running` | `bool`             | Set by `wait()` or `start()`, cleared by `self.refresh()`  |
     | `self.pid`     | `int`              | Process ID provided by `self.process`                      |
+    | `self.readers` | `List[Thread]`     | STDOUT/STDERR reader, joined by `cleanup()` before closing |
 
     **Command Results**
     | Var              | Type         | Description                  |
@@ -104,8 +103,10 @@ class Command:
         self.io_path = f"/proc/{self.pid}/io"
 
         # Get Status of Process after spawn
-        threading.Thread(target=self._read_stdout, daemon=True).start()
-        threading.Thread(target=self._read_stderr, daemon=True).start()
+        self.readers = [threading.Thread(target=self._read_stdout, daemon=True),
+                        threading.Thread(target=self._read_stderr, daemon=True)]
+        for reader in self.readers:
+            reader.start()
         self.status()
         if not self.quiet:
             print("[EXEC] " + json.dumps(self._asdict(), indent=2))
@@ -155,9 +156,9 @@ class Command:
 
     def kill(self) -> None:
         self.status()
-        if self.process:
+        if self.running:    # never signal a finished PID, the kernel may have reused it
             try:
-                os.kill(self.pid, signal.SIGTERM)
+                self.process.terminate()    # SIGTERM
                 self.exitCode = self.process.wait()
             except Exception as e:
                 self.status_msg.append(f"[ERROR] killing process: {str(e)}")
@@ -165,6 +166,8 @@ class Command:
 
     def cleanup(self) -> None:
         if self.process and not self.closed:
+            for reader in self.readers:     # read STDOUT/STDERR completely before closing
+                reader.join(timeout=1)
             self.process.stdout.close() # type: ignore
             self.process.stderr.close() # type: ignore
             self.process.wait()
@@ -228,6 +231,7 @@ class Command:
         self.running: bool = False
         self.quiet: bool = True
         self.process: subprocess.Popen = None # type: ignore
+        self.readers: List[threading.Thread] = []
 
         self.closed: bool = True
         self.didRun: bool = False
