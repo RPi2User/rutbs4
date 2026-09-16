@@ -257,7 +257,11 @@ class UT_Encryption(unittest.TestCase):
                 f.createChecksum()
                 f.wait()
 
-                self.assertNotEqual(f.cksum.value, self.SHA256)
+                if scheme == E_Mode.NONE:   # If we don't encrypt the checksum need to be the same
+                    self.assertEqual(f.cksum.value, self.SHA256)
+                else:
+                    self.assertNotEqual(f.cksum.value, self.SHA256)
+
                 self.assertEqual(f.encryption_scheme.state, E_State.IDLE)
 
                 # 3. Decrypt File

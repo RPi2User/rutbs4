@@ -86,7 +86,7 @@ class Encryption:
         # Continue IDLEing
 
     def decrypt(self, path: str) -> None:
-        if self.state != E_State.IDLE:
+        if self.state != E_State.IDLE or self.mode == E_Mode.NONE:
             return
 
         self.state = E_State.DECRYPT
@@ -100,7 +100,7 @@ class Encryption:
         self.refresh()
 
     def encrypt(self, path: str) -> None:
-        if self.state != E_State.IDLE:
+        if self.state != E_State.IDLE or self.mode == E_Mode.NONE:
             return
 
         self.state = E_State.ENCRYPT

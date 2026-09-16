@@ -6,7 +6,7 @@ from typing import List
 
 from backend.Checksum import Checksum, ChecksumState
 from backend.Command import Command
-from backend.Encryption import E_State, Encryption, Key
+from backend.Encryption import E_Mode, E_State, Encryption, Key
 
 DEBUG: bool = True
 
@@ -372,11 +372,17 @@ class File:
 # --- ENCRYPTION --------------------------------------------------------------
 
     def decrypt(self) -> None:
+        if self.encryption_scheme.mode == E_Mode.NONE:
+            return
+
         if self.state is FileState.IDLE:
             self.state = FileState.DECRYPT
             self.encryption_scheme.decrypt(self.path.path)
 
     def encrypt(self) -> None:
+        if self.encryption_scheme.mode == E_Mode.NONE:
+            return
+
         if self.state is FileState.IDLE:
             self.state = FileState.ENCRYPT
             self.encryption_scheme.encrypt(self.path.path)
