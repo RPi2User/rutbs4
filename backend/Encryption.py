@@ -77,6 +77,9 @@ class Encryption:
         if self.cmd.running:    # do nothing if status still same
             return
 
+        if not self.cmd.didRun:    # not started yet (e.g. queued for the Job scheduler)
+            return
+
         if self.state in [E_State.ENCRYPT, E_State.DECRYPT ]:
             if self.cmd.exitCode != 0:
                 self.state = E_State.ERROR
@@ -95,9 +98,6 @@ class Encryption:
 
         self.cmd.reset()
         self.cmd.cmd = self.MODE_CMD[self.mode] + "-d -iv " + self.key.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + self.targetPath + "'"
-        self.cmd.start()
-
-        self.refresh()
 
     def encrypt(self, path: str) -> None:
         if self.state != E_State.IDLE or self.mode == E_Mode.NONE:
@@ -109,9 +109,6 @@ class Encryption:
 
         self.cmd.reset()
         self.cmd.cmd = self.MODE_CMD[self.mode] + "-e -iv " + self.key.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + self.targetPath + "'"
-        self.cmd.start()
-
-        self.refresh()
 
     def _asdict(self) -> dict:
         self.refresh()

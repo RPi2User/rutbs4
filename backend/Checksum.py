@@ -63,7 +63,6 @@ class Checksum:
         self.state = ChecksumState.CREATE
         self.cmd.reset()
         self.cmd.cmd = "openssl " + self.type.name.lower() + " -r '" + self.file_path + "'"
-        self.cmd.start()
 
     def validate(self, target: str) -> None:
         if self.state not in {ChecksumState.IDLE, ChecksumState.MISMATCH}:
