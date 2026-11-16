@@ -82,7 +82,8 @@ class Job():
                            --parent FAILED-----> FAILED                 --> FAILED (exitCode != 0)
 
     Scheduling (every tick, in this order):
-        1. Tape Entries          -> the tape must never idle, one Entry per drive
+        1. Tape Entries          -> one Entry per drive, strictly in the order they were added,
+                                    so the order on tape is known before anything is written
         2. Entries feeding tape  -> e.g. checksum/encryption before a tape write
         3. Everything else       -> e.g. decrypt/verify after the tape
         Same priority: first come, first serve. CPU work is limited by `Job.limit`.
@@ -190,15 +191,19 @@ class Job():
     @staticmethod
     def _startEntries() -> None:
         running: List[Entry] = [e for e in Job.queue if e.state is EntryState.RUNNING]
-        busyDrives: set = {e.tape for e in running if e.tape}
         cpuSlots: int = Job.limit - sum(1 for e in running if not e.tape)
+
+        # A drive works strictly in queue order: only its oldest unfinished Entry may start
+        nextOnDrive: dict = {}
+        for e in Job.queue:
+            if e.tape and e.state not in Job.FINISHED:
+                nextOnDrive.setdefault(e.tape, e)
 
         ready: List[Entry] = [e for e in Job.queue if e.state is EntryState.READY4EXEC]
         for e in sorted(ready, key=Job._priority):  # sorted() is stable -> FIFO per priority
             if e.tape:
-                if e.tape in busyDrives:
+                if nextOnDrive[e.tape] is not e:
                     continue
-                busyDrives.add(e.tape)
             else:
                 if cpuSlots <= 0:
                     continue

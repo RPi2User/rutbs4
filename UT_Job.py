@@ -163,6 +163,23 @@ class UT_Job(unittest.TestCase):
         self._refreshUntilDone()
         print("F_ONE_PER_DRIVE")
 
+    def test_AI_TapeOrder(self) -> None:
+        """
+        A drive writes in the order of Job.Add(), even if a later Entry is ready first
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            log: str = os.path.join(tmp, "order.txt")
+            slow: str = Job.Add(Command("sleep 0.3"))
+            Job.Add(Command(f"sh -c 'echo 1 >> {log}'"), tape="/dev/nst0", dependsOn=slow)
+            fast: str = Job.Add(Command("sleep 0.05"))
+            Job.Add(Command(f"sh -c 'echo 2 >> {log}'"), tape="/dev/nst0", dependsOn=fast)
+
+            self._refreshUntilDone()
+            with open(log) as f:
+                self.assertEqual(f.read().split(), ["1", "2"])
+
+        print("I_TAPE_ORDER")
+
     def test_AG_FlushDone(self) -> None:
         """
         Flush(killRunning=False) removes only finished Entries
