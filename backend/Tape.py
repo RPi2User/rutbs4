@@ -108,7 +108,8 @@ class Tape():
                 self.state = E_Tape.ONLINE
 
         self.lto_version = E_LTOv(_lto_version)
-        self.native_capacity = E_LTO_Cap[self.lto_version.name].value
+        if self.lto_version.name in E_LTO_Cap.__members__:   # unknown capacity stays 0
+            self.native_capacity = E_LTO_Cap[self.lto_version.name].value
 
     def _asdict(self) -> dict:
         data = {

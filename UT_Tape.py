@@ -74,5 +74,14 @@ class UT_Tape(unittest.TestCase):
 
         print("C_CUSTOM")
 
+    def test_AD_UnknownCapacity(self) -> None:
+        "LTO11 has no known capacity yet, the tape is still usable"
+        t: Tape = Tape("b810")
+
+        self.assertEqual(t.lto_version, E_LTOv.LTO_11)
+        self.assertEqual(t.native_capacity, 0)
+        self.assertEqual(t.state, E_Tape.ONLINE)
+        print("D_UNKNOWN_CAPACITY")
+
 if __name__ == '__main__':
     unittest.main()
