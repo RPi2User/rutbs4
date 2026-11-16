@@ -1,0 +1,23 @@
+{
+  "_comment": "Example of the slim TOC proposal as it would be stored. The body is encrypted with the cipher named in header.body_cipher (openssl aes-256-ctr -pbkdf2); base64 is only the text form of the encrypted bytes, because JSON cannot hold binary data. Passphrase of this example: correct horse battery staple",
+  "header": {
+    "format": "rutbs",
+    "version": 16384,
+    "fingerprint": "1f5585a4-95d6-4304-bd04-df67d5553521",
+    "state": "WRITING",
+    "created": "2026-11-16T17:30:00",
+    "hostname": "florian-main",
+    "blocksize": "256K",
+    "drive": {
+      "vendor": "IBM",
+      "model": "ULTRIUM-TD4",
+      "serial": "EXAMPLE001"
+    },
+    "tape": {
+      "lto-version": "LTO_4",
+      "native_capacity": 800000000000
+    },
+    "body_cipher": "AES256CTR"
+  },
+  "body": "U2FsdGVkX1/ChcEP0rRX91UAqZurknEjF/ciBqgeFEsGZV9nhcpi495UhupOJjpO5x0Ki53zvhRI7YIvlKdYciXG8A6rvrbiANgyYRb+4jUtb3fu1hy0AHSfxvQumTQNf2e/cE3A0okukp/hPUo1jNVlK/v76JV1TcvJaeRsX3wl9G+v4XcWndS3DHfYvQt1p1V3MOzAIwtOJ/FfNSq/UbXE7Gog2wCQdsJ/53TkK3LKRKuu1aFPyod6/rFLxPe4B8h1A7xY7rBmTqki3P+c+TVcwA6mUwsd28GOzhIMQ5L42RpNEk8+nSzvDM3YA/sIlZK4aj8fbVU/6VqZcpUBrIY9OSKSw4gDw0TP8FcAfj9xQ3Y/J28naVC3IztBejtTr8xnyoZYeVK9kTJW4m7zlCaHTGOslJAKo5LIiJRzV7dX8OGzlzx+T66HN/GVF+xxCGzBlQqW0iz+XCbJRNo25OrLYsfRt2+GAd576Sa+VC3P5kUI6gqF8Ed/6HJ/CK83/uKg7DlSSGlYZOvxnZjbh3V4kS951QUWj0MBTz0FTZqB/3EoVyw0oGGyd2Yja/vwlObwXFmb7JgnNoeBW8ztMLsB3pSVIV6xyrkiaRXylmkrCyHuHBvbwGlto2zgVIxi6EWlJ7Mo6EdrWfAGG/H6GBy62hAfRsvibtDqb9I6WSCl2SleN7sHKKqwLyEcmEZ5ffqVKqHxkulqH1BG5JkikA5Zw707ZUBSxVVqtkDM6E5DbWe1qWvUPHMWQnC/DJ7REiCMtG2uQDwGJ9ACSJT0Use5T/1l4hevbBtdcaduFRzibF5iyycIDQpjnI6lzsfbd0Z88+4B96kKkYSI3bIEV0Bm5OvcPCbDMO8qYbvtUnw44FOWS2mNRdd3ACSXrHNQwHfFirZ6v/VdSct+uzqx3+dQ5K5Fs59dnkL3MGzKXmcxR8jz1qHmhr6IzvyQjvyk0ExbiBOO0SFzM8JilTzFN9+pi2XKeFWKCF3m9rdwwJ3KLu3NlHEiexrBScwuwyhTOPFAmqluX0EzJadFKe5L6dha0SQXxmLHuK7tuceFSpTWBCYNEvoYNy6iGxuG7JNuhtMdApqmFHdYnNDIVfKUDovT+ewEC8qUwwfOfNPxRhwJ9bV2+aTQ3B6pnfh70cjeIqjAYCs9NdBHMyVCd/N2Fp6sjXQPNYKyfdIHVXjHFNnG9X1RuvfzYvQgTUruKmJE0Zopdu4JD1SLMANA/rvh1Vpdj5xRe2PsJZKINHThmiOHeUzCcGxOSMRJVjHl4np+RWqOpJoYNHXGitMvvJNSH8v2kAKHOhAfcCJRz/0jxU25uidSJbTuT9pz7uddW9ypz3X0vi26bjDbJVMeL9LsdbUt8s8D7N6Pr36VzoD8KrsqQJ6sbM0I8gHhcszNyNL+M+6KW3A6rodz6nLVFrL4FPzIriIEUYH5tyuWWz4UFrFHh4teMzJTcXxTNpNwryAjQKaeW1B5PkiBDUSI+sysni/Amk4HUZMdsq/Jgz8c3zsoJSDhGU4TaS+GAtCrIOPcf6t151wCiMpvwvkiBUGmnCWk1zMwdFWVLMH0/uI9ZIMs9wCfMBgG4A7Ru5Fm4dPEQVU75bwABUjem2/b4Wwu0/s27PY8VHBF562Ia93z+jyQTSr8QXwSCbdz3sOdnEhroDJO+rz/6xwcbHPA0GES3O8LbVApiU2/2MUA7ndnyjLRnQkOOQme+mPN+8XGbb5EYAmPMTDN9oho3/YVAB59zad2IHpYlUbYPUn4aK9oX/IeIhBmeswUgHto6j2nCRoW/9BUrwARG7ml39IvoTbRvyOF9cju9kpl5VY1elUzU0vEhIPQpT/etCqF6QkW8jRgPDv2F6tKi5D6KOQZZCcUKhRpdYEFdocb9LYGgzKtuviTctR4FAgiqZLoUbc2VBgAbuztYlFT1QmXWv/ZQtyJ2HKjW+4hz2lrHfPrcQwqHT4iuij0vRrF+ctAUwCJ/E7NlAXmnkKH42C7KlJnJRLNwgxWktqRkWDGgwpyO0ZWD/T1i6fl5JHry9YLh+u0L4sjLNiXgrkcqwugujVJ1gJ7x4ETEoklYR9uEeIsm7VKIYA+S1hAI9eGzA1P0WSHppDvcSC48gXbCsYqFoiznL4HVwrITrBt4t4HWewFyARf36Q9O/w0v3QMtLPFKxfugHlShnG4zcdaKVL2GjA/0oJfpULe3tAl9d+4qDRlZw25TaE7rystRfMQI7qpZbHZkdbi2YWOE0i+QL6NXMTtDr9+EfiNCr+Zd3sKJ+Xt5NgEzfZvrr2S0rWW9esZKzWq+Y5tAv2iQceUhaIHioIrUPkSiIrsKaB/qQta1aZd0Rsqo34EMYfXmNkOqrTeHZQc8tn4e8/wxy6lxM/4OjuougoshfxF4k53bnX6UJEyHaGMj06t5rLA3LJDx/B9TokXWmj9GqH88DsPu1m5kBbKx0mj5/vMyqsPLPaKTuEebbUu22HogNDlPXP9WuCT047O5Yk0j3k0efaWEIjKAKe0IJL6NzMrUrC7dLQwrpUZ0cKNOGSOzl1RyAZ7Y83Bf+Vz8slYV0bBnfiMJ26tD8dkG2ayLhxAeX8iZjVqCUQr11Gd/F8Qi4o1plnDae7zkElJUP1nUSl7HhjZhFfiuzFJMcan1jYDScltzqtIdQrbiJ8wrMCeX86pu8E0WQFvS8g56ABbIagUq8fc4X9C5vdIymS5xMkst+IYJswLFyXWKmFw//u57T8v/P6IOUjkfgs8NJEnYXDHifolm2sJIEav6ntDW3+XSDfKDQnteV+JEafKyyTKW/bRKc+GMcp9q/GcY/UJkxGb7bzMXUqL0wT/Rp0RTqnkUm2BNCggmIOoisIZa9vktuGkxwAvON40IvFOIAjqVNGp6yeomDFEpH3XAMkqNG2yKZdAxEiLDGrshrCmwzN/eAXJbtn17/ZdcIH41XaA87Qh12L3IJWhTmJ0FaXwKjIvoU0ctG5nqQkgrA8N6uQxTITl1dqlt7Ku5WQlYAo2prQQgdRucuBYE37yVOJVpIYyISkoCjS0qjTNoieT574X/OUA1VFOECOSBUm/1z5fTlh42ZVMzoLZf9QrsFhD3kYkHgIjadrEbCaU/RMHLQiahh1IgxBBc5J7U/Z0YBqP7XHqTFLM"
+}

@@ -1,0 +1,1020 @@
+{
+  "header": {
+    "timeStamp": "2026-11-16 17:29:59.531388",
+    "hostname": "florian-main",
+    "threadCount": 16,
+    "tapeDrive": {
+      "environment": {
+        "path": "/dev/nst0",
+        "generic_path": ""
+      },
+      "drive_info": {
+        "vendor": "IBM",
+        "model": "ULTRIUM-TD4",
+        "serial": "EXAMPLE001"
+      },
+      "override": {
+        "active": true
+      },
+      "state": "IDLE",
+      "blocksize": "256K",
+      "tape": {
+        "current_state": "ONLINE",
+        "lto-version": "LTO_4",
+        "writeProtect": false,
+        "beginOfTape": false,
+        "blocksize": "256K",
+        "native_capacity": 800000000000
+      },
+      "command": {
+        "command": null
+      },
+      "current_file": {
+        "file": null
+      }
+    }
+  },
+  "rootFolder": {
+    "path": "/mnt/daten/VMs",
+    "encryption_type": "AES256CTR",
+    "files": [
+      {
+        "id": 0,
+        "state": "IDLE",
+        "messages": [],
+        "size": 137460187136,
+        "path": {
+          "path": "/mnt/daten/VMs/file-6.qcow2",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-6.qcow2",
+          "name": "file-6.qcow2",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-6.qcow2'",
+          "pid": 224651,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224651/io",
+          "io": [
+            "rchar: 4868",
+            "wchar: 0",
+            "syscr: 9",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "137460187136"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-6.qcow2",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-6.qcow2'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 137460187136,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "f396380f271300293559d1ef2a0e7ede529a505615a17d9fc672cec54366324e",
+            "iv": "6afc4ca9f0df78d4f3c41b134266196e",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224648,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224648/io",
+              "io": [
+                "rchar: 3300",
+                "wchar: 0",
+                "syscr: 7",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "6afc4ca9f0df78d4f3c41b134266196e"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 137460187136,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      },
+      {
+        "id": 1,
+        "state": "IDLE",
+        "messages": [],
+        "size": 137460187136,
+        "path": {
+          "path": "/mnt/daten/VMs/file-7.qcow2",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-7.qcow2",
+          "name": "file-7.qcow2",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-7.qcow2'",
+          "pid": 224660,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224660/io",
+          "io": [
+            "rchar: 2468",
+            "wchar: 0",
+            "syscr: 6",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "137460187136"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-7.qcow2",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-7.qcow2'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 137460187136,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "2513040cfa450afc076fcd3fd9a9384c2ef43fe6a1cfb160f0947a7d7915233b",
+            "iv": "96c20669131e5256424be6e34ea1ee5c",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224657,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224657/io",
+              "io": [
+                "rchar: 2468",
+                "wchar: 0",
+                "syscr: 6",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "96c20669131e5256424be6e34ea1ee5c"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 137460187136,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      },
+      {
+        "id": 2,
+        "state": "IDLE",
+        "messages": [],
+        "size": 129172865582,
+        "path": {
+          "path": "/mnt/daten/VMs/file-8.zip",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-8.zip",
+          "name": "file-8.zip",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-8.zip'",
+          "pid": 224669,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224669/io",
+          "io": [
+            "rchar: 2468",
+            "wchar: 0",
+            "syscr: 6",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "129172865582"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-8.zip",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-8.zip'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 129172865582,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "b32118d608da648ddfbe19029d40ddd0582d3cf4d2a579bd054e660ce9310023",
+            "iv": "a7c7d61437bf3fe06d3b9e111c708148",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224666,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224666/io",
+              "io": [
+                "rchar: 4868",
+                "wchar: 0",
+                "syscr: 9",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "a7c7d61437bf3fe06d3b9e111c708148"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 129172865582,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      },
+      {
+        "id": 3,
+        "state": "IDLE",
+        "messages": [],
+        "size": 137460187136,
+        "path": {
+          "path": "/mnt/daten/VMs/file-1.qcow2",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-1.qcow2",
+          "name": "file-1.qcow2",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-1.qcow2'",
+          "pid": 224678,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224678/io",
+          "io": [
+            "rchar: 4084",
+            "wchar: 0",
+            "syscr: 8",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "137460187136"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-1.qcow2",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-1.qcow2'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 137460187136,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "179cd7592b1393f66d2a70a925a30be67246d4f5cc0e2c34d619ac4573f710b0",
+            "iv": "62746e10fe38c113b3376732c3ab0b38",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224675,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224675/io",
+              "io": [
+                "rchar: 2468",
+                "wchar: 0",
+                "syscr: 6",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "62746e10fe38c113b3376732c3ab0b38"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 137460187136,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      },
+      {
+        "id": 4,
+        "state": "IDLE",
+        "messages": [],
+        "size": 34365243392,
+        "path": {
+          "path": "/mnt/daten/VMs/file-3.qcow2",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-3.qcow2",
+          "name": "file-3.qcow2",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-3.qcow2'",
+          "pid": 224689,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224689/io",
+          "io": [
+            "rchar: 4868",
+            "wchar: 0",
+            "syscr: 9",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "34365243392"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-3.qcow2",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-3.qcow2'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 34365243392,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "5a5f69b36145ea43de93ec353ee02b8f68bc581965102c0df55d6a53f71a0b58",
+            "iv": "706827d8ad58510c13c4b5228390f15c",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224686,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224686/io",
+              "io": [
+                "rchar: 4868",
+                "wchar: 0",
+                "syscr: 9",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "706827d8ad58510c13c4b5228390f15c"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 34365243392,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      },
+      {
+        "id": 5,
+        "state": "IDLE",
+        "messages": [],
+        "size": 42956488704,
+        "path": {
+          "path": "/mnt/daten/VMs/file-5.qcow2",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-5.qcow2",
+          "name": "file-5.qcow2",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-5.qcow2'",
+          "pid": 224698,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224698/io",
+          "io": [
+            "rchar: 4868",
+            "wchar: 0",
+            "syscr: 9",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "42956488704"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-5.qcow2",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-5.qcow2'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 42956488704,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "f840fe32ca3003c36411d2fe9bc2c81bdd5e276321093332b284fc6188a6afd0",
+            "iv": "27c18c288a9caea1af0094f0c53b2b79",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224695,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224695/io",
+              "io": [
+                "rchar: 4868",
+                "wchar: 0",
+                "syscr: 9",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "27c18c288a9caea1af0094f0c53b2b79"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 42956488704,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      },
+      {
+        "id": 6,
+        "state": "IDLE",
+        "messages": [],
+        "size": 184549376,
+        "path": {
+          "path": "/mnt/daten/VMs/file-2.img",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-2.img",
+          "name": "file-2.img",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-2.img'",
+          "pid": 224707,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224707/io",
+          "io": [
+            "rchar: 4868",
+            "wchar: 0",
+            "syscr: 9",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "184549376"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-2.img",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-2.img'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 184549376,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "91b6d628a4548a37d33e79100bb68e62e3f7a19ec4d39d028fb4726caa69de1e",
+            "iv": "b1466f5d2cc2c403a22673e7c13757d3",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224704,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224704/io",
+              "io": [
+                "rchar: 2468",
+                "wchar: 0",
+                "syscr: 6",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "b1466f5d2cc2c403a22673e7c13757d3"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 184549376,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      },
+      {
+        "id": 7,
+        "state": "IDLE",
+        "messages": [],
+        "size": 3997184000,
+        "path": {
+          "path": "/mnt/daten/VMs/file-4.iso",
+          "context": "/mnt/daten/VMs",
+          "relPath": "file-4.iso",
+          "name": "file-4.iso",
+          "parent": "/mnt/daten/VMs"
+        },
+        "last_command": {
+          "cmd": "stat -c %s '/mnt/daten/VMs/file-4.iso'",
+          "pid": 224716,
+          "running": false,
+          "quiet": true,
+          "process": "<class 'subprocess.Popen'>",
+          "closed": true,
+          "did_ran": true,
+          "status_msg": [],
+          "filesize": -1,
+          "permission_error": false,
+          "io_path": "/proc/224716/io",
+          "io": [
+            "rchar: 2468",
+            "wchar: 0",
+            "syscr: 6",
+            "syscw: 0",
+            "read_bytes: 0",
+            "write_bytes: 0",
+            "cancelled_write_bytes: 0"
+          ],
+          "raw": false,
+          "exitCode": 0,
+          "stdout": [
+            "3997184000"
+          ],
+          "stderr": []
+        },
+        "cksum": {
+          "type": "SHA256",
+          "state": "IDLE",
+          "path": "/mnt/daten/VMs/file-4.iso",
+          "value": "",
+          "command": {
+            "cmd": "openssl sha256 -r '/mnt/daten/VMs/file-4.iso'",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 3997184000,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        },
+        "encryption": {
+          "state": "IDLE",
+          "mode": "AES256CTR",
+          "keepOrigFile": true,
+          "newFilePath": "",
+          "key": {
+            "length": "medium",
+            "value": "1a1d9b9be2474c3cdbddcb1aae661c47699a3bb6db568a197ebb73b19058d05d",
+            "iv": "d944811031fbf1e6cc9c6a853a009a67",
+            "cmd": {
+              "cmd": "openssl rand 16",
+              "pid": 224713,
+              "running": false,
+              "quiet": true,
+              "process": "<class 'subprocess.Popen'>",
+              "closed": true,
+              "did_ran": true,
+              "status_msg": [],
+              "filesize": -1,
+              "permission_error": false,
+              "io_path": "/proc/224713/io",
+              "io": [
+                "rchar: 2468",
+                "wchar: 0",
+                "syscr: 6",
+                "syscw: 0",
+                "read_bytes: 0",
+                "write_bytes: 0",
+                "cancelled_write_bytes: 0"
+              ],
+              "raw": true,
+              "exitCode": 0,
+              "stdout": [
+                "d944811031fbf1e6cc9c6a853a009a67"
+              ],
+              "stderr": []
+            }
+          },
+          "cmd": {
+            "cmd": "",
+            "pid": -1,
+            "running": false,
+            "quiet": true,
+            "process": "<class 'NoneType'>",
+            "closed": true,
+            "did_ran": false,
+            "status_msg": [],
+            "filesize": 3997184000,
+            "permission_error": false,
+            "io_path": "",
+            "io": [],
+            "raw": false,
+            "exitCode": -1,
+            "stdout": [],
+            "stderr": []
+          }
+        }
+      }
+    ]
+  },
+  "folders": []
+}

@@ -1,0 +1,154 @@
+{
+  "_comment": "Example of the slim TOC proposal, readable form: the body is NOT encrypted here. toc_proposal_tape.json is the same TOC as it would be stored. File names are placeholders.",
+  "header": {
+    "format": "rutbs",
+    "version": 16384,
+    "fingerprint": "1f5585a4-95d6-4304-bd04-df67d5553521",
+    "state": "WRITING",
+    "created": "2026-11-16T17:30:00",
+    "hostname": "florian-main",
+    "blocksize": "256K",
+    "drive": {
+      "vendor": "IBM",
+      "model": "ULTRIUM-TD4",
+      "serial": "EXAMPLE001"
+    },
+    "tape": {
+      "lto-version": "LTO_4",
+      "native_capacity": 800000000000
+    },
+    "body_cipher": "AES256CTR"
+  },
+  "body": {
+    "files": [
+      {
+        "id": 1,
+        "relPath": "file-1.qcow2",
+        "size": 137460187136,
+        "mtime": 1769508781,
+        "mode": "0600",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "179cd7592b1393f66d2a70a925a30be67246d4f5cc0e2c34d619ac4573f710b0",
+          "iv": "62746e10fe38c113b3376732c3ab0b38"
+        }
+      },
+      {
+        "id": 2,
+        "relPath": "file-2.img",
+        "size": 184549376,
+        "mtime": 1781803684,
+        "mode": "0644",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "91b6d628a4548a37d33e79100bb68e62e3f7a19ec4d39d028fb4726caa69de1e",
+          "iv": "b1466f5d2cc2c403a22673e7c13757d3"
+        }
+      },
+      {
+        "id": 3,
+        "relPath": "file-3.qcow2",
+        "size": 34365243392,
+        "mtime": 1792685957,
+        "mode": "0600",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "5a5f69b36145ea43de93ec353ee02b8f68bc581965102c0df55d6a53f71a0b58",
+          "iv": "706827d8ad58510c13c4b5228390f15c"
+        }
+      },
+      {
+        "id": 4,
+        "relPath": "file-4.iso",
+        "size": 3997184000,
+        "mtime": 1781601602,
+        "mode": "0644",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "1a1d9b9be2474c3cdbddcb1aae661c47699a3bb6db568a197ebb73b19058d05d",
+          "iv": "d944811031fbf1e6cc9c6a853a009a67"
+        }
+      },
+      {
+        "id": 5,
+        "relPath": "file-5.qcow2",
+        "size": 42956488704,
+        "mtime": 1793808799,
+        "mode": "0600",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "f840fe32ca3003c36411d2fe9bc2c81bdd5e276321093332b284fc6188a6afd0",
+          "iv": "27c18c288a9caea1af0094f0c53b2b79"
+        }
+      },
+      {
+        "id": 6,
+        "relPath": "file-6.qcow2",
+        "size": 137460187136,
+        "mtime": 1788969250,
+        "mode": "0600",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "f396380f271300293559d1ef2a0e7ede529a505615a17d9fc672cec54366324e",
+          "iv": "6afc4ca9f0df78d4f3c41b134266196e"
+        }
+      },
+      {
+        "id": 7,
+        "relPath": "file-7.qcow2",
+        "size": 137460187136,
+        "mtime": 1775828041,
+        "mode": "0600",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "2513040cfa450afc076fcd3fd9a9384c2ef43fe6a1cfb160f0947a7d7915233b",
+          "iv": "96c20669131e5256424be6e34ea1ee5c"
+        }
+      },
+      {
+        "id": 8,
+        "relPath": "file-8.zip",
+        "size": 129172865582,
+        "mtime": 1779255159,
+        "mode": "0644",
+        "cksum": {
+          "type": "SHA256",
+          "value": ""
+        },
+        "encryption": {
+          "mode": "AES256CTR",
+          "key": "b32118d608da648ddfbe19029d40ddd0582d3cf4d2a579bd054e660ce9310023",
+          "iv": "a7c7d61437bf3fe06d3b9e111c708148"
+        }
+      }
+    ]
+  }
+}
