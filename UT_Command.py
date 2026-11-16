@@ -468,5 +468,26 @@ class UT_Command(unittest.TestCase):
             raise
         print("R_RAW_ALLERR")
 
+    def test_AS_env(self) -> None:
+        """
+        Secrets go through env: readable by the process, never part of str(Command)
+        """
+        c: Command = Command("printenv UT_SECRET", env={"UT_SECRET": "b32fea58"})
+        c.wait()
+
+        self.assertEqual(c.stdout, ["b32fea58"])
+        self.assertNotIn("b32fea58", str(c).replace('"stdout": ["b32fea58"]', ""))
+        print("S_ENV")
+
+    def test_AT_quote(self) -> None:
+        """
+        Command.quote() keeps spaces and single quotes of a path intact
+        """
+        c: Command = Command("echo " + Command.quote("it's a test"))
+        c.wait()
+
+        self.assertEqual(c.stdout, ["it's a test"])
+        print("T_QUOTE")
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,3 +1,4 @@
+import os
 import subprocess
 import json
 import threading
@@ -9,12 +10,16 @@ class Command:
     """
     #### === COMMAND ==========================================================
 
-    Command.__init__(cmd: str, filesize: int = -1, raw: bool = False):
+    Command.__init__(cmd: str, filesize: int = -1, raw: bool = False, env: dict = None):
     - Requires
         - The command e.g. "cat foo.txt"
     - Supports
         - Filesize
         - Binary / RAW output (0xa5 6a -> "a56a")
+        - env: extra environment variables, the place for secrets.
+               They never show up in `ps`, _asdict() or str()
+
+    Command.quote(text) wraps a path in single quotes for the command string.
     
     | `Command.`             | Description                                                            |
     |------------------------|------------------------------------------------------------------------|
@@ -22,7 +27,7 @@ class Command:
     | `Command.wait()`       | Blocks until command has exited                                        |
     | `Command.kill()`       | Blocks until command is killed (SIGTERM, timeout 100ms)                |
     | `Command.cleanup()`    | Get called before running ← false, does close STDOUT/STDERR            |
-    | `Command.reset()`      | Calls self.cleanup() and clears all vars EXCEPT cmd, filesize and raw  |
+    | `Command.reset()`      | Calls self.cleanup() and clears all vars EXCEPT cmd, filesize, raw, env |
     | `Command.status()`     | Refreshes all vars, always call this!                                  |
 
     ### --- VARIABLES ---------------------------------------------------------
@@ -76,11 +81,17 @@ class Command:
     self.didRun is a "sticky bit" that shows if a cmd got exectuted AT LEAST ONCE
     """
 
-    def __init__(self, cmd: str, filesize: int = -1, raw: bool = False) -> None:
+    def __init__(self, cmd: str, filesize: int = -1, raw: bool = False, env: dict = None) -> None: # type: ignore
         self.cmd: str = cmd
         self.filesize: int = filesize
         self.raw: bool = raw
+        self.env: dict = env or {}
         self._clear() # This defaults all vars
+
+    @staticmethod
+    def quote(text: str) -> str:
+        # 'it's' -> 'it'\''s', so any path survives the shell
+        return "'" + text.replace("'", "'\\''") + "'"
 
 # --- PUBLIC FUNCTIONS ----------------------------------------------------------------------------
 
@@ -94,7 +105,8 @@ class Command:
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=False
+            text=False,
+            env={**os.environ, **self.env}
         )
         self.closed = False
         self.pid = self.process.pid
