@@ -20,12 +20,14 @@ class Entry():
     """
     #### === ENTRY ============================================================
 
-    Entry.__init__(command: Command, tape: str = "", dependsOn: str = ""):
+    Entry.__init__(command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False):
     - Requires
         - A Command that has not been started yet
     - Supports
         - tape:      tape device (e.g. "/dev/nst0") if this Command uses a drive
         - dependsOn: id of the parent Entry, which must be COMPLETED first
+        - runlist:   id of the request this Entry belongs to (e.g. one tape write)
+        - always:    closing step, runs even if its runlist was aborted
 
     | Var              | Type         | Description                                     |
     |------------------|--------------|-------------------------------------------------|
@@ -33,14 +35,18 @@ class Entry():
     | `self.command`   | `Command`    | The work itself                                 |
     | `self.tape`      | `str`        | Tape device, `""` for CPU/Disk work             |
     | `self.dependsOn` | `str`        | Parent id, `""` if there is no parent           |
+    | `self.runlist`   | `str`        | Request id, `""` if the Entry stands alone      |
+    | `self.always`    | `bool`       | `True`: is not aborted with its runlist         |
     | `self.state`     | `EntryState` | See `Job` for the state flow                    |
     """
 
-    def __init__(self, command: Command, tape: str = "", dependsOn: str = "") -> None:
+    def __init__(self, command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False) -> None:
         self.id: str = str(uuid.uuid4())
         self.command: Command = command
         self.tape: str = tape
         self.dependsOn: str = dependsOn
+        self.runlist: str = runlist
+        self.always: bool = always
         self.state: EntryState = EntryState.WAITING_FOR_PARENT if dependsOn else EntryState.READY4EXEC
 
     def _asdict(self) -> dict:
@@ -49,6 +55,8 @@ class Entry():
             "state": self.state.name,
             "tape": self.tape,
             "dependsOn": self.dependsOn,
+            "runlist": self.runlist,
+            "always": self.always,
             "command": self.command._asdict(),
         }
         return {"Entry": _out}
@@ -66,7 +74,9 @@ class Job():
     """
     #### === JOB ==============================================================
 
-    Job schedules Commands. Each Entry may depend on ONE parent Entry.
+    Job schedules Commands. There is ONE queue for the whole host, so the
+    thread limit holds no matter how many requests are queued.
+    Each Entry may depend on ONE parent Entry.
     Parents must be added before their children, so the queue is always in
     dependency order and a single pass over it resolves the whole tree.
 
@@ -80,6 +90,13 @@ class Job():
     State flow of an Entry:
         WAITING_FOR_PARENT --parent COMPLETED--> READY4EXEC --> RUNNING --> COMPLETED
                            --parent FAILED-----> FAILED                 --> FAILED (exitCode != 0)
+
+    Runlist:
+        All Entries of one request (e.g. "write this folder to that tape") share a runlist id.
+        If one of them fails, the request is aborted: every Entry of the runlist that has
+        not been started yet fails as well, running ones finish. Entries added with
+        always=True are closing steps (final TOC, rewind) and still run.
+        Other runlists are not affected.
 
     Scheduling (every tick, in this order):
         1. Tape Entries          -> one Entry per drive, strictly in the order they were added,
@@ -111,14 +128,14 @@ class Job():
 # --- PUBLIC FUNCTIONS ----------------------------------------------------------------------------
 
     @staticmethod
-    def Add(cmd: Command, tape: str = "", dependsOn: str = "") -> str:
+    def Add(cmd: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False) -> str:
         with Job.lock:
             if any(e.command is cmd for e in Job.queue):
                 raise ValueError("ERROR: Command already queued, create a new Command object")
             if dependsOn != "":
                 Job.Get(dependsOn)      # raises LookupError if the parent is unknown
 
-            _e: Entry = Entry(cmd, tape, dependsOn)
+            _e: Entry = Entry(cmd, tape, dependsOn, runlist, always)
             Job.queue.append(_e)
             Job._updateStates()         # parent might already be COMPLETED
             Job._updateJobState()
@@ -187,6 +204,12 @@ class Job():
                     e.state = EntryState.READY4EXEC
                 elif parent is EntryState.FAILED:
                     e.state = EntryState.FAILED
+
+        # One failure aborts the whole runlist: nothing new is started, except the closing steps
+        aborted: set = {e.runlist for e in Job.queue if e.runlist and e.state is EntryState.FAILED}
+        for e in Job.queue:
+            if e.runlist in aborted and not e.always and e.state in {EntryState.WAITING_FOR_PARENT, EntryState.READY4EXEC}:
+                e.state = EntryState.FAILED
 
     @staticmethod
     def _startEntries() -> None:

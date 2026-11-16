@@ -22,6 +22,7 @@ class UT_Job(unittest.TestCase):
         - AC-AD: Dependency chains (order, failure propagation)
         - AE-AF: Scheduling (tape priority, one Entry per drive)
         - AG-AH: Flush(killRunning=False) and the JobScheduler thread
+        - AI-AJ: Tape order, abort of a runlist
 
     Most tests call Job.Refresh() by hand, this keeps them deterministic.
     Depdencies:
@@ -179,6 +180,26 @@ class UT_Job(unittest.TestCase):
                 self.assertEqual(f.read().split(), ["1", "2"])
 
         print("I_TAPE_ORDER")
+
+    def test_AJ_Runlist(self) -> None:
+        """
+        One failure aborts its runlist, closing steps still run, other runlists are untouched
+        """
+        Job.limit = 1   # one after the other, in the order of Add()
+        first: str = Job.Add(Command(self.AB_DEP), runlist="r1")
+        bad: str = Job.Add(Command(self.AD_FAIL), runlist="r1")
+        later: str = Job.Add(Command(self.AB_DEP), runlist="r1")
+        closing: str = Job.Add(Command(self.AB_DEP), runlist="r1", always=True)
+        other: str = Job.Add(Command(self.AB_DEP), runlist="r2")
+
+        self._refreshUntilDone()
+        self.assertEqual(Job.Get(first).state, EntryState.COMPLETED)
+        self.assertEqual(Job.Get(bad).state, EntryState.FAILED)
+        self.assertEqual(Job.Get(later).state, EntryState.FAILED)
+        self.assertFalse(Job.Get(later).command.didRun)
+        self.assertEqual(Job.Get(closing).state, EntryState.COMPLETED)
+        self.assertEqual(Job.Get(other).state, EntryState.COMPLETED)
+        print("J_RUNLIST")
 
     def test_AG_FlushDone(self) -> None:
         """
