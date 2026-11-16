@@ -1,6 +1,9 @@
 #!/bin/bash
 # Just a quick caller for batch-testing
 
+echo Version
+python3 UT_Version.py
+
 echo Command
 python3 UT_Command.py
 
