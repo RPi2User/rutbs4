@@ -79,6 +79,27 @@ class UT_Folder(unittest.TestCase):
             self.assertIsNot(folder.files[0].encryption_scheme.cmd, folder.files[1].encryption_scheme.cmd)
         print("AB_SHARED_KEY")
 
+    def test_AC_oddFileNames(self) -> None:
+        with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
+            names = {"with space.txt", "it's.txt"}
+            for name in names:
+                with open(os.path.join(src, name), "w") as f:
+                    f.write(name)
+
+            folder: Folder = Folder(src, ChecksumType.SHA256, E_Mode.AES256CBC)
+            self.assertEqual({f.path.name for f in folder.files}, names)
+
+            entries = folder.queueWrite(self._fakeTape(dst))
+            self._waitAll(entries)
+            folder.finalizeChecksums()
+
+            for entry, file in zip(entries, folder.files):
+                self.assertEqual(Job.Get(entry).state, EntryState.COMPLETED)
+                self.assertEqual(file.cksum.value, hashlib.sha256(file.path.name.encode()).hexdigest())
+                self.assertNotIn(folder.key.value, str(Job.Get(entry)))  # the key is not part of any command
+                self.assertNotIn(folder.key.value, str(Job.Get(Job.Get(entry).dependsOn)))
+        print("AC_ODD_FILE_NAMES")
+
     def test_BA_singleFileRoundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
             content: bytes = os.urandom(2048)

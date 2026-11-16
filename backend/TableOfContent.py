@@ -69,10 +69,10 @@ class TableOfContent:
 
     def _scanSubDirs(self):
         # -mindepth 1 is used so the root dir is not element of folder{}
-        self.command = Command("find '" + self.rootFolder.path + "' -mindepth 1 -maxdepth 1 -type d")
+        self.command = Command("find " + Command.quote(self.rootFolder.path) + " -mindepth 1 -maxdepth 1 -type d")
         self.command.wait()
         for folder in self.command.stdout:
-            self.folder.append(Folder(folder))
+            self.folder.append(Folder(folder, self.rootFolder.checksumType, self.rootFolder.encMode))
 
     def __init__(self, rootFolder: Folder, header: TOC_Header) -> None:
         self.command = None
