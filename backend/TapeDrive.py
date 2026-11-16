@@ -8,9 +8,6 @@ from backend.Command import Command
 
 from backend.Tape import Tape, E_Tape
 
-DEBUG: bool = False
-VERSION = 4.1
-
 """_summary_
     
     -SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI
@@ -334,7 +331,7 @@ class TapeDrive:
 
         # Sensible to override
         if not self.inquiryCommand:
-            self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 12 1 83 0 2a 0", 0, True)
+            self.command = Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 12 1 83 0 2a 0", 0, True)
         else:
             self.command = self.inquiryCommand
 
@@ -362,7 +359,7 @@ class TapeDrive:
 
         # Sensible to override
         if not self.readModeSenseCommand:
-            self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
+            self.command = Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 5a 0 0 0 0 0 0 0 4 0", 0, True)
         else:
             self.command = self.readModeSenseCommand
 
@@ -372,7 +369,7 @@ class TapeDrive:
         if self.command.exitCode == 6:
             self._inquiry()
             # Ugly, but I don't know "nicer" way currently
-            self.command = Command("sg_raw --binary -r 1k '" + self.generic_path +  "' 5a 0 0 0 0 0 0 0 4 0", 0, True)
+            self.command = Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 5a 0 0 0 0 0 0 0 4 0", 0, True)
             self.command.wait()
 
         if self.tape.state == E_Tape.NO_TAPE:
@@ -391,8 +388,8 @@ class TapeDrive:
         # When currently running SOME stuff (except init)
         self.command.status()   # get current state
         
-        # Don't interfere with running commands!
-        if self.command.running:
+        # Don't interfere with running commands, or with one that still waits to be started
+        if self.command.running or not self.command.didRun:
             return
 
         # do not accept further commands when in error state
@@ -503,7 +500,7 @@ class TapeDrive:
 
         self.state = TD_State.WRITE
         self.command = Command(
-            "dd if='" + self.file.path.path + "' of='" + self.path + "' " +
+            "dd if=" + Command.quote(self.file.path.path) + " of=" + Command.quote(self.path) + " " +
             "iflag=fullblock status=none bs=" + self.blocksize,
             filesize=self.file.size)
 
@@ -534,7 +531,7 @@ class TapeDrive:
         tocfile.readSize()   # the file was empty at construction time, refresh after writing content
 
         self.command = Command(
-            "dd if='" + tocfile.path.path + "' of='" + self.path + "' " +
+            "dd if=" + Command.quote(tocfile.path.path) + " of=" + Command.quote(self.path) + " " +
             "iflag=fullblock status=none bs=" + self.blocksize,
             filesize=tocfile.size)
 
@@ -561,8 +558,8 @@ class TapeDrive:
         
         self.state = TD_State.READ
         self.command = Command(
-            "dd if='" + self.path + "' " + "of='" + file.path.path + "' " +
-            "bs='" + self.blocksize + "' " + "iflag=fullblock status=none")
+            "dd if=" + Command.quote(self.path) + " of=" + Command.quote(file.path.path) + " " +
+            "bs=" + self.blocksize + " iflag=fullblock status=none")
 
         self.command.start()
         self.tape.begin_of_tape = False
@@ -570,7 +567,7 @@ class TapeDrive:
     def __eject(self):
         self.state = TD_State.EJECT
         if self.ejectCommand is None:
-            self.command = Command("sg_raw '" + self.generic_path + "' 0x1B 0 0 0 0 0")
+            self.command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x1B 0 0 0 0 0")
         else:
             self.command = self.ejectCommand
         self.command.start()
@@ -579,7 +576,7 @@ class TapeDrive:
     def __rewind(self):
         self.state = TD_State.REWIND
         if self.rewindCommand is None:
-            self.command = Command("sg_raw '" + self.generic_path + "' 0x01 0 0 0 0 0")
+            self.command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x01 0 0 0 0 0")
         else:
             self.command = self.rewindCommand
         self.command.start()

@@ -8,8 +8,6 @@ from backend.Checksum import Checksum, ChecksumState
 from backend.Command import Command
 from backend.Encryption import E_Mode, E_State, Encryption, Key
 
-DEBUG: bool = True
-
 class FilePath():
 
     """#### === FILEPATH =========================================================
@@ -42,17 +40,8 @@ class FilePath():
             raise FileNotFoundError("[ERROR] Invalid context path!")
 
         # Full path validation
-        cmd: Command = Command("find " + self.path)
-        cmd.wait()
-
-        try:
-            if cmd.stdout[0] != self.path:
-                raise FileNotFoundError("[ERROR] Invalid Path given!")
-        except IndexError: # if len(stdout) == 0...
+        if not os.path.exists(self.path):
             raise FileNotFoundError("[ERROR] Invalid Path given!")
-
-        if cmd.exitCode != 0:
-            raise SystemError("[ERROR] FIND command on path failed with unkown reason!")
 
     def refresh(self) -> None:
         self.relPath: str = os.path.relpath(self.path, self.context)
@@ -324,6 +313,9 @@ class File:
                     self.state_msg.append("[ERROR] Encrypt/Decrypt failed with unkown reason")
                     return
 
+                case _:
+                    return  # still running or not started yet, never touch the files now
+
             if self.encryption_scheme.keepOrig:
                 self.path.path = self.encryption_scheme.targetPath
                 self.path.update()
@@ -391,7 +383,7 @@ class File:
 
     def readSize(self) -> None:
         self.cmd.reset()
-        self.cmd.cmd = "stat -c %s '" + self.path.path + "'"
+        self.cmd.cmd = "stat -c %s " + Command.quote(self.path.path)
         self.cmd.wait()
 
         try:

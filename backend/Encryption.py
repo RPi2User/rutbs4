@@ -56,6 +56,8 @@ class E_Mode(Enum):
 
 class Encryption:
 
+    KEY_ENV: str = "RUTBS_KEY"  # openssl reads the key from the environment, so it is not visible in `ps`
+
     MODE_CMD = {
         E_Mode.AES128CBC: "openssl aes-128-cbc -pbkdf2 ",
         E_Mode.AES256CBC: "openssl aes-256-cbc -pbkdf2 ",
@@ -97,7 +99,9 @@ class Encryption:
         self.targetPath = ".".join([part for part in path.split('.')[:-1]]) # removes ".tail"
 
         self.cmd.reset()
-        self.cmd.cmd = self.MODE_CMD[self.mode] + "-d -iv " + self.key.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + self.targetPath + "'"
+        self.cmd.env = {self.KEY_ENV: self.key.value}
+        self.cmd.cmd = (self.MODE_CMD[self.mode] + "-d -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
+                        " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath))
 
     def encrypt(self, path: str) -> None:
         if self.state != E_State.IDLE or self.mode == E_Mode.NONE:
@@ -108,7 +112,9 @@ class Encryption:
         self.targetPath = path + ".crypt"
 
         self.cmd.reset()
-        self.cmd.cmd = self.MODE_CMD[self.mode] + "-e -iv " + self.key.iv + " -k " + self.key.value + " -in '" + path + "' -out '" + self.targetPath + "'"
+        self.cmd.env = {self.KEY_ENV: self.key.value}
+        self.cmd.cmd = (self.MODE_CMD[self.mode] + "-e -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
+                        " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath))
 
     def _asdict(self) -> dict:
         self.refresh()

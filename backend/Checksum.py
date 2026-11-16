@@ -53,7 +53,7 @@ class Checksum:
     def setType(self, target_type: ChecksumType) -> None:
         self.type = target_type
         if not hasattr(self, "cmd"):
-            self.cmd: Command = Command("openssl " + self.type.name.lower() + " -r '" + self.file_path + "'")
+            self.cmd: Command = Command("openssl " + self.type.name.lower() + " -r " + Command.quote(self.file_path))
             return
 
     def create(self):
@@ -62,7 +62,7 @@ class Checksum:
 
         self.state = ChecksumState.CREATE
         self.cmd.reset()
-        self.cmd.cmd = "openssl " + self.type.name.lower() + " -r '" + self.file_path + "'"
+        self.cmd.cmd = "openssl " + self.type.name.lower() + " -r " + Command.quote(self.file_path)
 
     def validate(self, target: str) -> None:
         if self.state not in {ChecksumState.IDLE, ChecksumState.MISMATCH}:
