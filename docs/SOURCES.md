@@ -122,12 +122,13 @@ Notes:
 
 ### Folder.py
 
-All files directly inside one directory (not recursive), sharing one checksum type,
-one encryption mode and one `Key`.
+All files directly inside one directory (not recursive), sharing one checksum type and
+one encryption mode. Every file has its own key and IV.
 
 - `Folder(path, checksumType, encryptionMode=E_Mode.NONE)`.
-- `queueWrite(tapeDrive)` adds, per file, the chain *checksum → encrypt → `dd` to tape* to
-  `Job` and returns the ids of the tape-write entries. Nothing is started here.
+- `queueWrite(tapeDrive, runlist="")` adds, per file, the chain *checksum → encrypt → `dd`
+  to tape* to `Job` and returns the ids of the tape-write entries. Nothing is started here.
+  With a runlist id, a failing file stops the files after it.
 - `finalizeChecksums()` — call after the entries have finished, copies the results into
   `file.cksum.value`.
 - `encrypt()` / `decrypt()` are empty stubs.
@@ -139,10 +140,14 @@ Notes:
 ### Job.py
 
 Global scheduler for `Command` objects. `Job` is used as a singleton: all methods are
-static, the queue is shared process-wide.
+static, the queue is shared process-wide. One queue for the whole host is what keeps the
+thread limit.
 
-- `Job.Add(cmd, tape="", dependsOn="")` → entry id. An entry may depend on one parent,
-  which must be added first.
+- `Job.Add(cmd, tape="", dependsOn="", runlist="", always=False)` → entry id. An entry may
+  depend on one parent, which must be added first.
+- `runlist` groups the entries of one request. If one of them fails, the entries of that
+  runlist which have not started yet fail too; `always=True` marks closing steps that
+  still run.
 - `Job.Work(delayMs)` starts a background thread that calls `Job.Refresh()` periodically;
   `Job.Stop()` ends it. `Job.Refresh()` can also be called by hand (the tests do this).
 - `Job.Get(id)`, `Job.Registry()`, `Job.Flush(killRunning=True)`.
@@ -154,7 +159,6 @@ static, the queue is shared process-wide.
 
 Notes:
 - Finished entries stay in the queue until `Flush()` is called.
-- A failed tape entry does not stop the later ones on that drive yet.
 - The class docstring is accurate and more detailed than this section.
 
 ### Tape.py
@@ -244,7 +248,7 @@ python3 write_folder_to_tape.py --dir /data/out --tape /tmp/faketape.bin \
 
 Options: `--checksum` (md5, sha256, sha512, none), `--encryption` (none, aes128cbc,
 aes256cbc, aes128ctr, aes256ctr), `--blocksize`, `--lto-version`.
-The encryption key and IV are printed to the terminal.
+The key and IV of every file are printed to the terminal.
 
 ### rbs_backend.py — to be ported
 
@@ -267,8 +271,8 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 | `UT_Checksum.py` | create and validate, MD5 / SHA256 / SHA512, mismatch | fixtures `cksum/` |
 | `UT_Encryption.py` | key generation, encrypt → decrypt round trip for all modes | fixtures `encryption/` |
 | `UT_Tape.py` | hardware id parsing | — |
-| `UT_Job.py` | dependencies, failure propagation, priorities, tape order, scheduler thread | — |
-| `UT_Folder.py` | file collection, odd file names, shared key, write chain against a fake tape | `openssl` |
+| `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, scheduler thread | — |
+| `UT_Folder.py` | file collection, odd file names, own key per file, write chain against a fake tape, abort | `openssl` |
 
 - Fixtures live in `/mnt/daten/testfiles/rutbs4` (absolute path, outside the repository).
 - `UT_File`, `UT_Checksum` and `UT_Encryption` modify the fixture files while running.
@@ -285,8 +289,8 @@ design and disappear with the steps listed in [DESIGN.md](DESIGN.md).
 1. **Key is stored in plain text on the tape.** `TableOfContent._asdict()` includes every
    file's `Encryption`, and with it the key and IV. Solved by the encrypted TOC body.
 2. **The TOC is incomplete.** It lists the files of subfolders, but
-   `write_folder_to_tape.py` only writes the root folder; each subfolder gets a different
-   key; only one directory level is scanned. There is no trailing TOC yet.
+   `write_folder_to_tape.py` only writes the root folder; only one directory level is
+   scanned. There is no trailing TOC yet.
 3. **The TOC cannot be read back.** There is no parser, so nothing can be restored.
 4. With a regular file as fake tape, each `dd` truncates the file: only the last file
    written remains, the TOC is overwritten. Tests without hardware can therefore only
