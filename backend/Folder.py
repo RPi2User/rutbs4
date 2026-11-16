@@ -2,7 +2,7 @@ import json
 from enum import Enum
 from typing import List
 
-from backend.Encryption import E_Mode, Encryption, Key
+from backend.Encryption import E_Mode
 from backend.File import File
 from backend.Command import Command
 from backend.Checksum import ChecksumType
@@ -18,25 +18,23 @@ class Folder:
         self.checksumType: ChecksumType = checksumType
         self.encMode: E_Mode = encryptionMode
 
-        # One shared Key for the whole Folder: restoring N different per-file keys is
-        # impractical. Every File still gets its own Encryption/Command instance though,
-        # so their (not-yet-started) Commands can be queued with Job independently.
-        self.key: Key = Key()
-
         find_files: Command = Command("find " + Command.quote(path) + " -maxdepth 1 -type f")
         find_files.wait()   # wait until the find process is finished, shall be instant
 
         for _id, filepath in enumerate(find_files.stdout):
-            file: File = File(_id, filepath, self.path)
+            file: File = File(_id, filepath, self.path)     # every File brings its own Key and IV
             file.cksum.setType(self.checksumType)
-            file.encryption_scheme = Encryption(self.key, self.encMode)
+            file.encryption_scheme.mode = self.encMode
             self.files.append(file)
 
-    def queueWrite(self, tapeDrive: TapeDrive) -> List[str]:
+    def queueWrite(self, tapeDrive: TapeDrive, runlist: str = "") -> List[str]:
         """
         Registers Checksum -> Encryption -> tape write for every File in this Folder with the
         Job scheduler (see Job.py's own docstring example for the same pattern). Nothing is
         started here, Job.Work()/Job.Refresh() drives the actual execution.
+
+        All Entries get the given runlist id: if one File fails, the Files after it are
+        not written anymore (see Job).
 
         Returns the Job entry ids of the terminal tape-write Entries, so the caller can wait
         for them to reach EntryState.COMPLETED/FAILED.
@@ -50,12 +48,12 @@ class Folder:
 
             if self.checksumType != ChecksumType.NONE:
                 file.cksum.create()
-                parent = Job.Add(file.cksum.cmd)
+                parent = Job.Add(file.cksum.cmd, runlist=runlist)
 
             if self.encMode != E_Mode.NONE:
                 file.encryption_scheme.encrypt(file.path.path)
                 write_path = file.encryption_scheme.targetPath   # tape must read the ciphertext
-                parent = Job.Add(file.encryption_scheme.cmd, dependsOn=parent)
+                parent = Job.Add(file.encryption_scheme.cmd, dependsOn=parent, runlist=runlist)
 
             # Built directly (not via TapeDrive.write()), matching Job.py's own docstring
             # pattern: TapeDrive.write() assumes one write at a time and isn't meant to have
@@ -64,7 +62,7 @@ class Folder:
                 "dd if=" + Command.quote(write_path) + " of=" + Command.quote(tapeDrive.path) + " " +
                 "iflag=fullblock status=none bs=" + tapeDrive.blocksize,
                 filesize=file.size)
-            write_entries.append(Job.Add(write_cmd, tape=tapeDrive.path, dependsOn=parent))
+            write_entries.append(Job.Add(write_cmd, tape=tapeDrive.path, dependsOn=parent, runlist=runlist))
 
         return write_entries
 

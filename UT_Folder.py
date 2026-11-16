@@ -18,9 +18,10 @@ class UT_Folder(unittest.TestCase):
 
     """_summary_
     Tests A:
-        - AA-AB: File collection, shared Key/independent Command per File
+        - AA-AC: File collection, own Key/IV and Command per File, odd file names
         - B:     Single File end-to-end via Job against a drive_override TapeDrive
         - C:     Job-chain structure for checksum -> encrypt -> write, and NONE/NONE
+        - D:     A failing File aborts the rest of the write
     Depdencies:
     - openssl (to build the expected ciphertext for the roundtrip check)
     """
@@ -61,7 +62,7 @@ class UT_Folder(unittest.TestCase):
             self.assertEqual({f.path.name for f in folder.files}, {"f0.txt", "f1.txt", "f2.txt"})
         print(".AA_COLLECTS_FILES")
 
-    def test_AB_sharedKeyIndependentCommand(self) -> None:
+    def test_AB_ownKeyPerFile(self) -> None:
         with tempfile.TemporaryDirectory() as src:
             for n in range(2):
                 with open(os.path.join(src, f"f{n}.txt"), "w") as f:
@@ -70,14 +71,13 @@ class UT_Folder(unittest.TestCase):
             folder: Folder = Folder(src, ChecksumType.SHA256, E_Mode.AES256CBC)
 
             self.assertEqual(len(folder.files), 2)
-            keys = {f.encryption_scheme.key for f in folder.files}
-            self.assertEqual(len(keys), 1)                      # same Key object shared
-            self.assertIs(folder.files[0].encryption_scheme.key, folder.key)
-
-            schemes = {id(f.encryption_scheme) for f in folder.files}
-            self.assertEqual(len(schemes), 2)                   # but independent Encryption/Command
-            self.assertIsNot(folder.files[0].encryption_scheme.cmd, folder.files[1].encryption_scheme.cmd)
-        print("AB_SHARED_KEY")
+            a, b = (f.encryption_scheme for f in folder.files)
+            self.assertNotEqual(a.key.value, b.key.value)       # every File has its own Key ...
+            self.assertNotEqual(a.key.iv, b.key.iv)             # ... and its own IV
+            self.assertEqual(a.mode, E_Mode.AES256CBC)          # the mode comes from the Folder
+            self.assertEqual(b.mode, E_Mode.AES256CBC)
+            self.assertIsNot(a.cmd, b.cmd)                      # independent Commands for Job
+        print("AB_OWN_KEY")
 
     def test_AC_oddFileNames(self) -> None:
         with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
@@ -96,8 +96,9 @@ class UT_Folder(unittest.TestCase):
             for entry, file in zip(entries, folder.files):
                 self.assertEqual(Job.Get(entry).state, EntryState.COMPLETED)
                 self.assertEqual(file.cksum.value, hashlib.sha256(file.path.name.encode()).hexdigest())
-                self.assertNotIn(folder.key.value, str(Job.Get(entry)))  # the key is not part of any command
-                self.assertNotIn(folder.key.value, str(Job.Get(Job.Get(entry).dependsOn)))
+                key: str = file.encryption_scheme.key.value
+                self.assertNotIn(key, str(Job.Get(entry)))  # the key is not part of any command
+                self.assertNotIn(key, str(Job.Get(Job.Get(entry).dependsOn)))
         print("AC_ODD_FILE_NAMES")
 
     def test_BA_singleFileRoundtrip(self) -> None:
@@ -108,7 +109,7 @@ class UT_Folder(unittest.TestCase):
                 f.write(content)
 
             folder: Folder = Folder(src, ChecksumType.SHA256, E_Mode.AES256CBC)
-            key = folder.key
+            key = folder.files[0].encryption_scheme.key
             td: TapeDrive = self._fakeTape(dst)
 
             entries = folder.queueWrite(td)
@@ -124,7 +125,7 @@ class UT_Folder(unittest.TestCase):
                 on_tape: bytes = f.read()
             self.assertNotEqual(on_tape, content)  # sanity: it really is encrypted, not plaintext
 
-            # Decrypt what actually ended up "on tape" with the shared Key/IV and compare to the original.
+            # Decrypt what actually ended up "on tape" with the Key/IV of the File and compare to the original.
             # (openssl -pbkdf2 salts every encryption run, so two independent encrypt runs never produce
             # byte-identical ciphertext even with the same key/iv - only the roundtrip is deterministic.)
             decrypted: str = os.path.join(dst, "roundtrip.plain")
@@ -185,6 +186,26 @@ class UT_Folder(unittest.TestCase):
                 on_tape = f.read()
             self.assertEqual(on_tape, expected)
         print("CB_NO_CKSUM_NO_ENC")
+
+    def test_DA_failedFileAbortsWrite(self) -> None:
+        with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
+            for n in range(3):
+                with open(os.path.join(src, f"f{n}.txt"), "w") as f:
+                    f.write("data" + str(n))
+
+            folder: Folder = Folder(src, ChecksumType.SHA256, E_Mode.AES256CBC)
+            os.remove(folder.files[1].path.path)    # the second File vanishes before it is processed
+
+            Job.limit = 1                           # one after the other, so the outcome is fixed
+            entries = folder.queueWrite(self._fakeTape(dst), runlist="write-1")
+            self._waitAll(entries)
+            Job.limit = Job.DEFAULT_THREADLIMIT
+
+            self.assertEqual(Job.Get(entries[0]).state, EntryState.COMPLETED)   # was on its way already
+            self.assertEqual(Job.Get(entries[1]).state, EntryState.FAILED)
+            self.assertEqual(Job.Get(entries[2]).state, EntryState.FAILED)      # aborted ...
+            self.assertFalse(folder.files[2].cksum.cmd.didRun)                  # ... before anything ran
+        print("DA_FAILED_FILE_ABORTS")
 
 
 if __name__ == '__main__':

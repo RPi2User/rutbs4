@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Write a folder to tape, file-by-file: each file is checksummed, optionally encrypted (one
-shared key for the whole folder) and written to tape with an EOF mark, orchestrated through
+Write a folder to tape, file-by-file: each file is checksummed, optionally encrypted (every
+file with its own key) and written to tape with an EOF mark, orchestrated through
 Job (see backend/Job.py).
 
 Example (real LTO drive):
@@ -15,6 +15,7 @@ Example (no SCSI tooling / no hardware, test against a regular file):
 import argparse
 import sys
 import time
+import uuid
 
 from backend.Checksum import ChecksumType
 from backend.Command import Command
@@ -84,10 +85,6 @@ def main() -> int:
         return 1
 
     print(f"Folder: {args.dir} ({len(folder.files)} files), checksum={args.checksum}, encryption={args.encryption}")
-    if ENCRYPTION_MAP[args.encryption] != E_Mode.NONE:
-        print("Shared key for this folder (needed to decrypt again!):")
-        print(f"  key: {folder.key.value}")
-        print(f"  iv:  {folder.key.iv}")
 
     def rewind_finished() -> bool:
         td._refresh()
@@ -110,7 +107,7 @@ def main() -> int:
         return 1
     print("TOC written.")
 
-    entries = folder.queueWrite(td)
+    entries = folder.queueWrite(td, runlist=str(uuid.uuid4()))
     Job.Work(200)
     finished = wait_for(lambda: all(Job.Get(e).state in Job.FINISHED for e in entries), timeout=3600)
     Job.Stop()
@@ -126,6 +123,8 @@ def main() -> int:
         ok = entry.state.name == "COMPLETED"
         all_ok = all_ok and ok
         print(f"  [{'OK' if ok else 'FAILED'}] {file.path.name}  ({args.checksum}={file.cksum.value})")
+        if ENCRYPTION_MAP[args.encryption] != E_Mode.NONE:   # needed to decrypt again!
+            print(f"         key: {file.encryption_scheme.key.value}  iv: {file.encryption_scheme.key.iv}")
 
     print("All files written successfully." if all_ok else "Some files FAILED, see above.")
     return 0 if all_ok else 1
