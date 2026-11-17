@@ -24,3 +24,6 @@ python3 UT_Job.py
 
 echo Folder
 python3 UT_Folder.py
+
+echo TableOfContent
+python3 UT_TableOfContent.py

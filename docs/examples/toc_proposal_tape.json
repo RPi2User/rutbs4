@@ -4,7 +4,7 @@
     "format": "rutbs",
     "version": 16384,
     "fingerprint": "1f5585a4-95d6-4304-bd04-df67d5553521",
-    "state": "WRITING",
+    "state": "IDLE",
     "created": "2026-11-16T17:30:00",
     "hostname": "florian-main",
     "blocksize": "256K",

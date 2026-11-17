@@ -191,22 +191,36 @@ The long comment at the top of the file explains the SCSI commands and is worth 
 Notes:
 - `write()` builds its command but does not start it; hand `command` to `Job`.
   `rewind()`, `eject()` and `read()` still start theirs on their own.
-- `writeTOC()` blocks until the TOC is on tape, and only works at begin of tape.
+- `writeTOC(sealedToc)` takes the text from `TableOfContent.seal()`, blocks until it is on
+  tape, and only works at begin of tape.
 - `format()` is a stub that always raises.
 - Every `_asdict()` on a real drive runs two `sg_raw` calls.
 
 ### TableOfContent.py
 
-JSON description of what is on the tape. It is written as the first file on tape.
+The TOC is one JSON document: `{"header": {...}, "body": "<base64>"}`. The header is clear
+text (format, version, fingerprint, state, host, blocksize, drive vendor/model/serial, tape,
+body cipher); the body holds the folders with all files and their keys, encrypted with the
+passphrase of the tape (`openssl aes-256-ctr -pbkdf2`).
 
-- `TOC_Header(tapeDrive, threadCount)` — timestamp, hostname and a snapshot of the drive.
+- `TOC_Header(tapeDrive, threadCount, fingerprint="", bodyCipher=AES256CTR)` — a random
+  fingerprint is created unless one is given. `header.state` is a `TOC_State`
+  (`IDLE` / `COMPLETE` / `FAILED`).
 - `TableOfContent(rootFolder, header)` — also scans the direct subdirectories of the root
   folder (one level) into `folder`.
-- `TOC_Body` is an unused stub.
+- `seal(passphrase)` → the JSON text to put on tape; `store(directory)` keeps a copy as
+  `YYYYMMDD_hhmmss_<fingerprint>.json`.
+- `TableOfContent.readHeader(text)` needs no passphrase; `TableOfContent.open(text,
+  passphrase)` returns `{"header", "body"}` as dicts, `TOC_WrongPassphrase` if the body
+  does not decrypt to JSON.
 
 Notes:
-- There is no way yet to parse a TOC back from JSON, so nothing can be read from tape
-  with it.
+- `_asdict()` is the whole TOC in clear text including keys. Tests and debugging only.
+- Passphrase goes to `openssl` through the environment, the body through stdin; no plain
+  text file is written.
+- Not done yet: the trailing TOC on tape, reading a TOC from tape, files of
+  sub directories in the body (see DESIGN.md).
+- `TOC_Body` is gone.
 
 ### TD_Pool.py
 
@@ -237,7 +251,7 @@ importable.
 Command line tool from a sprint, currently the only working entry point (not yet
 committed). It goes away once the REST API can do the same.
 
-Steps: create drive → scan folder → rewind → write TOC → queue all files → run `Job` →
+Steps: create drive → scan folder → rewind → ask for the passphrase (`RUTBS_PASSPHRASE` or prompt) → write sealed TOC → queue all files → run `Job` →
 print one result line per file. Exit code 0 only if every file was written.
 
 ```
@@ -273,11 +287,12 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 | `UT_Tape.py` | hardware id parsing | — |
 | `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, scheduler thread | — |
 | `UT_Folder.py` | file collection, odd file names, own key per file, write chain against a fake tape, abort | `openssl` |
+| `UT_TableOfContent.py` | header, seal / open round trip, wrong passphrase, TOC directory | `openssl` |
 
 - Fixtures live in `/mnt/daten/testfiles/rutbs4` (absolute path, outside the repository).
 - `UT_File`, `UT_Checksum` and `UT_Encryption` modify the fixture files while running.
 - `UnitTest.sh` runs everything but always exits 0; read the output.
-- Verified on 2026-11-16: all eight test files pass.
+- Verified on 2026-11-17: all nine test files pass.
 
 ---
 
@@ -286,21 +301,22 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 Reproduced on 2026-11-16 unless marked "(read)". Most of them are settled by the target
 design and disappear with the steps listed in [DESIGN.md](DESIGN.md).
 
-1. **Key is stored in plain text on the tape.** `TableOfContent._asdict()` includes every
-   file's `Encryption`, and with it the key and IV. Solved by the encrypted TOC body.
-2. **The TOC is incomplete.** It lists the files of subfolders, but
+1. **The TOC is incomplete.** It lists the files of subfolders, but
    `write_folder_to_tape.py` only writes the root folder; only one directory level is
    scanned. There is no trailing TOC yet.
-3. **The TOC cannot be read back.** There is no parser, so nothing can be restored.
-4. With a regular file as fake tape, each `dd` truncates the file: only the last file
+2. **Nothing can be restored yet.** A sealed TOC can be opened from text, but there is no
+   read from tape.
+3. With a regular file as fake tape, each `dd` truncates the file: only the last file
    written remains, the TOC is overwritten. Tests without hardware can therefore only
    cover a single file.
-5. `.crypt` files are written next to the originals and never removed (no spool yet).
-6. `TD_Pool.gatherDrives()` reads the exit code right after `start()`, while the command is
+4. `.crypt` files are written next to the originals and never removed (no spool yet).
+5. `TD_Pool.gatherDrives()` reads the exit code right after `start()`, while the command is
    still running, and therefore reports "No Drives Found".
-7. `Host` and `rbs_backend.py` cannot be imported.
-8. `docs/classDiagram.md`, `docs/sequenceDiagrams.md`, `docs/JOB.MD` and `docs/todo.md`
+6. `Host` and `rbs_backend.py` cannot be imported.
+7. `docs/classDiagram.md`, `docs/sequenceDiagrams.md`, `docs/JOB.MD` and `docs/todo.md`
    describe older designs and no longer match the code.
+
+Fixed on 2026-11-17: the keys are no longer in plain text on the tape (encrypted TOC body).
 
 Fixed on 2026-11-16: files were written to tape in completion order instead of queue
 order; `File.encrypt()` could delete the original before the encryption had started; file

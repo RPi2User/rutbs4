@@ -23,7 +23,7 @@ One version for backend, tape format and cartridge memory, stored as 16 bit
 ## Tape layout
 
 ```
-tape file 0      TOC, state WRITING     the plan: order, sizes, keys
+tape file 0      TOC, state IDLE        the plan: order, sizes, keys
 tape file 1..N   the files, in exactly the order of the TOC
 tape file N+1    TOC, state COMPLETE    the result: same content plus checksums
 ```
@@ -35,8 +35,8 @@ tape file N+1    TOC, state COMPLETE    the result: same content plus checksums
 - The second TOC gives redundancy (a damaged begin of tape does not lose the tape) and is
   the final write test: if it is on the tape, everything before it fits.
 - **Tape cannot be changed in place.** Writing at the begin of tape makes everything
-  behind it unreadable. The first TOC therefore always says `WRITING`. A tape is good only
-  if a trailing TOC with state `COMPLETE` exists. On a failed job the trailing TOC is
+  behind it unreadable. The first TOC therefore always says `IDLE`: it is a plan, nothing
+  is finished. A tape is good only if a trailing TOC with state `COMPLETE` exists. On a failed job the trailing TOC is
   written with state `FAILED` if the drive still accepts it; if not, the missing trailing
   TOC is the failure marker. With a cartridge memory the failure is noted there as well.
 - A tape that already carries a fingerprint is only overwritten after an explicit format.
@@ -64,7 +64,7 @@ the job; for every file it shows which step failed and why. Its size does not ma
 
 - Format: JSON.
 - **Header**, clear text: timestamp, hostname, thread count, version, state
-  (`WRITING` / `COMPLETE` / `FAILED`) and the drive with its tape, which carries the
+  (`IDLE` / `COMPLETE` / `FAILED`) and the drive with its tape, which carries the
   fingerprint.
 - **Body**, encrypted with the passphrase of the tape: the folders with all their files.
   The cipher used for the body is named in the header.
@@ -193,16 +193,17 @@ derives its state from those commands. There is no second, blocking way to run a
 
 1. Whether the manufacturer's medium serial number (chip attribute `0x0401`, read-only)
    should be used as fingerprint when the chip is readable. It would never need writing.
-2. The TOC container: header and encrypted body in one JSON document (body as base64
-   text), or the encrypted body as raw bytes behind the header.
+2. The TOC container is implemented as header and encrypted body in one JSON document
+   (body as base64 text). To confirm, or switch to the encrypted body as raw bytes behind
+   the header.
 
 ## Next steps
 
 Done: tape order follows the queue; a failure aborts its run list; every file has its own
-key; secrets are kept off the command line.
+key; secrets are kept off the command line; TOC with version, fingerprint, state, encrypted
+body, reading from text and TOC directory.
 
-1. TOC: version, fingerprint and state in the header, encrypted body, reading a TOC back,
-   TOC directory.
+1. TOC: reading it back from tape (needs the drive, see 3), files of sub directories.
 2. File: phase methods on top of the queue; remove the blocking path and the duplicate
    state machines. Recursive scan, spool directory.
 3. TapeDrive: positioning by tape file number, trailing TOC, drive discovery by serial.

@@ -506,8 +506,8 @@ class TapeDrive:
 
         self.tape.begin_of_tape = False
 
-    def writeTOC(self, tableOfContent: "TableOfContent"):
-        # This writes TOC as first File on Tape
+    def writeTOC(self, sealedToc: str):
+        # This writes the sealed TOC (TableOfContent.seal(), the keys are encrypted in it) as first File on Tape
         self._refresh()
 
         if self.state != TD_State.IDLE or not self.tape.begin_of_tape:
@@ -522,7 +522,7 @@ class TapeDrive:
 
         try:
             with open(tocfile.path.path, 'w') as f:
-                f.write(json.dumps(tableOfContent._asdict(), indent=2))
+                f.write(sealedToc)
         except PermissionError:
            raise PermissionError("Cannot write Temporary file into /tmp!")
         except:

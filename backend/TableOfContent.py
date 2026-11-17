@@ -1,69 +1,106 @@
 import json
+import os
 import platform
+import subprocess
+import uuid
 
 from datetime import datetime
+from enum import Enum
 from typing import List
 
+from backend.Encryption import Encryption, E_Mode
 from backend.TapeDrive import TapeDrive
 from backend.Command import Command
 from backend.Folder import Folder
+from backend.Version import Version
 
 """_summary_
     Host must create a suitable TOC, with a valid TapeDrive object.
     After that, the TOC must be passed to the Read/Write-Scheduler
 """
 
+class TOC_State(Enum):
+    IDLE = 0        # first TOC: the plan, nothing finished (no write is running while it is sealed)
+    COMPLETE = 1    # trailing TOC: everything is on the tape
+    FAILED = 2      # trailing TOC of an aborted job
+
+class TOC_WrongPassphrase(Exception):
+    pass
+
 class TOC_Header:
 
-    def __init__(self, tapeDrive: TapeDrive, threadCount: int):
-        self.timeStamp = str(datetime.now())
+    """
+    Clear text part of the TOC. Anybody holding the tape can read it, so it must never
+    contain key material: the drive is reduced to vendor / model / serial on purpose
+    (TapeDrive._asdict() would carry the file the drive is working on).
+    """
+
+    FORMAT: str = "rutbs"
+
+    def __init__(self, tapeDrive: TapeDrive, threadCount: int, fingerprint: str = "",
+                 bodyCipher: E_Mode = E_Mode.AES256CTR):
+        if bodyCipher == E_Mode.NONE:
+            raise ValueError("The TOC body must be encrypted")
+
+        self.version: int = Version.word()
+        self.fingerprint: str = fingerprint or str(uuid.uuid4())
+        self.state: TOC_State = TOC_State.IDLE
+        self.timeStamp = datetime.now().isoformat(timespec="seconds")
         self.hostname = platform.node()
         self.threadCount = threadCount
-        self.tapeDrive = tapeDrive._asdict()
-
+        self.blocksize: str = tapeDrive.blocksize
+        self.bodyCipher: E_Mode = bodyCipher
+        self.drive: dict = {
+            "vendor": tapeDrive.vendor,
+            "model": tapeDrive.model,
+            "serial": tapeDrive.serial,
+        }
+        self.tape: dict = {
+            "lto-version": tapeDrive.tape.lto_version.name,
+            "native_capacity": tapeDrive.tape.native_capacity,
+        }
 
     def _asdict(self)-> dict:
         data = {
-            "timeStamp": self.timeStamp,
+            "format": self.FORMAT,
+            "version": self.version,
+            "fingerprint": self.fingerprint,
+            "state": self.state.name,
+            "created": self.timeStamp,
             "hostname": self.hostname,
             "threadCount": self.threadCount,
-            "tapeDrive": self.tapeDrive,
+            "blocksize": self.blocksize,
+            "drive": self.drive,
+            "tape": self.tape,
+            "body_cipher": self.bodyCipher.name,
         }
         return data
 
     def __str__(self) -> str:
         return json.dumps(self._asdict())
 
-class TOC_Body:
-
-    def createMasterKey(self): #???
-        pass
-
-    def __init__(self, rootDirectory: Folder, passphrase: str = ""):
-        self.root = rootDirectory
-        self.passphrase = passphrase
-
 
 class TableOfContent:
 
     """_summary_
-        A TableOfContent contains the following groups:
-        - System Data
-        - Job Properties
-        - All (future) FILES written on the Tape
+        A TableOfContent is stored as one JSON document:
 
-        NOTE: Tape Properties are included in TapeDrive object!
-        NOTE: encryption / checksumming options are configured directly in the folder objects!
+            {"header": {...clear text...}, "body": "<base64 of the encrypted body>"}
 
-        System Data:
-        - TimeStamp
-        - Hostname
-        - Thread Count
-        - TapeDrive
+        The header names the tape (fingerprint), the state and the cipher of the body.
+        The body holds the folders with all their files, including the key and IV of every
+        file, and is encrypted with the passphrase of the tape. A wrong passphrase shows as
+        a body that is not valid JSON.
 
-        Folder:
-        - rootFolder
-        - folder[]
+        | `TableOfContent.`           | Description                                          |
+        |-----------------------------|------------------------------------------------------|
+        | `seal(passphrase)`          | Returns the JSON document, remembers it in `sealed`  |
+        | `store(directory)`          | Writes `sealed` to YYYYMMDD_hhmmss_<fingerprint>.json |
+        | `TableOfContent.readHeader(text)` | Header only, no passphrase needed              |
+        | `TableOfContent.open(text, passphrase)` | Header and body as dicts                 |
+
+        The first TOC is sealed with state IDLE before anything ran, the trailing one
+        with state COMPLETE or FAILED after everything ran.
     """
 
 
@@ -84,15 +121,71 @@ class TableOfContent:
         self._scanSubDirs() # When no subdirs available, find returns nothing with exit_code = 0
 
         self.header: TOC_Header = header
+        self.sealed: str = ""
 
-    def _asdict(self) -> dict:
-        data = {
-            "header": self.header._asdict(),
+    def _body(self) -> dict:
+        return {
             "rootFolder": self.rootFolder._asdict(),
             "folders": [folder._asdict() for folder in self.folder]
         }
-        
-        return data
-    
+
+    def _asdict(self) -> dict:
+        """Everything in clear text, keys included. For tests and debugging only, never for the tape."""
+        return {"header": self.header._asdict(), **self._body()}
+
     def __str__(self) -> str:
         return json.dumps(self._asdict())
+
+    # CIPHER
+    # The passphrase goes to openssl through the environment, the plain body through stdin:
+    # neither shows up in `ps` and no plain text file is left behind.
+    @staticmethod
+    def _openssl(mode: E_Mode, decrypt: bool, passphrase: str, data: bytes) -> bytes:
+        cmd: str = (Encryption.MODE_CMD[mode] + ("-d" if decrypt else "-e") +
+                    " -a -A -pass env:" + Encryption.KEY_ENV)
+        result = subprocess.run(cmd, shell=True, input=data, capture_output=True,
+                                env={**os.environ, Encryption.KEY_ENV: passphrase})
+        if result.returncode != 0:
+            raise TOC_WrongPassphrase("openssl failed: " + result.stderr.decode(errors="replace").strip())
+        return result.stdout
+
+    # WRITE
+    def seal(self, passphrase: str) -> str:
+        if not passphrase:
+            raise ValueError("A passphrase is required to seal the TOC")
+
+        body: bytes = json.dumps(self._body()).encode()
+        encrypted: bytes = self._openssl(self.header.bodyCipher, False, passphrase, body)
+
+        self.sealed = json.dumps({"header": self.header._asdict(), "body": encrypted.decode()}, indent=2)
+        return self.sealed
+
+    def store(self, directory: str) -> str:
+        """Keeps a copy of the sealed TOC in the TOC directory and returns its path."""
+        if not self.sealed:
+            raise ValueError("seal() the TOC before storing it")
+
+        stamp: str = datetime.fromisoformat(self.header.timeStamp).strftime("%Y%m%d_%H%M%S")
+        path: str = os.path.join(directory, stamp + "_" + self.header.fingerprint + ".json")
+        with open(path, "w") as f:
+            f.write(self.sealed)
+        return path
+
+    # READ
+    @staticmethod
+    def readHeader(text: str) -> dict:
+        document: dict = json.loads(text)
+        if document.get("header", {}).get("format") != TOC_Header.FORMAT:
+            raise ValueError("Not a rutbs TOC")
+        return document["header"]
+
+    @staticmethod
+    def open(text: str, passphrase: str) -> dict:
+        """Returns {"header": {...}, "body": {...}}. Raises TOC_WrongPassphrase if the body cannot be read."""
+        header: dict = TableOfContent.readHeader(text)
+        mode: E_Mode = E_Mode[header["body_cipher"]]
+        try:
+            plain: bytes = TableOfContent._openssl(mode, True, passphrase, json.loads(text)["body"].encode())
+            return {"header": header, "body": json.loads(plain)}
+        except (TOC_WrongPassphrase, ValueError) as e:  # json.JSONDecodeError and UnicodeDecodeError are ValueErrors
+            raise TOC_WrongPassphrase("Wrong passphrase or damaged TOC") from e

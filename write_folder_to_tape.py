@@ -5,7 +5,7 @@ file with its own key) and written to tape with an EOF mark, orchestrated throug
 Job (see backend/Job.py).
 
 Example (real LTO drive):
-    python3 write_folder_to_tape.py --dir /path/to/folder --tape /dev/nst0 --generic /dev/sg0
+    RUTBS_PASSPHRASE=... python3 write_folder_to_tape.py --dir /path/to/folder --tape /dev/nst0 --generic /dev/sg0
 
 Example (no SCSI tooling / no hardware, test against a regular file):
     python3 write_folder_to_tape.py --dir /path/to/folder --tape /tmp/faketape.bin \\
@@ -13,6 +13,8 @@ Example (no SCSI tooling / no hardware, test against a regular file):
 """
 
 import argparse
+import getpass
+import os
 import sys
 import time
 import uuid
@@ -60,6 +62,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def get_passphrase() -> str:
+    """The passphrase of the tape: from RUTBS_PASSPHRASE, else asked for. Never a command line argument (visible in ps)."""
+    return os.environ.get("RUTBS_PASSPHRASE") or getpass.getpass("Passphrase for this tape: ")
+
+
 def wait_for(predicate, timeout: float = 30.0, interval: float = 0.1) -> bool:
     end = time.time() + timeout
     while not predicate():
@@ -99,9 +106,14 @@ def main() -> int:
         print("[ERROR] Rewind failed", file=sys.stderr)
         return 1
 
+    passphrase = get_passphrase()
+    if not passphrase:
+        print("[ERROR] A passphrase is required, the TOC holds the keys", file=sys.stderr)
+        return 1
+
     header = TOC_Header(td, threadCount=1)
     toc = TableOfContent(folder, header)
-    td.writeTOC(toc)
+    td.writeTOC(toc.seal(passphrase))
     if td.state == TD_State.ERROR:
         print("[ERROR] Failed to write TOC", file=sys.stderr)
         return 1
