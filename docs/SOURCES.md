@@ -15,6 +15,7 @@ write_folder_to_tape.py          <- the only working entry point
   ├─ Folder ── File              what to write
   │             ├─ Checksum
   │             └─ Encryption ── Key
+  ├─ Spool ── Mount              where the encrypted files wait
   ├─ TableOfContent              JSON description, first file on tape
   └─ Job                         runs the queued Commands
 All of the above use Command (subprocess wrapper).
@@ -24,17 +25,16 @@ There are two generations of code in the repository:
 
 | Status | Files |
 |--------|-------|
-| **Current**, importable, unit tests pass | `Version`, `Command`, `Checksum`, `Encryption`, `File`, `Folder`, `Job`, `Tape`, `TapeDrive`, `TableOfContent`, `write_folder_to_tape.py` |
-| **To be ported**, not importable | `Host`, `rbs_backend.py` — the REST layer. Still written against the package `tbk`, which no longer exists (renamed to `_old_tbk/`, git-ignored). `Mount` and `Response` belong to it. |
+| **Current**, importable, unit tests pass | `Version`, `Command`, `Checksum`, `Encryption`, `File`, `Folder`, `Spool`, `Mount`, `Job`, `Tape`, `TapeDrive`, `TableOfContent`, `write_folder_to_tape.py` |
+| **To be ported**, not importable | `Host`, `rbs_backend.py` — the REST layer. Still written against the package `tbk`, which no longer exists (renamed to `_old_tbk/`, git-ignored). `Response` belongs to it. |
 | Unfinished | `TD_Pool` (imports, but does not find drives) |
 
 Conventions used by all current classes:
 
 - `_asdict()` returns a JSON-ready dict, `__str__()` returns it as a JSON string.
-- Objects are small state machines. Calling `_asdict()` / `refresh()` / `_status()` first
-  polls the underlying `Command` and then advances the state.
-- Creating an operation (`Checksum.create()`, `Encryption.encrypt()`, `TapeDrive.write()`)
-  only **builds** the `Command`. Something else has to start it: `Job`, or a `wait()` call.
+- Creating an operation (`Checksum.create()`, `Encryption.encrypt()`, `File.Write()`) only
+  **builds** the `Command`. `Job` starts it. `File` hides the lower classes: it queues their
+  commands and derives its state from the Job entries.
 
 ---
 
@@ -74,7 +74,9 @@ Checksum of one file via `openssl <md5|sha256|sha512> -r`.
 
 - `Checksum(file_path, type=SHA256)`, `setType(type)`.
 - `create()` prepares a new calculation, `validate(target)` prepares a comparison against a
-  known value, `wait()` runs it and stores the result in `value`.
+  known value, `wait()` runs it and stores the result in `value`. Each builds a new
+  `Command`, so the type can be changed at any time and the Job queue never sees the same
+  object twice.
 - States (`ChecksumState`): `IDLE`, `CREATE`, `VALIDATE`, `MISMATCH`, `ERROR`.
 - `ChecksumType.NONE` turns `create()` into a no-op.
 
@@ -89,9 +91,10 @@ File encryption via `openssl aes-{128,256}-{cbc,ctr} -pbkdf2`.
 
 - `Key(length=KeyLength.medium)` generates a random key and IV with `openssl rand`
   (blocking, two subprocesses). Both are hex strings in `value` / `iv`.
-- `Encryption(key, mode=E_Mode.AES256CBC, keepOrig=True)`.
-- `encrypt(path)` prepares `path` → `path + ".crypt"`; `decrypt(path)` prepares the reverse
-  (strips the last extension). The result path is in `targetPath`, the command in `cmd`.
+- `Encryption(key, mode=E_Mode.AES256CBC)`.
+- `encrypt(path, target="")` prepares `path` → `target`, by default `path + ".crypt"`;
+  `decrypt(path, target="")` prepares the reverse (by default it strips the last extension).
+  The result path is in `targetPath`, the new command in `cmd`.
 - `E_Mode.NONE` turns both into no-ops. States (`E_State`): `IDLE`, `ENCRYPT`, `DECRYPT`, `ERROR`.
 
 Notes:
@@ -101,41 +104,52 @@ Notes:
 
 ### File.py
 
-One file on disk, with its checksum and encryption.
+One file on disk, which goes through all phases itself.
 
 - `FilePath(path, context)` — splits a path into `path`, `name`, `parent`, `relPath`
   (relative to `context`) and checks that the file exists.
 - `File(id, path, path_context, createFile=False)` — raises `FileNotFoundError` if the file
   does not exist. Reads the size and creates a default `Checksum` (SHA256) and `Encryption`.
-- File system: `touch()`, `remove()`, `append(text)`, `readSize()`.
-- Operations: `createChecksum()`, `validateIntegrity(target)`, `encrypt()`, `decrypt()`,
-  then `wait()` to run them. `refresh()` advances the state.
-- States (`FileState`): `IDLE` is the only state that accepts new operations;
-  `MISMATCH`, `REMOVED`, `ERROR` are final.
+- Phases: `Validate()`, `Encrypt(target="")`, `Write(tapeDrive)`, `Read(tapeDrive, target)`,
+  `Decrypt(target)`. Each builds one `Command`, hands it to `Job` and returns the entry id;
+  pass it as `dependsOn` to the next phase. All take `runlist` and `dependsOn`. A phase with
+  nothing to do (checksum NONE, encryption NONE) returns `dependsOn`.
+- `Validate()` creates the checksum if there is none yet, else it compares to the stored one.
+  The same call is the check after a restore.
+- `state` (`FileState`) is derived from the Job entries: `IDLE`, `QUEUED`, `CKSUM_CALC`,
+  `VALIDATING`, `ENCRYPT`, `WRITE`, `READ`, `DECRYPT`, and the final `MISMATCH`, `ERROR`
+  (`REMOVED` after `remove()`). Reading `state`, `cksum` or `encryption_scheme` takes over
+  the results of finished phases, so nothing is stale.
+- `path` stays the original file; `cryptPath` is the encrypted copy, `where` the plain file
+  `Validate()` looks at (the original, or the restored one).
+- File system: `touch()`, `remove()`, `append(text)`, `readSize()`. They are instant and need
+  no Job.
 
 Notes:
-- The class docstring is out of date (`path_context` is missing, `destroy()` does not exist).
-- Every `File` generates its own `Key`, which costs two `openssl` calls; `Folder` replaces
-  it right away.
-- `encrypt()` / `decrypt()` followed by `wait()` is a second way to run a phase, next to
-  `Folder.queueWrite()` + `Job`. The target design keeps only the `Job` way.
+- A second `Validate()` / `Encrypt()` / `Decrypt()` while the first one is still pending, and
+  any phase on a file in `ERROR` / `MISMATCH` / `REMOVED`, raises `RuntimeError`.
+- `Read()` reads at the current tape position. Positioning by tape file number comes with
+  the TapeDrive.
+- A `File` can only be built for a file that exists. Restoring from a TOC on another machine
+  needs a way to build one from the TOC entry (not done).
+- Every `File` generates its own `Key`, which costs two `openssl` calls; `Folder` keeps it.
 
 ### Folder.py
 
-All files directly inside one directory (not recursive), sharing one checksum type and
-one encryption mode. Every file has its own key and IV.
+All files below one directory, sub directories included, sharing one checksum type and
+one encryption mode. Every file has its own key and IV. The files are sorted by relative
+path (the tape order) and `File.id` counts from 1: it is the tape file number, tape file 0
+is the TOC.
 
 - `Folder(path, checksumType, encryptionMode=E_Mode.NONE)`.
-- `queueWrite(tapeDrive, runlist="")` adds, per file, the chain *checksum → encrypt → `dd`
-  to tape* to `Job` and returns the ids of the tape-write entries. Nothing is started here.
-  With a runlist id, a failing file stops the files after it.
-- `finalizeChecksums()` — call after the entries have finished, copies the results into
-  `file.cksum.value`.
-- `encrypt()` / `decrypt()` are empty stubs.
+- `queueWrite(tapeDrive, runlist="", spool=None)` queues, per file, the phases `Validate()` →
+  `Encrypt()` → `Write()` and returns the ids of the tape-write entries. Nothing is started here.
+  With a runlist id, a failing file stops the files after it. With a spool, the encrypted
+  files go there (`0001.crypt`), else next to the originals.
 
 Notes:
 - The checksum is taken from the plain file, before encryption.
-- The `.crypt` files are created next to the originals and are not removed afterwards.
+- Without a spool the `.crypt` files are created next to the originals and not removed.
 
 ### Job.py
 
@@ -150,7 +164,8 @@ thread limit.
   still run.
 - `Job.Work(delayMs)` starts a background thread that calls `Job.Refresh()` periodically;
   `Job.Stop()` ends it. `Job.Refresh()` can also be called by hand (the tests do this).
-- `Job.Get(id)`, `Job.Registry()`, `Job.Flush(killRunning=True)`.
+- `Job.Wait(ids, timeoutSec=0)` blocks until the entries are finished (drives `Refresh()`
+  itself), `Job.Get(id)`, `Job.Registry()`, `Job.Flush(killRunning=True)`.
 - Entry states: `WAITING_FOR_PARENT → READY4EXEC → RUNNING → COMPLETED | FAILED`.
   A failed parent fails all of its children.
 - Scheduling: a tape device runs one entry at a time, strictly in the order of `Add()`.
@@ -189,8 +204,9 @@ The long comment at the top of the file explains the SCSI commands and is worth 
   `ejectCommand` and call `tapeOverride(Tape(...))`. `path` may then be a regular file.
 
 Notes:
-- `write()` builds its command but does not start it; hand `command` to `Job`.
-  `rewind()`, `eject()` and `read()` still start theirs on their own.
+- `write()` and `read()` are the old single-file way. `File.Write()` / `File.Read()` replace
+  them, they go when the positioning is done. `rewind()` and `eject()` start their
+  commands on their own.
 - `writeTOC(sealedToc)` takes the text from `TableOfContent.seal()`, blocks until it is on
   tape, and only works at begin of tape.
 - `format()` is a stub that always raises.
@@ -206,8 +222,7 @@ passphrase of the tape (`openssl aes-256-ctr -pbkdf2`).
 - `TOC_Header(tapeDrive, threadCount, fingerprint="", bodyCipher=AES256CTR)` — a random
   fingerprint is created unless one is given. `header.state` is a `TOC_State`
   (`IDLE` / `COMPLETE` / `FAILED`).
-- `TableOfContent(rootFolder, header)` — also scans the direct subdirectories of the root
-  folder (one level) into `folder`.
+- `TableOfContent(folder, header)` — `folder` is the one `Folder` of the request.
 - `seal(passphrase)` → the JSON text to put on tape; `store(directory)` keeps a copy as
   `YYYYMMDD_hhmmss_<fingerprint>.json`.
 - `TableOfContent.readHeader(text)` needs no passphrase; `TableOfContent.open(text,
@@ -218,9 +233,18 @@ Notes:
 - `_asdict()` is the whole TOC in clear text including keys. Tests and debugging only.
 - Passphrase goes to `openssl` through the environment, the body through stdin; no plain
   text file is written.
-- Not done yet: the trailing TOC on tape, reading a TOC from tape, files of
-  sub directories in the body (see DESIGN.md).
+- Not done yet: the trailing TOC on tape and reading a TOC from tape (see DESIGN.md).
 - `TOC_Body` is gone.
+
+### Spool.py
+
+The spool directory of one job: `<mount>/rutbs-spool/<epoch>_<fingerprint>/`.
+
+- `Spool(mountpoint, fingerprint)` — raises `ValueError` unless `mountpoint` is a mount
+  point. `create()` makes the directory (mode 0700, `FileExistsError` if it exists),
+  `file(id)` is the path `0001.crypt` of a tape file number, `remove()` deletes the
+  directory (and `rutbs-spool` if it is empty). `remove()` refuses paths that are not below
+  `rutbs-spool`.
 
 ### TD_Pool.py
 
@@ -230,7 +254,9 @@ issues).
 
 ### Mount.py
 
-Plain data holder for one mounted file system. Used by `Host`.
+One mounted file system from `findmnt`: `filesystem`, `fstype`, `size`, `used`, `avail`,
+`mountpoint`. `Mount.list()` returns all, `Mount.of(path)` the one that holds an existing
+path (`None` otherwise). Used by `Spool`; `Host` will use it for its status.
 
 ### Response.py
 
@@ -281,18 +307,19 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 |------|--------|-------|
 | `UT_Version.py` | 16 bit version value | — |
 | `UT_Command.py` | start, wait, timeout, kill, stdout/stderr, hex output, `/proc` io, env, quoting | `ping`, `dd`, fixtures `cmd/` |
-| `UT_File.py` | create, touch, remove, append | fixtures `file/` |
-| `UT_Checksum.py` | create and validate, MD5 / SHA256 / SHA512, mismatch | fixtures `cksum/` |
-| `UT_Encryption.py` | key generation, encrypt → decrypt round trip for all modes | fixtures `encryption/` |
+| `UT_File.py` | create, touch, remove, append; the phases against a fake tape: derived state, pass-through, tape and back, damaged tape, refusals | fixtures `file/`, `openssl` |
+| `UT_Checksum.py` | `File.Validate()`: create and compare, MD5 / SHA256 / SHA512, mismatch | fixtures `cksum/` |
+| `UT_Encryption.py` | key generation, Validate → Encrypt → Decrypt → Validate for all modes, wrong key | fixtures `encryption/` |
 | `UT_Tape.py` | hardware id parsing | — |
+| `UT_Spool.py` | `/mnt/daten` is found as mount, spool create / remove, refusals | `findmnt`, `/mnt/daten` as mount |
 | `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, scheduler thread | — |
-| `UT_Folder.py` | file collection, odd file names, own key per file, write chain against a fake tape, abort | `openssl` |
+| `UT_Folder.py` | file collection, recursion and order, odd file names, own key per file, write chain against a fake tape, spool, abort | `openssl`, `/mnt/daten` as mount |
 | `UT_TableOfContent.py` | header, seal / open round trip, wrong passphrase, TOC directory | `openssl` |
 
 - Fixtures live in `/mnt/daten/testfiles/rutbs4` (absolute path, outside the repository).
-- `UT_File`, `UT_Checksum` and `UT_Encryption` modify the fixture files while running.
+- `UT_File` creates and deletes files in its fixture folder while running; `UT_Encryption` leaves the fixture as it was (it writes `.crypt` / `.restored` next to it and removes them).
 - `UnitTest.sh` runs everything but always exits 0; read the output.
-- Verified on 2026-11-17: all nine test files pass.
+- Verified on 2026-11-17: all ten test files pass.
 
 ---
 
@@ -301,22 +328,22 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 Reproduced on 2026-11-16 unless marked "(read)". Most of them are settled by the target
 design and disappear with the steps listed in [DESIGN.md](DESIGN.md).
 
-1. **The TOC is incomplete.** It lists the files of subfolders, but
-   `write_folder_to_tape.py` only writes the root folder; only one directory level is
-   scanned. There is no trailing TOC yet.
+1. **There is no trailing TOC yet.** `write_folder_to_tape.py` writes the first TOC only.
 2. **Nothing can be restored yet.** A sealed TOC can be opened from text, but there is no
    read from tape.
 3. With a regular file as fake tape, each `dd` truncates the file: only the last file
    written remains, the TOC is overwritten. Tests without hardware can therefore only
    cover a single file.
-4. `.crypt` files are written next to the originals and never removed (no spool yet).
+4. `write_folder_to_tape.py` does not use the spool yet, so its `.crypt` files are written next to the originals and never removed.
 5. `TD_Pool.gatherDrives()` reads the exit code right after `start()`, while the command is
    still running, and therefore reports "No Drives Found".
 6. `Host` and `rbs_backend.py` cannot be imported.
 7. `docs/classDiagram.md`, `docs/sequenceDiagrams.md`, `docs/JOB.MD` and `docs/todo.md`
    describe older designs and no longer match the code.
 
-Fixed on 2026-11-17: the keys are no longer in plain text on the tape (encrypted TOC body).
+Fixed on 2026-11-17: the keys are no longer in plain text on the tape (encrypted TOC body);
+there is one way to run a phase (the Job), `File.state` no longer lags behind, and
+`Checksum.setType()` after construction works.
 
 Fixed on 2026-11-16: files were written to tape in completion order instead of queue
 order; `File.encrypt()` could delete the original before the encryption had started; file

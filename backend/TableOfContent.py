@@ -6,11 +6,9 @@ import uuid
 
 from datetime import datetime
 from enum import Enum
-from typing import List
 
 from backend.Encryption import Encryption, E_Mode
 from backend.TapeDrive import TapeDrive
-from backend.Command import Command
 from backend.Folder import Folder
 from backend.Version import Version
 
@@ -104,30 +102,13 @@ class TableOfContent:
     """
 
 
-    def _scanSubDirs(self):
-        # -mindepth 1 is used so the root dir is not element of folder{}
-        self.command = Command("find " + Command.quote(self.rootFolder.path) + " -mindepth 1 -maxdepth 1 -type d")
-        self.command.wait()
-        for folder in self.command.stdout:
-            self.folder.append(Folder(folder, self.rootFolder.checksumType, self.rootFolder.encMode))
-
-    def __init__(self, rootFolder: Folder, header: TOC_Header) -> None:
-        self.command = None
-        self.rootFolder: Folder
-        self.folder: List[Folder] = []
-        # 1. Add all Folders to list
-        # 2. Add all Files from Root Folder
-        self.rootFolder = rootFolder
-        self._scanSubDirs() # When no subdirs available, find returns nothing with exit_code = 0
-
+    def __init__(self, folder: Folder, header: TOC_Header) -> None:
+        self.folder: Folder = folder    # all files below the input directory, in tape order
         self.header: TOC_Header = header
         self.sealed: str = ""
 
     def _body(self) -> dict:
-        return {
-            "rootFolder": self.rootFolder._asdict(),
-            "folders": [folder._asdict() for folder in self.folder]
-        }
+        return {"folder": self.folder._asdict()}
 
     def _asdict(self) -> dict:
         """Everything in clear text, keys included. For tests and debugging only, never for the tape."""

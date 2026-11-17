@@ -22,6 +22,7 @@ import uuid
 from backend.Checksum import ChecksumType
 from backend.Command import Command
 from backend.Encryption import E_Mode
+from backend.File import FileState
 from backend.Folder import Folder
 from backend.Job import Job
 from backend.Tape import Tape
@@ -120,19 +121,14 @@ def main() -> int:
     print("TOC written.")
 
     entries = folder.queueWrite(td, runlist=str(uuid.uuid4()))
-    Job.Work(200)
-    finished = wait_for(lambda: all(Job.Get(e).state in Job.FINISHED for e in entries), timeout=3600)
-    Job.Stop()
+    finished = Job.Wait(entries, timeoutSec=3600)
     if not finished:
         print("[ERROR] Timed out waiting for the write pipeline", file=sys.stderr)
         return 1
 
-    folder.finalizeChecksums()
-
     all_ok = True
-    for file, entry_id in zip(folder.files, entries):
-        entry = Job.Get(entry_id)
-        ok = entry.state.name == "COMPLETED"
+    for file in folder.files:
+        ok = file.state is FileState.IDLE       # the phases of the file all completed
         all_ok = all_ok and ok
         print(f"  [{'OK' if ok else 'FAILED'}] {file.path.name}  ({args.checksum}={file.cksum.value})")
         if ENCRYPTION_MAP[args.encryption] != E_Mode.NONE:   # needed to decrypt again!

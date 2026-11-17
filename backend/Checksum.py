@@ -61,8 +61,8 @@ class Checksum:
             return
 
         self.state = ChecksumState.CREATE
-        self.cmd.reset()
-        self.cmd.cmd = "openssl " + self.type.name.lower() + " -r " + Command.quote(self.file_path)
+        # A new Command every time: the Job queue keeps finished Commands and refuses a second Add() of the same object
+        self.cmd = Command("openssl " + self.type.name.lower() + " -r " + Command.quote(self.file_path))
 
     def validate(self, target: str) -> None:
         if self.state not in {ChecksumState.IDLE, ChecksumState.MISMATCH}:

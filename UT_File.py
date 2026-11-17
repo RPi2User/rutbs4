@@ -1,11 +1,50 @@
+import hashlib
+import os
+import tempfile
 import unittest
 
 # Module imports
 from backend.Checksum import Checksum, ChecksumState, ChecksumType
 from backend.Command import Command
+from backend.Encryption import E_Mode
 from backend.File import File, FileState, FilePath
+from backend.Job import Job
+from backend.Tape import Tape
+from backend.TapeDrive import TapeDrive
 
 class UT_File(unittest.TestCase):
+
+    """_summary_
+    Tests A: sanity, touch, remove, append (fixtures)
+    Tests B: the phases (Validate, Encrypt, Write, Read, Decrypt) against a fake tape, no fixtures
+        - BA: the state is derived from the Job entries
+        - BB: phases with nothing to do pass the chain on
+        - BC: a File goes onto the tape and comes back
+        - BD: a damaged tape is noticed by the last Validate()
+        - BE: refused phases
+    """
+
+    def setUp(self) -> None:
+        Job.Stop()
+        Job.Flush()
+
+    def tearDown(self) -> None:
+        Job.Flush()
+
+    def _tape(self, tmp: str) -> TapeDrive:
+        path: str = os.path.join(tmp, "faketape.bin")
+        open(path, "wb").close()
+        td: TapeDrive = TapeDrive(path=path, generic_path="", drive_override=True)
+        td.tapeOverride(Tape("3800"))
+        return td
+
+    def _source(self, tmp: str, content: bytes, mode: E_Mode) -> File:
+        path: str = os.path.join(tmp, "payload.bin")
+        with open(path, "wb") as f:
+            f.write(content)
+        file: File = File(1, path, tmp)
+        file.encryption_scheme.mode = mode
+        return file
 
     CONTEXT: str = "/mnt/daten/testfiles/rutbs4"
 
@@ -110,6 +149,98 @@ class UT_File(unittest.TestCase):
             print(f)
             raise
         print("E_APPEND")
+
+    def test_BA_stateIsDerived(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            file: File = self._source(tmp, b"data", E_Mode.NONE)
+            self.assertEqual(file.state, FileState.IDLE)
+
+            entry: str = file.Validate()
+            self.assertEqual(file.state, FileState.QUEUED)
+            self.assertEqual(file.entries, [(FileState.CKSUM_CALC, entry)])
+
+            self.assertTrue(Job.Wait([entry], 10))
+            self.assertEqual(file.state, FileState.IDLE)
+            self.assertEqual(file.cksum.value, hashlib.sha256(b"data").hexdigest())
+        print("BA_STATE_DERIVED")
+
+    def test_BB_nothingToDoPassesOn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            file: File = self._source(tmp, b"data", E_Mode.NONE)
+            file.cksum.setType(ChecksumType.NONE)
+
+            self.assertEqual(file.Validate(dependsOn="parent"), "parent")
+            self.assertEqual(file.Encrypt(dependsOn="parent"), "parent")
+            self.assertEqual(file.Decrypt(tmp + "/x", dependsOn="parent"), "parent")
+            self.assertEqual(file.entries, [])
+        print("BB_PASS_ON")
+
+    def _writeAndRestore(self, tmp: str, mode: E_Mode, damage: bool) -> File:
+        content: bytes = os.urandom(4096)
+        td: TapeDrive = self._tape(tmp)
+        file: File = self._source(tmp, content, mode)
+
+        # forward: checksum, encrypt, tape
+        step: str = file.Validate(runlist="write")
+        step = file.Encrypt(runlist="write", dependsOn=step)
+        step = file.Write(td, runlist="write", dependsOn=step)
+        self.assertTrue(Job.Wait([step], 30))
+        self.assertEqual(file.state, FileState.IDLE)
+        self.assertEqual(file.cksum.value, hashlib.sha256(content).hexdigest())
+
+        if damage:
+            with open(td.path, "r+b") as f:
+                f.seek(100)
+                f.write(b"\xff\xff\xff\xff")
+
+        # back: tape, decrypt, compare with the stored checksum - queued in one go
+        target: str = os.path.join(tmp, "restored.crypt" if mode is not E_Mode.NONE else "restored.bin")
+        step = file.Read(td, target, runlist="read")
+        step = file.Decrypt(os.path.join(tmp, "restored.bin"), runlist="read", dependsOn=step)
+        step = file.Validate(runlist="read", dependsOn=step)
+        self.assertTrue(Job.Wait([step], 30))
+
+        if not damage:
+            with open(os.path.join(tmp, "restored.bin"), "rb") as f:
+                self.assertEqual(f.read(), content)
+        return file
+
+    def test_BC_tapeAndBack(self) -> None:
+        for mode in [E_Mode.NONE, E_Mode.AES256CBC, E_Mode.AES128CTR]:
+            with tempfile.TemporaryDirectory() as tmp:
+                file: File = self._writeAndRestore(tmp, mode, damage=False)
+                self.assertEqual(file.state, FileState.IDLE, mode.name)
+                self.assertEqual(file.state_msg, [])
+        print("BC_TAPE_AND_BACK")
+
+    def test_BD_damagedTape(self) -> None:
+        for mode in [E_Mode.NONE, E_Mode.AES128CTR]:      # CBC would already fail to decrypt, see UT_Encryption
+            with tempfile.TemporaryDirectory() as tmp:
+                file: File = self._writeAndRestore(tmp, mode, damage=True)
+                self.assertEqual(file.state, FileState.MISMATCH, mode.name)
+        print("BD_DAMAGED_TAPE")
+
+    def test_BE_refusals(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            file: File = self._source(tmp, b"data", E_Mode.AES256CBC)
+            td: TapeDrive = self._tape(tmp)
+
+            with self.assertRaises(RuntimeError):
+                file.Write(td)                  # Encrypt() first
+            with self.assertRaises(RuntimeError):
+                file.Decrypt(tmp + "/x")        # nothing to decrypt yet
+
+            file.Validate()
+            with self.assertRaises(RuntimeError):
+                file.Validate()                 # the first checksum has not run yet
+
+            Job.Flush()
+            fresh: File = self._source(tmp, b"data", E_Mode.NONE)
+            fresh.state = FileState.ERROR       # final: no further phase
+            with self.assertRaises(RuntimeError):
+                fresh.Validate()
+        print("BE_REFUSALS")
+
 
 if __name__ == '__main__':
     unittest.main()

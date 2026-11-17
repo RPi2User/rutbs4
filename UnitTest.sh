@@ -27,3 +27,6 @@ python3 UT_Folder.py
 
 echo TableOfContent
 python3 UT_TableOfContent.py
+
+echo Spool
+python3 UT_Spool.py

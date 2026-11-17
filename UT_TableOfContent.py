@@ -32,7 +32,7 @@ class UT_TableOfContent(unittest.TestCase):
     def _toc(self, tmp: str) -> TableOfContent:
         src: str = os.path.join(tmp, "src")
         os.makedirs(os.path.join(src, "sub"))
-        for name in ["a.txt", "b b.txt"]:
+        for name in ["a.txt", "b b.txt", "sub/c.txt"]:
             with open(os.path.join(src, name), "w") as f:
                 f.write("data " + name)
 
@@ -71,8 +71,8 @@ class UT_TableOfContent(unittest.TestCase):
             toc: TableOfContent = self._toc(tmp)
             text: str = toc.seal(self.PASSPHRASE)
 
-            keys: list = [(f.encryption_scheme.key.value, f.encryption_scheme.key.iv) for f in toc.rootFolder.files]
-            self.assertEqual(len(keys), 2)
+            keys: list = [(f.encryption_scheme.key.value, f.encryption_scheme.key.iv) for f in toc.folder.files]
+            self.assertEqual(len(keys), 3)
 
             # nothing secret in the clear text part
             for value, iv in keys:
@@ -80,12 +80,11 @@ class UT_TableOfContent(unittest.TestCase):
             self.assertNotIn("a.txt", text)    # file names are in the body, too
 
             opened: dict = TableOfContent.open(text, self.PASSPHRASE)
-            files: list = opened["body"]["rootFolder"]["files"]
-            self.assertEqual(sorted(f["path"]["name"] for f in files),
-                             ["a.txt", "b b.txt"])
+            files: list = opened["body"]["folder"]["files"]
+            self.assertEqual([f["path"]["relPath"] for f in files], ["a.txt", "b b.txt", "sub/c.txt"])
+            self.assertEqual([f["id"] for f in files], [1, 2, 3])
             restored: list = [(f["encryption"]["key"]["value"], f["encryption"]["key"]["iv"]) for f in files]
             self.assertEqual(sorted(restored), sorted(keys))
-            self.assertEqual(len(opened["body"]["folders"]), 1)     # sub
 
     def test_C_wrongPassphrase(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

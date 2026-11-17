@@ -78,8 +78,8 @@ the job; for every file it shows which step failed and why. Its size does not ma
   A wrong passphrase shows as a body that is not valid JSON.
 - The clear-text header must never contain key material. The drive snapshot in the header
   therefore must not carry the file the drive is working on.
-- If the backend is started with a TOC directory, every final TOC is also stored there as
-  `YYYYMMDD_hhmmss_<fingerprint>.json`. This loose collection answers which tape holds a
+- Every final TOC is also stored in the TOC directory of the backend (default `/opt/rutbs`)
+  as `YYYYMMDD_hhmmss_<fingerprint>.json`. This loose collection answers which tape holds a
   file, and a passphrase can be tested against it without loading the tape.
 - **(proposal)** Container: `{"header": {…}, "body": "…"}` in one JSON document, see
   `examples/toc_proposal_tape.json`. The body is the output of the cipher named in the
@@ -133,11 +133,14 @@ The file is the core object. It goes through every phase itself:
 | `File.Validate()` | check that I am still myself |
 | `File.Get()` | fetch me from an S3 bucket — future |
 
-**(proposal)** Each phase only prepares one `Command` and hands it to the job. The file
-derives its state from those commands. There is no second, blocking way to run a phase.
+Each phase only prepares one `Command` and hands it to the job, and returns the job entry
+id so the next phase can depend on it. The file derives its state from those entries.
+There is no second, blocking way to run a phase. The phases are implemented in
+`backend/File.py`; `Validate()` creates the checksum, and compares to it when there is one.
 
 - The relative path of a file is kept, so a directory tree is restored 1:1.
-  Sub directories are scanned recursively.
+  Sub directories are scanned recursively; the files are sorted by relative path, which is
+  the tape order.
 - Restored metadata: modification time and permissions.
 - Restoring a single file: read the TOC, jump to the tape file number, read that one
   file, rewind and eject, report success or not-found.
@@ -149,9 +152,10 @@ derives its state from those commands. There is no second, blocking way to run a
   until it is complete; nothing is guessed.
 - Every job gets its own spool directory:
   `<mount>/rutbs-spool/<epoch>_<fingerprint>/` with the TOC, the checksum list and the
-  encrypted files. It is removed when the job is done.
-- **(proposal)** Encrypted files in the spool are named after their tape file number
-  (`0001.crypt`), because two files in different directories may share a name.
+  encrypted files. It is removed when the job is done. The mount must be a real mount
+  point (`backend/Mount.py` finds them with `findmnt`), a plain directory is refused.
+- Encrypted files in the spool are named after their tape file number (`0001.crypt`),
+  because two files in different directories may share a name.
 
 ## Security
 
@@ -177,10 +181,14 @@ derives its state from those commands. There is no second, blocking way to run a
 ## Host and REST API
 
 - The host has a stable fingerprint, so a frontend can recognise it and send the matching
-  configuration. It is taken from `/etc/machine-id`; alternatively the backend is started
-  with an id of choice as command line argument.
-- Command line arguments of the backend: port, TOC directory, host id. Everything else is
-  configured at run time.
+  configuration. It is read from a machine id file.
+- The backend has exactly two command line arguments. Everything else is configured at run
+  time, the port is fixed (5533).
+
+  | Argument | Default |
+  |----------|---------|
+  | TOC directory | `/opt/rutbs` |
+  | machine id file | `/etc/machine-id` |
 - Configuration (paths, thread limit, …) is set at run time through the API and held in
   memory. The frontend is responsible for providing it.
 - Long operations do not block the request: `POST` returns a job id, the progress is polled.
@@ -201,12 +209,14 @@ derives its state from those commands. There is no second, blocking way to run a
 
 Done: tape order follows the queue; a failure aborts its run list; every file has its own
 key; secrets are kept off the command line; TOC with version, fingerprint, state, encrypted
-body, reading from text and TOC directory.
+body, reading from text and TOC directory; recursive scan in tape order, mounts and spool
+directory; the file phases (`Validate`, `Encrypt`, `Write`, `Read`, `Decrypt`) on the queue.
 
-1. TOC: reading it back from tape (needs the drive, see 3), files of sub directories.
-2. File: phase methods on top of the queue; remove the blocking path and the duplicate
-   state machines. Recursive scan, spool directory.
-3. TapeDrive: positioning by tape file number, trailing TOC, drive discovery by serial.
+1. TOC: reading it back from tape (needs the drive, see 3).
+2. Restore of a whole folder: build the files from the TOC (a `File` needs an existing
+   file today), `Folder.queueRestore()`, restore of metadata. Needs the positioning of 3.
+3. TapeDrive: positioning by tape file number, trailing TOC, drive discovery by serial,
+   remove the old `write()` / `read()` (replaced by `File.Write()` / `File.Read()`).
    Needs hardware.
 4. Host and REST API on the new core; then remove `write_folder_to_tape.py`.
 5. Cartridge memory. Needs hardware.

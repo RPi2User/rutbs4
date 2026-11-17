@@ -65,13 +65,12 @@ class Encryption:
         E_Mode.AES256CTR: "openssl aes-256-ctr -pbkdf2 ",
     }
 
-    def __init__(self, key: Key, mode: E_Mode = E_Mode.AES256CBC, keepOrig: bool = True):
+    def __init__(self, key: Key, mode: E_Mode = E_Mode.AES256CBC):
         self.key = key
         self.mode = mode
         self.cmd = Command("")
         self.state: E_State = E_State.IDLE
         self.targetPath = ""
-        self.keepOrig: bool = keepOrig
 
     def refresh(self) -> None:
         self.cmd.status()
@@ -90,38 +89,36 @@ class Encryption:
 
         # Continue IDLEing
 
-    def decrypt(self, path: str) -> None:
+    def decrypt(self, path: str, target: str = "") -> None:
         if self.state != E_State.IDLE or self.mode == E_Mode.NONE:
             return
 
         self.state = E_State.DECRYPT
 
-        self.targetPath = ".".join([part for part in path.split('.')[:-1]]) # removes ".tail"
+        self.targetPath = target or ".".join([part for part in path.split('.')[:-1]]) # default: removes ".tail"
 
-        self.cmd.reset()
-        self.cmd.env = {self.KEY_ENV: self.key.value}
-        self.cmd.cmd = (self.MODE_CMD[self.mode] + "-d -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
-                        " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath))
+        # A new Command every time: the Job queue keeps finished Commands and refuses a second Add() of the same object
+        self.cmd = Command(self.MODE_CMD[self.mode] + "-d -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
+                           " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath),
+                           env={self.KEY_ENV: self.key.value})
 
-    def encrypt(self, path: str) -> None:
+    def encrypt(self, path: str, target: str = "") -> None:
         if self.state != E_State.IDLE or self.mode == E_Mode.NONE:
             return
 
         self.state = E_State.ENCRYPT
 
-        self.targetPath = path + ".crypt"
+        self.targetPath = target or path + ".crypt"   # target: e.g. a file in the spool
 
-        self.cmd.reset()
-        self.cmd.env = {self.KEY_ENV: self.key.value}
-        self.cmd.cmd = (self.MODE_CMD[self.mode] + "-e -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
-                        " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath))
+        self.cmd = Command(self.MODE_CMD[self.mode] + "-e -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
+                           " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath),
+                           env={self.KEY_ENV: self.key.value})
 
     def _asdict(self) -> dict:
         self.refresh()
         data = {
             "state": self.state.name,
             "mode": self.mode.name,
-            "keepOrigFile": self.keepOrig,
             "newFilePath": self.targetPath,
             "key": self.key._asdict(),
             "cmd": self.cmd._asdict()

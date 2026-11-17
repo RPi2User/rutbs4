@@ -112,6 +112,7 @@ class Job():
     | `Job.Registry()`   | Returns all Entries as dict                              |
     | `Job.Flush()`      | Kills & removes all, or (killRunning=False) removes done |
     | `Job.Refresh()`    | One scheduler tick: update states, start Entries         |
+    | `Job.Wait()`       | Blocks until the given Entries are COMPLETED or FAILED   |
     | `Job.Work()`       | Starts the JobScheduler thread (calls Refresh)           |
     | `Job.Stop()`       | Stops the JobScheduler thread                            |
     """
@@ -173,6 +174,21 @@ class Job():
             Job._updateStates()
             Job._startEntries()
             Job._updateJobState()
+
+    @staticmethod
+    def Wait(entryIds: List[str], timeoutSec: float = 0) -> bool:
+        """
+        Blocks until all given Entries are COMPLETED or FAILED, and drives the scheduler
+        itself, so it works with or without Job.Work(). timeoutSec 0 = wait forever.
+        Returns False on timeout.
+        """
+        end: float = time.time() + timeoutSec
+        while any(Job.Get(i).state not in Job.FINISHED for i in entryIds):
+            if timeoutSec and time.time() > end:
+                return False
+            Job.Refresh()
+            time.sleep(0.01)
+        return True
 
     @staticmethod
     def Work(delayMs: int = 500) -> None:

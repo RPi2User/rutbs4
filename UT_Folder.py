@@ -8,8 +8,10 @@ import unittest
 # Module imports
 from backend.Checksum import ChecksumType
 from backend.Encryption import E_Mode
+from backend.File import FileState
 from backend.Folder import Folder
 from backend.Job import Job, EntryState
+from backend.Spool import Spool
 from backend.Tape import Tape
 from backend.TapeDrive import TapeDrive
 
@@ -19,6 +21,8 @@ class UT_Folder(unittest.TestCase):
     """_summary_
     Tests A:
         - AA-AC: File collection, own Key/IV and Command per File, odd file names
+        - AD:    Sub directories are scanned, tape order = sorted relative paths, ids start at 1
+        - AE:    Encrypted Files go to the spool, named after the tape file number
         - B:     Single File end-to-end via Job against a drive_override TapeDrive
         - C:     Job-chain structure for checksum -> encrypt -> write, and NONE/NONE
         - D:     A failing File aborts the rest of the write
@@ -54,7 +58,7 @@ class UT_Folder(unittest.TestCase):
             for n in range(3):
                 with open(os.path.join(src, f"f{n}.txt"), "w") as f:
                     f.write("data" + str(n))
-            os.makedirs(os.path.join(src, "subdir"))  # must be ignored, -maxdepth 1 -type f
+            os.makedirs(os.path.join(src, "subdir"))  # an empty directory is not a file
 
             folder: Folder = Folder(src, ChecksumType.SHA256, E_Mode.NONE)
 
@@ -91,7 +95,6 @@ class UT_Folder(unittest.TestCase):
 
             entries = folder.queueWrite(self._fakeTape(dst))
             self._waitAll(entries)
-            folder.finalizeChecksums()
 
             for entry, file in zip(entries, folder.files):
                 self.assertEqual(Job.Get(entry).state, EntryState.COMPLETED)
@@ -100,6 +103,44 @@ class UT_Folder(unittest.TestCase):
                 self.assertNotIn(key, str(Job.Get(entry)))  # the key is not part of any command
                 self.assertNotIn(key, str(Job.Get(Job.Get(entry).dependsOn)))
         print("AC_ODD_FILE_NAMES")
+
+    def test_AD_recursiveAndOrdered(self) -> None:
+        with tempfile.TemporaryDirectory() as src:
+            for rel in ["z.txt", "m.txt", "a/b.txt", "a/a.txt", "a/deep/x.txt"]:
+                os.makedirs(os.path.dirname(os.path.join(src, rel)), exist_ok=True)
+                with open(os.path.join(src, rel), "w") as f:
+                    f.write(rel)
+
+            folder: Folder = Folder(src, ChecksumType.NONE, E_Mode.NONE)
+
+            self.assertEqual([f.path.relPath for f in folder.files],
+                             ["a/a.txt", "a/b.txt", "a/deep/x.txt", "m.txt", "z.txt"])
+            self.assertEqual([f.id for f in folder.files], [1, 2, 3, 4, 5])     # tape file 0 is the TOC
+            self.assertEqual(folder.files[0].path.parent, os.path.join(src, "a"))
+            self.assertEqual(folder.files[0].path.context, src)
+        print("AD_RECURSIVE_ORDERED")
+
+    @unittest.skipUnless(os.path.ismount("/mnt/daten"), "needs /mnt/daten as a mount")
+    def test_AE_spool(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            src: str = os.path.join(tmp, "src")
+            os.makedirs(src)
+            with open(os.path.join(src, "f.txt"), "w") as f:
+                f.write("data")
+
+            spool: Spool = Spool("/mnt/daten", "ut-folder")
+            spool.create()
+            try:
+                folder: Folder = Folder(src, ChecksumType.NONE, E_Mode.AES256CBC)
+                entries = folder.queueWrite(self._fakeTape(tmp), spool=spool)
+                self._waitAll(entries)
+
+                self.assertEqual(Job.Get(entries[0]).state, EntryState.COMPLETED)
+                self.assertTrue(os.path.exists(os.path.join(spool.path, "0001.crypt")))
+                self.assertFalse(os.path.exists(os.path.join(src, "f.txt.crypt")))   # nothing next to the original
+            finally:
+                spool.remove()
+        print("AE_SPOOL")
 
     def test_BA_singleFileRoundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
@@ -116,9 +157,9 @@ class UT_Folder(unittest.TestCase):
             Job.Work(20)
             self._waitAll(entries)
             Job.Stop()
-            folder.finalizeChecksums()
 
             self.assertEqual(Job.Get(entries[0]).state, EntryState.COMPLETED)
+            self.assertEqual(folder.files[0].state, FileState.IDLE)     # derived from the Job entries, no finalize step
             self.assertEqual(folder.files[0].cksum.value, hashlib.sha256(content).hexdigest())
 
             with open(td.path, "rb") as f:
@@ -205,6 +246,7 @@ class UT_Folder(unittest.TestCase):
             self.assertEqual(Job.Get(entries[1]).state, EntryState.FAILED)
             self.assertEqual(Job.Get(entries[2]).state, EntryState.FAILED)      # aborted ...
             self.assertFalse(folder.files[2].cksum.cmd.didRun)                  # ... before anything ran
+            self.assertEqual([f.state for f in folder.files], [FileState.IDLE, FileState.ERROR, FileState.ERROR])
         print("DA_FAILED_FILE_ABORTS")
 
 
