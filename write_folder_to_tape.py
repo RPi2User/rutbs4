@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
                               "or when --tape is a regular file instead of a real tape device)")
     parser.add_argument("--rewind-cmd", default="",
                          help="Command used to rewind the tape (only used together with --drive-override), "
-                              "e.g. 'mt -f /dev/nst0 rewind'")
+                              "e.g. 'sg_raw /dev/sg0 0x01 0 0 0 0 0'")
     return parser.parse_args()
 
 

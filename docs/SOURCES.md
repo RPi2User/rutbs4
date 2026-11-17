@@ -25,9 +25,8 @@ There are two generations of code in the repository:
 
 | Status | Files |
 |--------|-------|
-| **Current**, importable, unit tests pass | `Version`, `Command`, `Checksum`, `Encryption`, `File`, `Folder`, `Spool`, `Mount`, `Job`, `Tape`, `TapeDrive`, `TableOfContent`, `write_folder_to_tape.py` |
+| **Current**, importable, unit tests pass | `Version`, `Command`, `Checksum`, `Encryption`, `File`, `Folder`, `Spool`, `Mount`, `Job`, `Tape`, `TapeDrive`, `TD_Pool`, `TableOfContent`, `write_folder_to_tape.py` |
 | **To be ported**, not importable | `Host`, `rbs_backend.py` — the REST layer. Still written against the package `tbk`, which no longer exists (renamed to `_old_tbk/`, git-ignored). `Response` belongs to it. |
-| Unfinished | `TD_Pool` (imports, but does not find drives) |
 
 Conventions used by all current classes:
 
@@ -194,9 +193,11 @@ Notes:
 One tape drive. Talks SCSI through `sg_raw` and moves data with `dd`.
 The long comment at the top of the file explains the SCSI commands and is worth reading.
 
-- `TapeDrive(path, generic_path, drive_override=False, blocksize="256K")` —
+- `TapeDrive(path, generic_path, drive_override=False, blocksize="256K", paths=None, wwid="")` —
   `path` is the non-rewinding device (`/dev/nst0`), `generic_path` the SCSI generic device
-  (`/dev/sg0`). The constructor queries vendor/model/serial and the tape.
+  (`/dev/sg0`). The constructor queries vendor/model/serial and the tape. `wwid` is the id
+  the kernel gives the logical unit (read from sysfs if not given), `paths` all
+  `(nst, sg)` pairs of a drive with several cables, `id` the key for the Job (`wwid`, else the path).
 - `rewind()`, `eject()`, `write(file)`, `read(file)`, `writeTOC(toc)`, `clearError()`.
 - States (`TD_State`): `IDLE`, `READ`, `WRITE`, `REWIND`, `EJECT`, `WRITE_TOC`, `ERROR`, …
   Operations are silently ignored unless the drive is `IDLE`.
@@ -248,9 +249,20 @@ The spool directory of one job: `<mount>/rutbs-spool/<epoch>_<fingerprint>/`.
 
 ### TD_Pool.py
 
-Meant to find all tape drives: `/dev/sg*` devices of group `tape`, mapped to their
-`/dev/nstX` device through sysfs. Not used anywhere and not functional yet (see known
-issues).
+Finds the tape drives. A drive with two SAS cables shows up as two `sg` / `nst` devices and
+is ONE drive: devices are grouped by the `wwid` the kernel publishes in
+`/sys/class/scsi_generic/sgN/device/wwid`, not by the serial number.
+
+- `TD_Pool(sysfs=..., dev="/dev", drive_override=False)`.
+- `scan()` reads sysfs only (no SCSI command) and returns one dict per drive: `wwid`,
+  `vendor`, `model`, `paths` (`[(nst, sg), ...]`, sorted by sg number).
+- `gatherDrives()` returns one `TapeDrive` per drive (it queries the drive) and keeps them
+  in `drives`.
+- A drive is never hidden: every tape with an `nst` device is listed. Paths that cannot be
+  proven to be one drive (no `wwid`, or the same `wwid` with another vendor / model) are
+  listed on their own, with a `[WARNING]` in `messages`. Only a tape without `nst` device
+  is left out (`[ERROR]`).
+- `TapeDrive.id` is the `wwid`, else the path: the Job key.
 
 ### Mount.py
 
@@ -311,6 +323,7 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 | `UT_Checksum.py` | `File.Validate()`: create and compare, MD5 / SHA256 / SHA512, mismatch | fixtures `cksum/` |
 | `UT_Encryption.py` | key generation, Validate → Encrypt → Decrypt → Validate for all modes, wrong key | fixtures `encryption/` |
 | `UT_Tape.py` | hardware id parsing | — |
+| `UT_TD_Pool.py` | fake sysfs: two paths of one drive, natural sg order, nothing hidden | — |
 | `UT_Spool.py` | `/mnt/daten` is found as mount, spool create / remove, refusals | `findmnt`, `/mnt/daten` as mount |
 | `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, scheduler thread | — |
 | `UT_Folder.py` | file collection, recursion and order, odd file names, own key per file, write chain against a fake tape, spool, abort | `openssl`, `/mnt/daten` as mount |
@@ -319,7 +332,7 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 - Fixtures live in `/mnt/daten/testfiles/rutbs4` (absolute path, outside the repository).
 - `UT_File` creates and deletes files in its fixture folder while running; `UT_Encryption` leaves the fixture as it was (it writes `.crypt` / `.restored` next to it and removes them).
 - `UnitTest.sh` runs everything but always exits 0; read the output.
-- Verified on 2026-11-17: all ten test files pass.
+- Verified on 2026-11-17: all eleven test files pass.
 
 ---
 
@@ -334,16 +347,19 @@ design and disappear with the steps listed in [DESIGN.md](DESIGN.md).
 3. With a regular file as fake tape, each `dd` truncates the file: only the last file
    written remains, the TOC is overwritten. Tests without hardware can therefore only
    cover a single file.
-4. `write_folder_to_tape.py` does not use the spool yet, so its `.crypt` files are written next to the originals and never removed.
-5. `TD_Pool.gatherDrives()` reads the exit code right after `start()`, while the command is
-   still running, and therefore reports "No Drives Found".
+4. **The spool needs as much free space as the whole input.** Nothing holds back the
+   encryption while the tape is slower, and a spool file is not deleted after the drive has
+   taken it (only `Spool.remove()` at the end does). Plan the spool mount for the full
+   encrypted size of the input directory.
+5. `write_folder_to_tape.py` does not use the spool yet, so its `.crypt` files are written next to the originals and never removed.
 6. `Host` and `rbs_backend.py` cannot be imported.
 7. `docs/classDiagram.md`, `docs/sequenceDiagrams.md`, `docs/JOB.MD` and `docs/todo.md`
    describe older designs and no longer match the code.
 
 Fixed on 2026-11-17: the keys are no longer in plain text on the tape (encrypted TOC body);
 there is one way to run a phase (the Job), `File.state` no longer lags behind, and
-`Checksum.setType()` after construction works.
+`Checksum.setType()` after construction works; `TD_Pool` finds drives and treats the
+two paths of a dual-cabled drive as one.
 
 Fixed on 2026-11-16: files were written to tape in completion order instead of queue
 order; `File.encrypt()` could delete the original before the encryption had started; file

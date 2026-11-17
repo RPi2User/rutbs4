@@ -214,7 +214,7 @@ class File:
             "iflag=fullblock status=none bs=" + tapeDrive.blocksize,
             filesize=self.size)
         tapeDrive.tape.begin_of_tape = False
-        return self._queue(FileState.WRITE, cmd, runlist, dependsOn, tape=tapeDrive.path)
+        return self._queue(FileState.WRITE, cmd, runlist, dependsOn, tape=tapeDrive.id)
 
     def Read(self, tapeDrive: "TapeDrive", target: str, runlist: str = "", dependsOn: str = "") -> str:
         self._accept()
@@ -227,7 +227,7 @@ class File:
             "dd if=" + Command.quote(tapeDrive.path) + " of=" + Command.quote(target) + " " +
             "iflag=fullblock status=none bs=" + tapeDrive.blocksize,
             filesize=self.size)
-        return self._queue(FileState.READ, cmd, runlist, dependsOn, tape=tapeDrive.path)
+        return self._queue(FileState.READ, cmd, runlist, dependsOn, tape=tapeDrive.id)
 
     def Decrypt(self, target: str, runlist: str = "", dependsOn: str = "") -> str:
         self._accept()

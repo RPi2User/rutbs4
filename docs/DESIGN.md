@@ -28,8 +28,8 @@ tape file 1..N   the files, in exactly the order of the TOC
 tape file N+1    TOC, state COMPLETE    the result: same content plus checksums
 ```
 
-- The **tape file number** is the position of a file. It is stored in the TOC, and
-  `mt fsf <n>` jumps to it.
+- The **tape file number** is the position of a file. It is stored in the TOC, and a SCSI
+  SPACE command (file marks) jumps to it.
 - The order is fixed when the job is created (sorted by relative path). Nothing about it
   depends on timing, so the first TOC can be written before any file is processed.
 - The second TOC gives redundancy (a damaged begin of tape does not lose the tape) and is
@@ -170,9 +170,29 @@ There is no second, blocking way to run a phase. The phases are implemented in
 
 - The backend finds the drives itself and reports vendor, model, serial, device paths and
   state. One implementation, run at start and on request.
-- A drive is identified by its **serial number**. The same drive reachable on several
-  paths (SAS multipath: `/dev/nst0` and `/dev/nst1`) is one drive. A drive without a
-  readable serial is rejected: `TapeDrive Serial not readable`.
+- A drive is identified by the **id of its logical unit** that the kernel reads from the
+  device identification (SCSI INQUIRY VPD page 0x83) and publishes in sysfs as `wwid`
+  (`naa.50050763121a839e`). It is not the serial number. A drive with two SAS cables shows up
+  as two `sg` and two `nst` devices with the same `wwid` (the ports differ): that is ONE
+  `TapeDrive`, `TapeDrive.paths` lists all pairs and the first one is used. `TapeDrive.id`
+  is the key the Job uses, so a drive never gets two commands at once, whichever path.
+- **A drive is never hidden.** Whenever the kernel made a `/dev/nstX` for it, it is listed.
+  If it cannot be proven that two paths are one drive (no `wwid`, or the same `wwid` with
+  a different vendor / model), they are listed as two, with a warning. Showing a drive twice
+  is better than not showing it.
+- **The drive decides whether it can take an order.** Before every job step the drive is
+  asked, over SCSI, whether it is able to accept it, and the state machine acts on the
+  answer. That is what keeps a drive that is listed twice (or used by another process) from
+  getting two orders at once; the backend keeps no bookkeeping for it. The steps stay small
+  and atomic for this reason. Open: which query shows reliably that the drive is busy on its
+  other path (TEST UNIT READY, or RESERVE / RELEASE); to be tried on the drive while a write
+  runs. Today `TapeDrive` only looks at the state of its own `Command`, there is no
+  query to the drive yet.
+- A `TapeDrive` does four things: rewind, eject, write a data stream with `dd`, read a data
+  stream with `dd`. Everything else is optional: reading the cartridge memory, seeking
+  (one file forward / backward, file n), formatting. Eject is never part of a test run.
+- SCSI only: the code sends SCSI commands (`sg_raw`) and uses `dd` on the `nst` device. It
+  does not use `mt`; the operator may. Horizon: a Python SCSI library instead of `sg_raw`.
 - Position: the backend only knows "at begin of tape" or "not". It rewinds itself before
   it starts a job.
 - Block size belongs to the tape and is stored in the TOC header. Default `256K`.
@@ -215,8 +235,9 @@ directory; the file phases (`Validate`, `Encrypt`, `Write`, `Read`, `Decrypt`) o
 1. TOC: reading it back from tape (needs the drive, see 3).
 2. Restore of a whole folder: build the files from the TOC (a `File` needs an existing
    file today), `Folder.queueRestore()`, restore of metadata. Needs the positioning of 3.
-3. TapeDrive: positioning by tape file number, trailing TOC, drive discovery by serial,
-   remove the old `write()` / `read()` (replaced by `File.Write()` / `File.Read()`).
-   Needs hardware.
+3. TapeDrive: the four functions as job phases (`Rewind()`, `Eject()`, `Write()`, `Read()`,
+   queued in tape order), the trailing TOC, remove the old `write()` / `read()` /
+   `writeTOC()` / `format()`. Optional: seek by tape file number with the SCSI SPACE
+   command. Drive discovery is done (`TD_Pool`). Needs the drive to verify.
 4. Host and REST API on the new core; then remove `write_folder_to_tape.py`.
 5. Cartridge memory. Needs hardware.

@@ -1,5 +1,7 @@
 import json
+import os
 from time import sleep
+from typing import List, Tuple
 from enum import Enum
 import uuid
 
@@ -168,6 +170,8 @@ class TapeDrive:
     model: str = ""
     serial: str = ""
     blocksize: str = ""
+    wwid: str = ""                  # kernel's id of the logical unit, the same on every path of one drive
+    paths: List[Tuple[str, str]]    # all (nst, sg) device pairs of this drive, the first one is used
 
     rewindCommand: Command = None
     ejectCommand: Command = None
@@ -177,7 +181,7 @@ class TapeDrive:
 
     # Internal variables, do not edit!
     drive_override: bool = False
-    tape: Tape = Tape("0000")
+    tape: Tape                      # per instance, see __init__
     tape_override: bool = False
     state: TD_State = TD_State.ERROR
     path: str = ""
@@ -261,13 +265,13 @@ class TapeDrive:
             "override": {
                 "active": true,
                 "rewindCommand": {
-                    "cmd": "mt -f /dev/nst0 rewind",
+                    "cmd": "sg_raw '/dev/sg0' 0x01 0 0 0 0 0",
                     "pid": 10559,
                     "running": false,
                     {…}
                     "exitCode": 0},
                 "ejectCommand": {
-                    "cmd": "mt -f /dev/nst0 eject",
+                    "cmd": "sg_raw '/dev/sg0' 0x1B 0 0 0 0 0",
                     {…}
                     "exitCode": null}
                 },
@@ -308,9 +312,26 @@ class TapeDrive:
         Useful resources:
             https://www.cyberciti.biz/hardware/unix-linux-basic-tape-management-commands/"""
 
-    def __init__(self, path: str, generic_path: str, drive_override: bool = False, blocksize: str = "256K"):
+    SYSFS: str = "/sys/class/scsi_generic"
+
+    @staticmethod
+    def sysfsRead(generic_path: str, attribute: str, root: str = SYSFS) -> str:
+        """What the kernel says about a /dev/sgX device (e.g. 'wwid'), '' if it says nothing."""
+        if not generic_path:
+            return ""
+        try:
+            with open(os.path.join(root, os.path.basename(generic_path), "device", attribute)) as f:
+                return f.read().strip()
+        except OSError:
+            return ""
+
+    def __init__(self, path: str, generic_path: str, drive_override: bool = False, blocksize: str = "256K",
+                 paths: List[Tuple[str, str]] | None = None, wwid: str = ""):
         self.path = path
         self.generic_path = generic_path
+        self.paths = paths or [(path, generic_path)]
+        self.wwid = wwid or self.sysfsRead(generic_path, "wwid")
+        self.tape = Tape("0000")
         self.drive_override = drive_override
         self.blocksize = blocksize
         self.file = None
@@ -408,6 +429,15 @@ class TapeDrive:
         self._inquiry()
         self._readModeSense()
 
+    @property
+    def id(self) -> str:
+        """
+        Identifies the drive, no matter which of its paths is used. Job allows one command per id.
+        A drive that was listed twice (no wwid) has two ids: whether it can take an order is
+        for the drive itself to say, see DESIGN.md.
+        """
+        return self.wwid or self.path
+
     def _asdict(self) -> dict:
         self._refresh()
 
@@ -434,7 +464,9 @@ class TapeDrive:
         data = {
             "environment": {
                 "path": self.path,
-                "generic_path": self.generic_path},
+                "generic_path": self.generic_path,
+                "wwid": self.wwid,
+                "paths": [{"path": p, "generic_path": g} for p, g in self.paths]},
             "drive_info": {
                 "vendor": self.vendor,
                 "model": self.model,

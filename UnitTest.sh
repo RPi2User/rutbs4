@@ -30,3 +30,6 @@ python3 UT_TableOfContent.py
 
 echo Spool
 python3 UT_Spool.py
+
+echo TD_Pool
+python3 UT_TD_Pool.py
