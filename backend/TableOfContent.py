@@ -75,7 +75,7 @@ class TOC_Header:
         return data
 
     def __str__(self) -> str:
-        return json.dumps(self._asdict())
+        return json.dumps(self._asdict(), indent=2)
 
 
 class TableOfContent:
@@ -115,7 +115,7 @@ class TableOfContent:
         return {"header": self.header._asdict(), **self._body()}
 
     def __str__(self) -> str:
-        return json.dumps(self._asdict())
+        return json.dumps(self._asdict(), indent=2)
 
     # CIPHER
     # The passphrase goes to openssl through the environment, the plain body through stdin:

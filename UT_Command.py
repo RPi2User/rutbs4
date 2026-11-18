@@ -1,3 +1,4 @@
+import json
 import unittest
 from time import sleep, time
 
@@ -476,7 +477,10 @@ class UT_Command(unittest.TestCase):
         c.wait()
 
         self.assertEqual(c.stdout, ["b32fea58"])
-        self.assertNotIn("b32fea58", str(c).replace('"stdout": ["b32fea58"]', ""))
+        shown: dict = json.loads(str(c))
+        shown["stdout"] = []        # the output of the command itself is of course what it printed
+        self.assertNotIn("b32fea58", json.dumps(shown))
+        self.assertIn("\n  ", str(c))   # indent=2
         print("S_ENV")
 
     def test_AT_quote(self) -> None:

@@ -49,4 +49,4 @@ class Mount:
         return self.__dict__.copy()
 
     def __str__(self) -> str:
-        return json.dumps(self._asdict())
+        return json.dumps(self._asdict(), indent=2)

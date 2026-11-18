@@ -244,6 +244,56 @@ class UT_Job(unittest.TestCase):
         self.assertIsNone(Job.scheduler)
         print("H_WORK")
 
+    def test_AK_prepare(self) -> None:
+        """
+        prepare() runs right before the Command starts, never before the parent is done.
+        A prepare that raises fails the Entry, the Command never ran.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            marker: str = os.path.join(tmp, "marker")
+
+            def make() -> None:
+                with open(marker, "w") as f:
+                    f.write("prepared")
+
+            first: str = Job.Add(Command("sleep 0.2"))
+            second: str = Job.Add(Command("cat " + Command.quote(marker)), dependsOn=first, prepare=make)
+            Job.Refresh()
+            self.assertFalse(os.path.exists(marker))        # the parent is still running
+
+            self._refreshUntilDone()
+            self.assertEqual(Job.Get(second).state, EntryState.COMPLETED)
+            self.assertEqual(Job.Get(second).command.stdout, ["prepared"])
+
+            def broken() -> None:
+                raise OSError("no space left")
+
+            failing: Command = Command("echo never")
+            e: str = Job.Add(failing, prepare=broken)
+            self._refreshUntilDone()
+            self.assertEqual(Job.Get(e).state, EntryState.FAILED)
+            self.assertIn("no space left", Job.Get(e).error)
+            self.assertFalse(failing.didRun)
+        print("K_PREPARE")
+
+    def test_AL_failed(self) -> None:
+        """
+        Job.Failed(runlist): a failed Entry of the runlist counts, a failed closing step and other runlists do not
+        """
+        Job.Add(Command(self.AD_FAIL), runlist="a")
+        Job.Add(Command(self.AB_DEP), runlist="b")
+        self._refreshUntilDone()
+        self.assertTrue(Job.Failed("a"))
+        self.assertFalse(Job.Failed("b"))
+
+        Job.Flush()
+        Job.Add(Command(self.AB_DEP), runlist="c")
+        Job.Add(Command(self.AD_FAIL), runlist="c", always=True)
+        self._refreshUntilDone()
+        self.assertFalse(Job.Failed("c"))
+        print("L_FAILED")
+
+
 if __name__ == '__main__':
     print("UT_Job:")
     unittest.main()

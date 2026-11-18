@@ -130,4 +130,4 @@ class Checksum:
         return data
 
     def __str__(self):
-        return json.dumps(self._asdict())
+        return json.dumps(self._asdict(), indent=2)

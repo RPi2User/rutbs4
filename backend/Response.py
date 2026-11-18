@@ -17,4 +17,4 @@ class Response(BaseResponse):
             "mimetype" : self.mimetype,
             "status_code": self.status
         }
-        return json.dumps(data)
+        return json.dumps(data, indent=2)

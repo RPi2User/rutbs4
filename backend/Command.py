@@ -229,8 +229,6 @@ class Command:
         return data
 
     def __str__(self):
-        if self.quiet:
-            return json.dumps(self._asdict())
         return json.dumps(self._asdict(), indent=2)
 
 # --- PRIVATE FUNCTIONS ---------------------------------------------------------------------------

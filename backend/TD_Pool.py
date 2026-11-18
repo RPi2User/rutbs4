@@ -99,4 +99,4 @@ class TD_Pool:
         return {"drives": [d._asdict() for d in self.drives], "messages": self.messages}
 
     def __str__(self) -> str:
-        return json.dumps(self._asdict())
+        return json.dumps(self._asdict(), indent=2)

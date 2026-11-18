@@ -1,33 +1,30 @@
 #!/usr/bin/env python3
 """
-Write a folder to tape, file-by-file: each file is checksummed, optionally encrypted (every
-file with its own key) and written to tape with an EOF mark, orchestrated through
-Job (see backend/Job.py).
+Write a folder to tape: one WriteJob (rewind, first TOC, every file checksummed, encrypted with
+its own key and written, last TOC, rewind). The passphrase comes from RUTBS_PASSPHRASE or is
+asked for. The tape is NOT ejected unless --eject is given.
 
-Example (real LTO drive):
-    RUTBS_PASSPHRASE=... python3 write_folder_to_tape.py --dir /path/to/folder --tape /dev/nst0 --generic /dev/sg0
+Example (real LTO drive, the first drive found):
+    RUTBS_PASSPHRASE=... python3 write_folder_to_tape.py --dir /path/to/folder --spool /stornvme
 
-Example (no SCSI tooling / no hardware, test against a regular file):
-    python3 write_folder_to_tape.py --dir /path/to/folder --tape /tmp/faketape.bin \\
-        --drive-override --rewind-cmd "true"
+Example (no SCSI tooling / no hardware, a regular file as tape):
+    RUTBS_PASSPHRASE=... python3 write_folder_to_tape.py --dir /path/to/folder --spool /mnt/data \\
+        --tape /tmp/faketape.bin --rewind-cmd true --eject-cmd true
 """
 
 import argparse
 import getpass
 import os
 import sys
-import time
-import uuid
 
 from backend.Checksum import ChecksumType
 from backend.Command import Command
 from backend.Encryption import E_Mode
-from backend.File import FileState
-from backend.Folder import Folder
 from backend.Job import Job
 from backend.Tape import Tape
-from backend.TableOfContent import TableOfContent, TOC_Header
-from backend.TapeDrive import TapeDrive, TD_State
+from backend.TapeDrive import TapeDrive
+from backend.TD_Pool import TD_Pool
+from backend.WriteJob import WriteJob
 
 CHECKSUM_MAP = {
     "md5": ChecksumType.MD5,
@@ -47,95 +44,52 @@ ENCRYPTION_MAP = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dir", required=True, help="Folder to write (files directly inside it, non-recursive)")
-    parser.add_argument("--tape", required=True, help="Non-rewinding tape device (/dev/nstX), or a regular file for local testing")
-    parser.add_argument("--generic", default="", help="Generic SCSI device (/dev/sgX); leave empty together with --drive-override")
+    parser.add_argument("--dir", required=True, help="Folder to write, sub directories included")
+    parser.add_argument("--spool", required=True, help="Mount point for the spool (needs as much free space as the folder)")
+    parser.add_argument("--toc-dir", default="", help="Directory that keeps a copy of the last TOC")
     parser.add_argument("--checksum", choices=sorted(CHECKSUM_MAP), default="sha256")
     parser.add_argument("--encryption", choices=sorted(ENCRYPTION_MAP), default="aes256cbc")
-    parser.add_argument("--blocksize", default="256K", help="dd block size, e.g. 256K or 384K")
-    parser.add_argument("--lto-version", default="3", help="LTO version, only used together with --drive-override")
-    parser.add_argument("--drive-override", action="store_true",
-                         help="Skip the sg_raw INQUIRY/MODE SENSE calls (needed when sg3_utils isn't installed, "
-                              "or when --tape is a regular file instead of a real tape device)")
-    parser.add_argument("--rewind-cmd", default="",
-                         help="Command used to rewind the tape (only used together with --drive-override), "
-                              "e.g. 'sg_raw /dev/sg0 0x01 0 0 0 0 0'")
+    parser.add_argument("--threads", type=int, default=4, help="Thread limit of the Job queue")
+    parser.add_argument("--eject", action="store_true", help="Eject the tape after a successful write (off by default)")
+    parser.add_argument("--tape", default="", help="A regular file instead of the first drive found, for local testing")
+    parser.add_argument("--rewind-cmd", default="", help="Rewind command of the fake tape")
+    parser.add_argument("--eject-cmd", default="", help="Eject command of the fake tape")
+    parser.add_argument("--lto-version", default="8", help="LTO version of the fake tape")
     return parser.parse_args()
-
-
-def get_passphrase() -> str:
-    """The passphrase of the tape: from RUTBS_PASSPHRASE, else asked for. Never a command line argument (visible in ps)."""
-    return os.environ.get("RUTBS_PASSPHRASE") or getpass.getpass("Passphrase for this tape: ")
-
-
-def wait_for(predicate, timeout: float = 30.0, interval: float = 0.1) -> bool:
-    end = time.time() + timeout
-    while not predicate():
-        if time.time() > end:
-            return False
-        time.sleep(interval)
-    return True
 
 
 def main() -> int:
     args = parse_args()
+    passphrase = os.environ.get("RUTBS_PASSPHRASE") or getpass.getpass("Passphrase for this tape: ")
+    Job.limit = args.threads
 
-    td = TapeDrive(path=args.tape, generic_path=args.generic, drive_override=args.drive_override, blocksize=args.blocksize)
+    if args.tape:
+        td = TapeDrive(args.tape, "", drive_override=True)
+        td.tapeOverride(Tape(args.lto_version + "800"))     # <ltoVersion>800 -> valid Tape, no write protect
+        td.rewindCommand = Command(args.rewind_cmd or "true")
+        td.ejectCommand = Command(args.eject_cmd or "true")
+    else:
+        pool = TD_Pool()
+        drives = pool.gatherDrives()
+        for message in pool.messages:
+            print(message, file=sys.stderr)
+        if not drives:
+            print("[ERROR] No tape drive found", file=sys.stderr)
+            return 1
+        td = drives[0]
 
-    if args.drive_override:
-        td.tapeOverride(Tape(args.lto_version + "800"))  # <ltoVersion>800 -> valid Tape, no write protect
-        if args.rewind_cmd:
-            td.rewindCommand = Command(args.rewind_cmd)
-
-    folder = Folder(args.dir, CHECKSUM_MAP[args.checksum], ENCRYPTION_MAP[args.encryption])
-    if not folder.files:
-        print(f"[ERROR] No files found directly in {args.dir}", file=sys.stderr)
+    try:
+        job = WriteJob(args.dir, td, passphrase, args.spool, tocDir=args.toc_dir,
+                       checksum=CHECKSUM_MAP[args.checksum], encryption=ENCRYPTION_MAP[args.encryption], eject=args.eject)
+        job.queue()
+    except ValueError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
-    print(f"Folder: {args.dir} ({len(folder.files)} files), checksum={args.checksum}, encryption={args.encryption}")
-
-    def rewind_finished() -> bool:
-        td._refresh()
-        return td.state != TD_State.REWIND
-
-    print(f"Rewinding {args.tape} ...")
-    td.rewind()
-    if not wait_for(rewind_finished):
-        print("[ERROR] Rewind timed out", file=sys.stderr)
-        return 1
-    if td.state == TD_State.ERROR:
-        print("[ERROR] Rewind failed", file=sys.stderr)
-        return 1
-
-    passphrase = get_passphrase()
-    if not passphrase:
-        print("[ERROR] A passphrase is required, the TOC holds the keys", file=sys.stderr)
-        return 1
-
-    header = TOC_Header(td, threadCount=1)
-    toc = TableOfContent(folder, header)
-    td.writeTOC(toc.seal(passphrase))
-    if td.state == TD_State.ERROR:
-        print("[ERROR] Failed to write TOC", file=sys.stderr)
-        return 1
-    print("TOC written.")
-
-    entries = folder.queueWrite(td, runlist=str(uuid.uuid4()))
-    finished = Job.Wait(entries, timeoutSec=3600)
-    if not finished:
-        print("[ERROR] Timed out waiting for the write pipeline", file=sys.stderr)
-        return 1
-
-    all_ok = True
-    for file in folder.files:
-        ok = file.state is FileState.IDLE       # the phases of the file all completed
-        all_ok = all_ok and ok
-        print(f"  [{'OK' if ok else 'FAILED'}] {file.path.name}  ({args.checksum}={file.cksum.value})")
-        if ENCRYPTION_MAP[args.encryption] != E_Mode.NONE:   # needed to decrypt again!
-            print(f"         key: {file.encryption_scheme.key.value}  iv: {file.encryption_scheme.key.iv}")
-
-    print("All files written successfully." if all_ok else "Some files FAILED, see above.")
-    return 0 if all_ok else 1
+    print(f"Writing {len(job.folder.files)} files from {args.dir} to {td.id}, tape fingerprint {job.toc.header.fingerprint}")
+    job.wait()
+    print(job)
+    return 0 if job.state == "COMPLETED" else 1
 
 
 if __name__ == "__main__":

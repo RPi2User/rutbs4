@@ -4,7 +4,7 @@ import os
 import threading
 import time
 import uuid
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from backend.Command import Command
 
@@ -20,7 +20,8 @@ class Entry():
     """
     #### === ENTRY ============================================================
 
-    Entry.__init__(command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False):
+    Entry.__init__(command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
+                   prepare: Callable[[], None] | None = None):
     - Requires
         - A Command that has not been started yet
     - Supports
@@ -28,6 +29,8 @@ class Entry():
         - dependsOn: id of the parent Entry, which must be COMPLETED first
         - runlist:   id of the request this Entry belongs to (e.g. one tape write)
         - always:    closing step, runs even if its runlist was aborted
+        - prepare:   called right before the Command starts, e.g. to write the file the Command
+                     reads. If it raises, the Entry FAILED and the Command never ran
 
     | Var              | Type         | Description                                     |
     |------------------|--------------|-------------------------------------------------|
@@ -37,11 +40,16 @@ class Entry():
     | `self.dependsOn` | `str`        | Parent id, `""` if there is no parent           |
     | `self.runlist`   | `str`        | Request id, `""` if the Entry stands alone      |
     | `self.always`    | `bool`       | `True`: is not aborted with its runlist         |
+    | `self.prepare`   | `callable`   | Runs just before the start, `None` if unused    |
+    | `self.error`     | `str`        | Why `prepare` failed, `""` otherwise            |
     | `self.state`     | `EntryState` | See `Job` for the state flow                    |
     """
 
-    def __init__(self, command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False) -> None:
+    def __init__(self, command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
+                 prepare: Callable[[], None] | None = None) -> None:
         self.id: str = str(uuid.uuid4())
+        self.prepare: Callable[[], None] | None = prepare
+        self.error: str = ""
         self.command: Command = command
         self.tape: str = tape
         self.dependsOn: str = dependsOn
@@ -57,6 +65,7 @@ class Entry():
             "dependsOn": self.dependsOn,
             "runlist": self.runlist,
             "always": self.always,
+            "error": self.error,
             "command": self.command._asdict(),
         }
         return {"Entry": _out}
@@ -108,6 +117,7 @@ class Job():
     | `Job.`             | Description                                              |
     |--------------------|----------------------------------------------------------|
     | `Job.Add()`        | Adds a Command, returns the Entry id                     |
+    | `Job.Failed()`     | True if an Entry of a runlist failed (closing steps excluded) |
     | `Job.Get()`        | Returns the Entry of an id, raises LookupError           |
     | `Job.Registry()`   | Returns all Entries as dict                              |
     | `Job.Flush()`      | Kills & removes all, or (killRunning=False) removes done |
@@ -129,18 +139,25 @@ class Job():
 # --- PUBLIC FUNCTIONS ----------------------------------------------------------------------------
 
     @staticmethod
-    def Add(cmd: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False) -> str:
+    def Add(cmd: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
+            prepare: Callable[[], None] | None = None) -> str:
         with Job.lock:
             if any(e.command is cmd for e in Job.queue):
                 raise ValueError("ERROR: Command already queued, create a new Command object")
             if dependsOn != "":
                 Job.Get(dependsOn)      # raises LookupError if the parent is unknown
 
-            _e: Entry = Entry(cmd, tape, dependsOn, runlist, always)
+            _e: Entry = Entry(cmd, tape, dependsOn, runlist, always, prepare)
             Job.queue.append(_e)
             Job._updateStates()         # parent might already be COMPLETED
             Job._updateJobState()
             return _e.id
+
+    @staticmethod
+    def Failed(runlist: str) -> bool:
+        """True if an Entry of the runlist failed. Closing steps (always=True) do not count."""
+        with Job.lock:
+            return any(e.runlist == runlist and e.state is EntryState.FAILED and not e.always for e in Job.queue)
 
     @staticmethod
     def Get(entryId: str) -> Entry:
@@ -247,6 +264,14 @@ class Job():
                 if cpuSlots <= 0:
                     continue
                 cpuSlots -= 1
+
+            if e.prepare is not None:
+                try:
+                    e.prepare()
+                except Exception as ex:     # whatever the Command needed could not be made: it must not run
+                    e.error = type(ex).__name__ + ": " + str(ex)
+                    e.state = EntryState.FAILED
+                    continue
 
             e.command.start()
             e.state = EntryState.RUNNING

@@ -208,13 +208,7 @@ class File:
                 raise RuntimeError("[ERROR] Encrypt() before Write()")
             source = self.cryptPath     # the tape gets the ciphertext
 
-        # Built here (not via TapeDrive.write()): that one assumes a single write at a time
-        cmd: Command = Command(
-            "dd if=" + Command.quote(source) + " of=" + Command.quote(tapeDrive.path) + " " +
-            "iflag=fullblock status=none bs=" + tapeDrive.blocksize,
-            filesize=self.size)
-        tapeDrive.tape.begin_of_tape = False
-        return self._queue(FileState.WRITE, cmd, runlist, dependsOn, tape=tapeDrive.id)
+        return self._record(FileState.WRITE, tapeDrive.Write(source, self.size, runlist, dependsOn))
 
     def Read(self, tapeDrive: "TapeDrive", target: str, runlist: str = "", dependsOn: str = "") -> str:
         self._accept()
@@ -223,11 +217,7 @@ class File:
         else:
             self.cryptPath = target     # Decrypt() takes it from here
 
-        cmd: Command = Command(
-            "dd if=" + Command.quote(tapeDrive.path) + " of=" + Command.quote(target) + " " +
-            "iflag=fullblock status=none bs=" + tapeDrive.blocksize,
-            filesize=self.size)
-        return self._queue(FileState.READ, cmd, runlist, dependsOn, tape=tapeDrive.id)
+        return self._record(FileState.READ, tapeDrive.Read(target, self.size, runlist, dependsOn))
 
     def Decrypt(self, target: str, runlist: str = "", dependsOn: str = "") -> str:
         self._accept()
@@ -308,8 +298,10 @@ class File:
         if self.state in {FileState.INIT, FileState.ERROR, FileState.MISMATCH, FileState.REMOVED}:
             raise RuntimeError("[ERROR] File " + str(self.id) + " is " + self.state.name + ", no further phase possible")
 
-    def _queue(self, phase: FileState, cmd: Command, runlist: str, dependsOn: str, tape: str = "") -> str:
-        entry: str = Job.Add(cmd, tape=tape, dependsOn=dependsOn, runlist=runlist)
+    def _queue(self, phase: FileState, cmd: Command, runlist: str, dependsOn: str) -> str:
+        return self._record(phase, Job.Add(cmd, dependsOn=dependsOn, runlist=runlist))
+
+    def _record(self, phase: FileState, entry: str) -> str:
         self.entries.append((phase, entry))
         return entry
 
@@ -390,4 +382,4 @@ class File:
         return data
 
     def __str__(self) -> str:
-        return "{\"FILE\" :" + json.dumps(self._asdict(), indent=2) + "}"
+        return json.dumps({"FILE": self._asdict()}, indent=2)

@@ -3,10 +3,9 @@ import os
 from time import sleep
 from typing import List, Tuple
 from enum import Enum
-import uuid
 
-from backend.File import File
 from backend.Command import Command
+from backend.Job import EntryState, Job
 
 from backend.Tape import Tape, E_Tape
 
@@ -140,29 +139,50 @@ from backend.Tape import Tape, E_Tape
     """
 
 class TD_State(Enum):
-    READ = 0,
-    WRITE = 1,
-    REWIND = 2,
-    EJECT = 3,
-    IDLE = 4,
-    WRITE_TOC = 5,
-    FORMAT = 6,
-    TEST_READ = 7,
-    ERROR = -1
+    IDLE = 0
+    QUEUED = 1      # orders wait in the Job queue
+    REWIND = 2
+    EJECT = 3
+    WRITE = 4
+    READ = 5
+    ERROR = -1      # the last finished order failed
 
 class TapeDrive:
 
-    """#### === TapeDrive =====================================================
-    
     """
+    ### === TapeDrive ====================================================
 
-    """_summary_
-    Main Interfaces:
-        - write(file: File)               -> Main WRITE Command
-        - read() -> List[Folder]          -> Main READ Command
-        - writeInit(toc: TableOfContent)  -> rewinds tape and write TOC
-        - readToc() -> TableOfContent     -> rewinds tape and returns TOC
-        - clearErrorState() -> None:      -> User can clear Error
+    A tape drive does four things, each one a step in the Job queue (returns the entry id, pass it
+    as `dependsOn` to the next step):
+
+    | `TapeDrive.`                  | SCSI / tool                                                     |
+    |-------------------------------|-----------------------------------------------------------------|
+    | `Rewind()`                    | `sg_raw <sg> 0x01 0 0 0 0 0` (REWIND)                           |
+    | `Eject()`                     | `sg_raw <sg> 0x1B 0 0 0 0 0` (LOAD/UNLOAD). Never part of a test. |
+    | `Write(source)`               | `dd if=<source> of=<nst>`: one tape file                        |
+    | `Read(target)`                | `dd if=<nst> of=<target>`: the next tape file                   |
+
+    All take `runlist=""`, `dependsOn=""`, `always=False` (closing step, runs even if its runlist was
+    aborted) and `prepare=None` (called right before the step starts, see Job). Everything else is
+    optional and not here (cartridge memory, seeking, formatting). No `mt`, SCSI only.
+
+    The drive is asked for vendor / model / serial (INQUIRY) and the tape (MODE SENSE) when it is
+    created. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running step
+    (`REWIND`, `EJECT`, `WRITE`, `READ`), or `ERROR` if the last finished step failed.
+
+    The two paths of a drive with two cables are in `paths`, the first one is used (see TD_Pool).
+    `id` is the key the Job uses, one step at a time runs per id.
+
+    Without SCSI tooling or hardware: `drive_override=True`, then set `rewindCommand` /
+    `ejectCommand` (their command line is used for every step) and call `tapeOverride(Tape("8800"))`.
+    `path` may then be a regular file. A regular file is truncated by every `Write()`, so only one
+    tape file fits.
+
+        >>> td = TapeDrive("/tmp/fake", "", drive_override=True)
+        >>> td.tapeOverride(Tape("8800")); td.rewindCommand = Command("true")
+        >>> step = td.Rewind()
+        >>> step = td.Write("/tmp/some_file", dependsOn=step)
+        >>> Job.Wait([step])
     """
 
     # System parameters (public)
@@ -183,134 +203,10 @@ class TapeDrive:
     drive_override: bool = False
     tape: Tape                      # per instance, see __init__
     tape_override: bool = False
-    state: TD_State = TD_State.ERROR
     path: str = ""
     generic_path: str = ""
-    command: Command = None
-    file: File = None
-
-    """_summary_
-        This Backend is written for SCSI/SAS-Drives but can support other drives via an override.
-        Due to the lack of a fibre channel drive I can't do any research to support them.
-        MAYBE they are supported via the same SCSI Commands I HOPE this is the case.
-            Please, if you have a spare FC-TapeDrive for me, please reach out!
-        
-        !!!             Currently only LTO-based tapes will be handled correctly!                   !!!
-        
-        A typical SCSI-Based Drive will be recognized on most linux systems as `/dev/*stX`.
-        Like:
-            - /dev/st0 
-            - /dev/nst0 
-            - /dev/nst1
-            - ... 
-            
-        If you are interested on how this project recognize a valid drive, please go to backend.TD_Pool
-        
-        If you want to create an TapeDrive object just search for two different paths:
-            - the non-rewinding path -> like /dev/nst0
-            - the generic scsi path -> like /dev/sg0
-            
-        Both values can be easily found with this simple command `lsscsi -g`
-        So in a python shell you can easily create a tape drive object with this two commands:
-        
-            ```python
-            >>> from backend.TapeDrive import TapeDrive
-            >>> tapedrive = TapeDrive("/dev/nst0", "/dev/sg0")
-            ```
-
-        Hence this project is optimized for API usage all __str__() functions will return a JSON string.
-        
-        If your drive is more an "exotic" one you can OVERRIDE some assumptions I made in this project.
-        
-        For example:
-        Our imaginary drive is recognized by the linux kernel as `/dev/nst0`. With no generic path.
-            !!! For this program to write multiple files, a NON REWINDING DRIVE is needed !!!
-        
-        ```python
-        >>> from backend.TapeDrive import TapeDrive
-        >>> from backend.Command import Command
-        >>> td_custom = TapeDrive(path="/dev/nst0", genericPath="", drive_override=True)
-        >>> td_custom.rewindCommand = Command("<YOUR REWIND COMMAND>")    # This can be a bash-script or a simple program call
-        >>> td_custom.ejectCommand = Command("<YOUR EJECT COMMAND>")
-        ```
-        In theory you can also populate all other variables like vendor, model, serial or blocksize.
-
-            NOTE: that all following FAILING commands (exit code != 0) will set the tape into an ERROR state
-            This ERROR can be cleared with `td_custom.clearError()`
-
-        If your drive won't be recognized by the backend, it's tape won't be either - most likely.
-        So you can OVERRIDE the TAPE as well:
-        
-        ```python
-        >>> from backend.Tape import Tape
-        >>> tape = Tape("0800") # This sets: writeprotect = False, size = 0, state = ONLINE
-        >>> td_custom.tapeOverride(tape)
-        >>> td_custom.rewind()
-        ```
-
-        After a quick `print(td_custom)` you can validate it's state and you can write any Files:
-        
-        ```python
-        >>> from backend.File import File
-        >>> testFile = File(id=0, path="/mnt/some_large_file.img")
-        >>> td_custom.write(testFile)
-        >>> print(td_custom)
-        {   "environment": {
-                "path": "/dev/nst0",
-                "generic_path": ""},
-            "drive_info": {
-                "vendor": "DriveVendor Tech.",
-                "model": "EverStor5000",
-                "serial": "1Ab2c3-aabbcc"},
-            "override": {
-                "active": true,
-                "rewindCommand": {
-                    "cmd": "sg_raw '/dev/sg0' 0x01 0 0 0 0 0",
-                    "pid": 10559,
-                    "running": false,
-                    {…}
-                    "exitCode": 0},
-                "ejectCommand": {
-                    "cmd": "sg_raw '/dev/sg0' 0x1B 0 0 0 0 0",
-                    {…}
-                    "exitCode": null}
-                },
-            "state": "IDLE",
-            "blocksize": "256K",
-            "tape": {
-                "lto-version": "NONE",
-                "native_capacity": 0,
-                "beginOfTape": false,
-                "current_state": "ONLINE"},
-            "command": {
-                "cmd": "dd if='/mnt/some_large_file.img' of='/dev/nst0' iflag=fullblock status=none bs=256K",
-                "pid": 11628,
-                "running": false,
-                {…}
-                "filesize": "4294967296",
-                "io": {…}
-                "exitCode": 0},
-            "current_file": {
-                "id": 0,
-                "size": "4294967296",
-                "name": "some_large_file.img",
-                "path": "/mnt/some_large_file.img",
-                "last_command": {
-                    "cmd": "stat -c %s '/mnt/some_large_file.img'",
-                    {…}
-                },
-                "cksum": {…}
-                }
-            }
-        }
-        As you can see our custom drive state is "IDLE", we aren't at BOT (begin of tape) anymore, our current tape
-        state is "ONLINE". The "command" returned the exit code "0" so our write command was successful.
-        
-        I know the "raw" JSON string is not readable at all. 
-        But given the complex nature of tape in general this object structure is necessary.
-        
-        Useful resources:
-            https://www.cyberciti.biz/hardware/unix-linux-basic-tape-management-commands/"""
+    command: Command = None         # the last Command of the drive
+    error: str = ""                 # why INQUIRY failed, "" if it did not
 
     SYSFS: str = "/sys/class/scsi_generic"
 
@@ -334,8 +230,109 @@ class TapeDrive:
         self.tape = Tape("0000")
         self.drive_override = drive_override
         self.blocksize = blocksize
-        self.file = None
-        self._refresh()
+        self.entries: List[Tuple[TD_State, str]] = []   # (step, Job entry id), in the order added
+        self._taken: set = set()                        # entries whose result is already taken over
+        self._state: TD_State = TD_State.IDLE
+        self._inquiry()
+        self._readModeSense()
+
+    @property
+    def id(self) -> str:
+        """
+        Identifies the drive, no matter which of its paths is used. Job allows one command per id.
+        A drive that was listed twice (no wwid) has two ids: whether it can take an order is
+        for the drive itself to say, see DESIGN.md.
+        """
+        return self.wwid or self.path
+
+    @property
+    def state(self) -> TD_State:
+        self.refresh()
+        return self._state
+
+    # === THE FOUR STEPS ======================================================
+
+    def Rewind(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
+        cmd: Command = self._like(self.rewindCommand) or Command("sg_raw " + Command.quote(self.generic_path) + " 0x01 0 0 0 0 0")
+        return self._queue(TD_State.REWIND, cmd, runlist, dependsOn, always, prepare)
+
+    def Eject(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
+        cmd: Command = self._like(self.ejectCommand) or Command("sg_raw " + Command.quote(self.generic_path) + " 0x1B 0 0 0 0 0")
+        return self._queue(TD_State.EJECT, cmd, runlist, dependsOn, always, prepare)
+
+    def Write(self, source: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
+        """One tape file: the content of `source`. `size` only serves the progress display."""
+        cmd: Command = Command("dd if=" + Command.quote(source) + " of=" + Command.quote(self.path) + " " +
+                               "iflag=fullblock status=none bs=" + self.blocksize, filesize=size)
+        return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
+
+    def Read(self, target: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
+        """The next tape file, from the current position, into `target`."""
+        cmd: Command = Command("dd if=" + Command.quote(self.path) + " of=" + Command.quote(target) + " " +
+                               "iflag=fullblock status=none bs=" + self.blocksize, filesize=size)
+        return self._queue(TD_State.READ, cmd, runlist, dependsOn, always, prepare)
+
+    # === STATE ===============================================================
+
+    @staticmethod
+    def _like(template: Command | None) -> Command | None:
+        """An override is a template: every step needs its own Command, Job refuses the same object twice."""
+        return None if template is None else Command(template.cmd, env=dict(template.env))
+
+    def _queue(self, step: TD_State, cmd: Command, runlist: str, dependsOn: str, always: bool, prepare) -> str:
+        entry: str = Job.Add(cmd, tape=self.id, dependsOn=dependsOn, runlist=runlist, always=always, prepare=prepare)
+        self.entries.append((step, entry))
+        self.command = cmd
+        return entry
+
+    def refresh(self) -> None:
+        """Derives the state from the Job entries and takes over what a finished step changed on the tape."""
+        if not self.entries:
+            return
+
+        active: TD_State | None = None
+        queued: bool = False
+        lastFailed: bool = False
+
+        for step, entryId in self.entries:
+            try:
+                entry = Job.Get(entryId)
+            except LookupError:
+                continue    # Job was flushed
+
+            if entry.state is EntryState.COMPLETED:
+                lastFailed = False
+                if entryId not in self._taken:
+                    self._taken.add(entryId)
+                    self._takeOver(step)
+            elif entry.state is EntryState.FAILED:
+                lastFailed = True
+            elif entry.state is EntryState.RUNNING:
+                active = step
+                if step in {TD_State.WRITE, TD_State.READ}:
+                    self.tape.begin_of_tape = False
+            else:
+                queued = True
+
+        if active:
+            self._state = active
+        elif queued:
+            self._state = TD_State.QUEUED
+        else:
+            self._state = TD_State.ERROR if lastFailed else TD_State.IDLE
+
+    def _takeOver(self, step: TD_State) -> None:
+        match step:
+            case TD_State.REWIND:
+                self.tape.begin_of_tape = True
+            case TD_State.WRITE | TD_State.READ:
+                self.tape.begin_of_tape = False
+            case TD_State.EJECT:
+                self.tape.state = E_Tape.NO_TAPE
+                self.tape.begin_of_tape = False
+                self.tape_override = False
+
+    # === ASKING THE DRIVE ====================================================
 
     def _inquiry(self) -> None:
         """
@@ -344,10 +341,8 @@ class TapeDrive:
         554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
         3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
         """
-
         # Do nothing if TapeDrive is unkown.
         if self.drive_override:
-            self.state = TD_State.IDLE
             return
 
         # Sensible to override
@@ -358,24 +353,25 @@ class TapeDrive:
 
         self.command.wait()
 
-        if(self.command.exitCode != 0 or not self.command.stdout):
+        for n in range(5):      # a drive that was just reset may need a moment
+            if self.command.exitCode == 0 and self.command.stdout:
+                break
+            sleep(.5)
+            self.command.reset()
             self.command.wait()
-            for n in range(5):
-                if (self.command.exitCode == 0):
-                    break
-                sleep(.5)
-                self.command.wait()
-            self.state = TD_State.ERROR
 
-        self.state = TD_State.IDLE
-        
-        self.vendor = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[8:16].strip()
-        self.model = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[16:31].strip()
-        self.serial = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")[32:42].strip()
+        if self.command.exitCode != 0 or not self.command.stdout:
+            self.error = "INQUIRY failed: " + " ".join(self.command.stderr)
+            self._state = TD_State.ERROR
+            return
+
+        ascii_id: str = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")
+        self.vendor = ascii_id[8:16].strip()
+        self.model = ascii_id[16:31].strip()
+        self.serial = ascii_id[32:42].strip()
 
     def _readModeSense(self) -> None:
-        
-        if self.tape_override or self.generic_path == "":
+        if self.tape_override or self.generic_path == "" or self.error:
             return
 
         # Sensible to override
@@ -399,48 +395,13 @@ class TapeDrive:
             except IndexError:
                 self.tape = Tape("0000")
 
-    def _refresh(self) -> None:
-        # When still initializing run first inquiry
-        if self.command is None:
-            self._inquiry()
-            self._readModeSense()
-            return
-        
-        # When currently running SOME stuff (except init)
-        self.command.status()   # get current state
-        
-        # Don't interfere with running commands, or with one that still waits to be started
-        if self.command.running or not self.command.didRun:
-            return
+    def tapeOverride(self, _tape: Tape) -> None:
+        self.tape_override = True
+        self.tape = _tape
 
-        # do not accept further commands when in error state
-        if self.command.exitCode != 0:
-            self.state = TD_State.ERROR
-            return
-
-        match self.state:
-            case TD_State.REWIND:
-                self.tape.begin_of_tape = True
-            case TD_State.EJECT: 
-                self.tape.state = E_Tape.NO_TAPE
-                self.tape.begin_of_tape = False
-        
-        self.state = TD_State.IDLE
-        self._inquiry()
-        self._readModeSense()
-
-    @property
-    def id(self) -> str:
-        """
-        Identifies the drive, no matter which of its paths is used. Job allows one command per id.
-        A drive that was listed twice (no wwid) has two ids: whether it can take an order is
-        for the drive itself to say, see DESIGN.md.
-        """
-        return self.wwid or self.path
+    # === SYSTEM ==============================================================
 
     def _asdict(self) -> dict:
-        self._refresh()
-
         override: dict = {
             "active": self.drive_override
         }
@@ -451,16 +412,6 @@ class TapeDrive:
         if self.ejectCommand is not None:
             override.update({"ejectCommand" : self.ejectCommand._asdict()})
 
-        if self.command is None:
-            command = {"command": None}
-        else:
-            command = self.command._asdict()
-        
-        if self.file is None:
-            currentFile = {"file": None}
-        else:
-            currentFile = self.file._asdict()
-            
         data = {
             "environment": {
                 "path": self.path,
@@ -473,142 +424,13 @@ class TapeDrive:
                 "serial": self.serial },
             "override": override,
             "state": self.state.name,
+            "error": self.error,
             "blocksize": self.blocksize,
             "tape": self.tape._asdict(),
-            "command" : command,
-            "current_file": currentFile
-        }    
-        
+            "command" : None if self.command is None else self.command._asdict()
+        }
+
         return data
 
     def __str__(self) -> str:
-        return json.dumps(self._asdict())
-    
-    def tapeOverride(self, _tape: Tape) -> None:
-        self.tape_override = True
-        self.tape = _tape
-        
-    def clearError(self) -> None:
-        self.state = TD_State.IDLE
-        self.command = None
-
-    def format(self, len: int = 1) -> None:
-        """_summary_
-        The format process wipes the first 1MiB of data from tape
-        This header-area is used to store the table of content (TOC). 
-        When the TOC exceeds 1MiB in size (len > 1), additional 1MiB
-        blocks will be written.
-
-        If the format process fails this tape object will be marked
-        as write protect with `self.tape.write_protect = True`.
-        
-        This must throw an suitable exception to be able to
-        respond with a useful 5xx status.
-        """
-        
-        new_tape: Tape = Tape(str(self.tape.lto_version) + "8" + "9" + "0") # Create new tape object with the current LTO-Version and the correct WP-property
-        self.tapeOverride(new_tape) # override new WP-property
-        raise IOError("[ERROR] failed to format tape, medium write protected")
-        
-
-    def rewind(self) -> None: 
-        self._refresh()
-        if(self.state != TD_State.IDLE or self.tape.begin_of_tape):
-            return  # Can raise a custom exception for proper state handling
-        self.__rewind()
-
-    def eject(self) -> None:
-        self._refresh()
-        if self.state not in {TD_State.IDLE, TD_State.ERROR}:
-            return
-        self.__eject()
-
-    def write(self, file: File):
-        self._refresh()
-        if self.state != TD_State.IDLE:
-            return
-
-        self.file = file
-
-        self.state = TD_State.WRITE
-        self.command = Command(
-            "dd if=" + Command.quote(self.file.path.path) + " of=" + Command.quote(self.path) + " " +
-            "iflag=fullblock status=none bs=" + self.blocksize,
-            filesize=self.file.size)
-
-        self.tape.begin_of_tape = False
-
-    def writeTOC(self, sealedToc: str):
-        # This writes the sealed TOC (TableOfContent.seal(), the keys are encrypted in it) as first File on Tape
-        self._refresh()
-
-        if self.state != TD_State.IDLE or not self.tape.begin_of_tape:
-            return
-
-        self.state = TD_State.WRITE_TOC
-
-        toc_uuid : str = str(uuid.uuid4())
-        toc_filename : str = "toc_" + toc_uuid + ".json"
-        toc_path: str = "/tmp/" + toc_filename
-        tocfile: File = File(0, toc_path, "/tmp", createFile=True)
-
-        try:
-            with open(tocfile.path.path, 'w') as f:
-                f.write(sealedToc)
-        except PermissionError:
-           raise PermissionError("Cannot write Temporary file into /tmp!")
-        except:
-            raise
-
-        tocfile.readSize()   # the file was empty at construction time, refresh after writing content
-
-        self.command = Command(
-            "dd if=" + Command.quote(tocfile.path.path) + " of=" + Command.quote(self.path) + " " +
-            "iflag=fullblock status=none bs=" + self.blocksize,
-            filesize=tocfile.size)
-
-        self.command.wait()
-
-        if(self.command.exitCode != 0):
-            self.state = TD_State.ERROR
-            return
-
-        tocfile.remove()
-        self.tape.begin_of_tape = False
-
-    def read(self, file: File) -> None:
-        # this reads A SINGLE FILE!
-        # WARNING: this feature relies on the concept that every write-operation
-        #   a End-Of-File Mark is written.
-        # Worst case:
-        #   all Files will be written into one large. Shall be compatible with tar????
-
-        self._refresh() # we currently are at the first file!
-
-        if self.state != TD_State.IDLE:
-            return
-        
-        self.state = TD_State.READ
-        self.command = Command(
-            "dd if=" + Command.quote(self.path) + " of=" + Command.quote(file.path.path) + " " +
-            "bs=" + self.blocksize + " iflag=fullblock status=none")
-
-        self.command.start()
-        self.tape.begin_of_tape = False
-
-    def __eject(self):
-        self.state = TD_State.EJECT
-        if self.ejectCommand is None:
-            self.command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x1B 0 0 0 0 0")
-        else:
-            self.command = self.ejectCommand
-        self.command.start()
-        self.tape_override = False
-
-    def __rewind(self):
-        self.state = TD_State.REWIND
-        if self.rewindCommand is None:
-            self.command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x01 0 0 0 0 0")
-        else:
-            self.command = self.rewindCommand
-        self.command.start()
+        return json.dumps(self._asdict(), indent=2)

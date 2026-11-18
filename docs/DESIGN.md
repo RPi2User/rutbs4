@@ -39,19 +39,20 @@ tape file N+1    TOC, state COMPLETE    the result: same content plus checksums
   is finished. A tape is good only if a trailing TOC with state `COMPLETE` exists. On a failed job the trailing TOC is
   written with state `FAILED` if the drive still accepts it; if not, the missing trailing
   TOC is the failure marker. With a cartridge memory the failure is noted there as well.
-- A tape that already carries a fingerprint is only overwritten after an explicit format.
+- A tape that already carries a fingerprint is only overwritten after it is explicitly registered anew
+  (not implemented yet; today every write starts at the begin of tape).
 - Tapes written by tbk3 are not supported.
 
 ## Fingerprint and cartridge memory
 
-- Every tape gets a fingerprint (random UUID) when it is formatted. It is stored in clear
+- Every tape gets a fingerprint (random UUID) when it is registered. Registering writes the chip only, never the tape. It is stored in clear
   text in the TOC header, so operator and changer can check that the right tape is loaded.
 - `Tape.cartridgeMemory` is an optional object for the chip in the cartridge. Reading it
   is attempted; if that fails the tape works without it.
-  - Fields: `fingerprint`, `version` (16 bit, the backend that formatted it), write-error flag.
-  - `read()` builds the command and fills the fields; `format()` writes a new fingerprint.
+  - Fields: `fingerprint`, `version` (16 bit, the backend that registered it), write-error flag.
+  - `read()` builds the command and fills the fields; `register()` writes a new fingerprint.
   - If the chip already holds a fingerprint, the TOC uses that one, so the chip is not
-    rewritten on every format of the tape.
+    rewritten on every registration of the tape.
 - **(proposal)** Attributes used on the chip (`sg_read_attr` / `sg_write_attr`):
   `0x0801` application name = `rutbs`, `0x0802` application version = version as hex,
   `0x0803` user medium text label = fingerprint. Needs to be checked on real drives.
@@ -94,8 +95,10 @@ A slim TOC with only the fields needed for a restore is an idea for a later vers
 A job is the complete run list of one request, for example a write:
 
 ```
-rewind → format → write TOC → per file: checksum → encrypt → write → write TOC → rewind → eject
+rewind → write TOC → per file: checksum → encrypt → write → write TOC → rewind → eject (on request)
 ```
+
+This is `backend/WriteJob.py`. A tape is not formatted (see "Milestone and what comes after").
 
 - The run list fixes the tape order; the final TOC is the result of the job.
 - Everything that can run in parallel does, limited by the thread limit of the host.
@@ -103,7 +106,7 @@ rewind → format → write TOC → per file: checksum → encrypt → write →
   Typically many checksums run first, encryption follows, and finished files wait in
   the spool until the drive takes them.
 - If a step fails the job is aborted: no further file is written, the trailing TOC is
-  written with state `FAILED`, the tape is rewound.
+  written with state `FAILED`, the tape is rewound, it is not ejected.
 - Jobs live in memory. A job that is interrupted by a restart of the backend has failed.
 - A write is rejected up front if the files do not fit the native capacity of the tape.
   Nothing is spread over several tapes.
@@ -117,7 +120,8 @@ needs is already busy.
 
 The entries of one job share a runlist id. That id is what gets aborted on a failure, and
 what a client polls for progress. Closing steps (trailing TOC, rewind) are marked so they
-still run after an abort.
+still run after an abort. A step can have a `prepare` hook that runs right before it starts:
+the trailing TOC is made there, when the results of all files are known.
 
 ## File
 
@@ -188,8 +192,8 @@ There is no second, blocking way to run a phase. The phases are implemented in
   other path (TEST UNIT READY, or RESERVE / RELEASE); to be tried on the drive while a write
   runs. Today `TapeDrive` only looks at the state of its own `Command`, there is no
   query to the drive yet.
-- A `TapeDrive` does four things: rewind, eject, write a data stream with `dd`, read a data
-  stream with `dd`. Everything else is optional: reading the cartridge memory, seeking
+- A `TapeDrive` does four things, as steps in the Job queue: `Rewind()`, `Eject()`, `Write()` (a
+  data stream with `dd`), `Read()` (a data stream with `dd`). Everything else is optional: reading the cartridge memory, seeking
   (one file forward / backward, file n), formatting. Eject is never part of a test run.
 - SCSI only: the code sends SCSI commands (`sg_raw`) and uses `dd` on the `nst` device. It
   does not use `mt`; the operator may. Horizon: a Python SCSI library instead of `sg_raw`.
@@ -225,19 +229,24 @@ There is no second, blocking way to run a phase. The phases are implemented in
    (body as base64 text). To confirm, or switch to the encrypted body as raw bytes behind
    the header.
 
-## Next steps
+## Milestone and what comes after
 
-Done: tape order follows the queue; a failure aborts its run list; every file has its own
-key; secrets are kept off the command line; TOC with version, fingerprint, state, encrypted
-body, reading from text and TOC directory; recursive scan in tape order, mounts and spool
-directory; the file phases (`Validate`, `Encrypt`, `Write`, `Read`, `Decrypt`) on the queue.
+**Milestone 1 (2026-11-17/18): writing works.** One `WriteJob` writes a folder to a real LTO-8
+tape: rewind, first TOC, every file (checksum, encryption, write), last TOC, rewind, and an
+eject only on request. Tested by hand on the drive, then corrected: the job now does all
+the steps itself, `TapeDrive` has only its four steps, `__str__` is always `indent=2`, the
+checksum defaults to SHA256.
 
-1. TOC: reading it back from tape (needs the drive, see 3).
-2. Restore of a whole folder: build the files from the TOC (a `File` needs an existing
-   file today), `Folder.queueRestore()`, restore of metadata. Needs the positioning of 3.
-3. TapeDrive: the four functions as job phases (`Rewind()`, `Eject()`, `Write()`, `Read()`,
-   queued in tape order), the trailing TOC, remove the old `write()` / `read()` /
-   `writeTOC()` / `format()`. Optional: seek by tape file number with the SCSI SPACE
-   command. Drive discovery is done (`TD_Pool`). Needs the drive to verify.
-4. Host and REST API on the new core; then remove `write_folder_to_tape.py`.
-5. Cartridge memory. Needs hardware.
+Everything below comes after the milestone and is postponed:
+
+1. **Read back and validate.** Reading the TOC from tape, positioning (optional, SCSI SPACE),
+   `Read` → `Decrypt` → `Validate` of a whole folder (a `File` is built from the TOC entry, it
+   needs an existing file today), restore of metadata. The steps for one file exist.
+2. **Cartridge memory before the fingerprint.** Read the chip (LTO-CM) first; if it holds a
+   fingerprint the TOC uses it, else a new one is made and set. See "Fingerprint and cartridge memory".
+3. **Registering a tape in the cartridge memory.** This is NOT a format in the classic sense:
+   no zeros are written over the tape. The tape is only registered (fingerprint, version in the
+   chip). The old `format` step of the run list is therefore gone for now.
+4. **The REST API** on the new core; then remove `write_folder_to_tape.py`.
+5. The drive is asked whether it can take a step before each one (see "Drives").
+6. Spool: hold back the encryption while the tape is slower, delete spool files after they were written.
