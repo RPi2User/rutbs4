@@ -8,6 +8,7 @@ For the current state of each source file see [SOURCES.md](SOURCES.md).
 
 - The backend is a plain REST server (Flask + Swagger). There is no other interface.
 - Keep it simple: shell out to standard tools, no database, no config file on the server.
+  (A database for the jobs is being considered, see "Todo: a database for the jobs".)
 - **Bring your own security.** The backend speaks HTTP and receives the passphrase in
   clear text. Whoever exposes it beyond a trusted LAN puts HTTPS in front of it.
 - We do what the operator asks for. Many small files are slow on tape; that is the
@@ -250,3 +251,51 @@ Everything below comes after the milestone and is postponed:
 4. **The REST API** on the new core; then remove `write_folder_to_tape.py`.
 5. The drive is asked whether it can take a step before each one (see "Drives").
 6. Spool: hold back the encryption while the tape is slower, delete spool files after they were written.
+7. System commands: every command goes through the Job system, see "Todo: system commands".
+8. A database for the jobs, see "Todo: a database for the jobs".
+
+## Todo: system commands
+
+Decided on 2026-11-18, **not implemented**. All commands go through the Job system, so there is one
+place for deadline, kill and log. Small requests (a few random bytes, the size of a file, a SCSI
+query) must not wait for the thread limit and must not block the caller for long, much like the
+deadlines known from real-time systems: the Job system grants such a command direct execution
+because it may kill it once the deadline is over.
+
+- New call `Job.Run(cmd, deadlineMs=2000)`. It runs the command at once in the caller's thread,
+  takes no slot of the thread limit, kills it when the deadline is over and returns the finished
+  `Command`. It is not a flag of `Job.Add()`: it must work inside constructors and inside
+  `prepare` hooks, which run under the Job lock, so it never waits for the scheduler and never
+  holds the lock while waiting.
+- The default deadline is **2 s**. Measured: `openssl rand`, `stat`, `findmnt` take 2 to 4 ms and
+  the SCSI queries INQUIRY, MODE SENSE and TEST UNIT READY about 3.5 ms on the idle drive.
+- The deadline is wall-clock time, not CPU time: a command that waits on a hung mount or a busy
+  drive uses almost no CPU and would never be caught. `RLIMIT_CPU` can be a second guard.
+- The folder scan (`find`) is a system job as well, with a deadline of **60 s**.
+- Only small things are system commands. Never rewind, eject, `dd`, checksum or encryption. On a
+  drive only read-only SCSI queries; they may run while the drive works on its queue, which is also
+  the way to ask the drive before a step (see "Drives").
+- **New state:** a command that was killed because the system was not fast enough gets its own
+  state (working name `KILLED`, "deadline exceeded") in the state machine of `Command` / `Job`,
+  distinct from `FAILED` (exit code not 0). Open: whether a runlist treats it like `FAILED`
+  (probably yes).
+- The system commands get a registry of their own, see the next section.
+- Places to convert: `Key` (two `openssl rand`), `File.readSize()` (`stat`), `Mount` (`findmnt`),
+  `Folder` (`find`), `TapeDrive` (INQUIRY, MODE SENSE and its retry), and the TOC encryption, which
+  uses `subprocess.run` because `Command` has no stdin yet. `Command` needs stdin first (the
+  passphrase stays in the environment).
+
+## Todo: a database for the jobs
+
+Not decided, **not implemented**. The jobs (and the system commands) with their metadata are
+stored in an SQL database; the author has nothing against it. Today the jobs live in memory and a
+job that is interrupted by a restart has failed.
+
+- This breaks the principle "no database". If it is adopted, that line changes.
+- Suggestion: SQLite, because it is part of Python and needs no server. To decide: which database,
+  what exactly is stored, how long.
+- What would change: jobs and their history survive a restart, a frontend can list finished jobs,
+  and the system commands get their registry without growing the memory.
+- Never store secrets: the environment of a `Command` (the key of a file) stays out. The command
+  line is fine, it holds the IV but never a key or passphrase.
+
