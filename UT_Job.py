@@ -23,6 +23,7 @@ class UT_Job(unittest.TestCase):
         - AE-AF: Scheduling (tape priority, one Entry per drive)
         - AG-AH: Flush(killRunning=False) and the JobScheduler thread
         - AI-AJ: Tape order, abort of a runlist
+        - AR: Entry.drive, Registry(drive=), Flush(drive=)
         - AM-AP: Urgent Entries (system commands): own list, no slot, deadline, from a prepare hook
 
     Most tests call Job.Refresh() by hand, this keeps them deterministic.
@@ -399,6 +400,37 @@ class UT_Job(unittest.TestCase):
         Job.Flush()
         self.assertEqual(Job.urgent, [])
         print("Q_REGISTRY_LIMIT")
+
+
+    def test_AR_drive(self) -> None:
+        """Entry.drive: a tape Entry belongs to its drive, others get it from the request; Registry and Flush can filter"""
+        a1: str = Job.Add(Command(self.AB_DEP), drive="wwid-A")
+        a2: str = Job.Add(Command("sleep 0.5"), tape="wwid-A", dependsOn=a1)        # drive follows from tape
+        b1: str = Job.Add(Command("sleep 0.5"), tape="wwid-B")
+        b2: str = Job.Add(Command(self.AB_DEP), drive="wwid-B", dependsOn=b1)
+        free: str = Job.Add(Command(self.AB_DEP))                                   # no drive at all
+        sys_a: str = Job.Add(Command(self.AB_DEP), urgent=True, drive="wwid-A")     # a SCSI query of drive A
+        self.assertEqual([Job.Get(i).drive for i in (a1, a2, b1, b2, free, sys_a)],
+                         ["wwid-A", "wwid-A", "wwid-B", "wwid-B", "", "wwid-A"])
+        self.assertEqual(Job.Registry(drive="wwid-A").keys(), {a1, a2, sys_a})
+        self.assertEqual(Job.Registry(drive="wwid-B").keys(), {b1, b2})
+        self.assertEqual(Job.Registry()[a2]["Entry"]["drive"], "wwid-A")
+        self.assertEqual(Job.Registry(drive="nobody"), {})
+
+        self.assertTrue(Job.Wait([a1, sys_a], 5))
+        Job.Refresh()
+        self.assertEqual(Job.Get(a2).state, EntryState.RUNNING)
+        self.assertEqual(Job.Get(b1).state, EntryState.RUNNING)
+
+        # the next request of drive A replaces what is left of A, drive B is not touched, not even killed
+        Job.Flush(killRunning=False, drive="wwid-A")
+        self.assertEqual(Job.Registry().keys(), {a2, b1, b2, free})                 # only the finished ones of A are gone
+        Job.Flush(killRunning=True, drive="wwid-A")
+        self.assertEqual(Job.Registry().keys(), {b1, b2, free})
+        self.assertEqual(Job.Get(b1).state, EntryState.RUNNING)                     # still running
+        Job.Flush(killRunning=True)
+        self.assertEqual(Job.Registry(), {})
+        print("R_DRIVE")
 
 
 if __name__ == '__main__':

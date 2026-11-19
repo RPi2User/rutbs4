@@ -191,10 +191,10 @@ class ReadJob:
         for f in self.files:
             encrypted: bool = f.encryption_scheme.mode is not E_Mode.NONE
             step: str = f.Read(d, self.spool.file(f.id) if encrypted else f.path.path, runlist=r)
-            step = f.Decrypt(f.path.path, runlist=r, dependsOn=step)
-            f.Validate(runlist=r, dependsOn=step)
+            step = f.Decrypt(f.path.path, runlist=r, dependsOn=step, drive=d.id)
+            f.Validate(runlist=r, dependsOn=step, drive=d.id)
         rewound: str = d.Rewind(runlist=r, always=True)
-        Job.Add(Command("true"), runlist=r, dependsOn=rewound, always=True, prepare=self.spool.remove)
+        Job.Add(Command("true"), runlist=r, dependsOn=rewound, always=True, prepare=self.spool.remove, drive=d.id)
 
         with Job.lock:
             self.entries = [e.id for e in Job.queue if e.runlist == r]

@@ -6,7 +6,8 @@ when it runs, and takes over the result.
 
 There is **one queue for the whole host** (`Job.queue`), so the thread limit holds no matter how many
 requests are queued. System commands that cannot wait live in a second list (`Job.urgent`). Both are
-shown by `Job.Registry()`; `Job.Get()` and `Job.Wait()` find an id in either.
+shown by `Job.Registry()`; `Job.Get()` and `Job.Wait()` find an id in either. Several requests can be
+in the registry at once, for example one per drive; `Entry.drive` tells them apart (`Job.Registry(drive=)`).
 
 ## Entry
 
@@ -16,6 +17,7 @@ shown by `Job.Registry()`; `Job.Get()` and `Job.Wait()` find an id in either.
 |--------------|-------------------------------------------------------------------------------------|
 | `cmd`        | The `Command`, not started yet. The same object is never queued twice                |
 | `tape`       | Drive id if the command uses a drive, `""` for CPU and disk work                     |
+| `drive`      | Drive id (its wwid) of the request the entry belongs to, also for checksum, encryption and closing steps. A tape entry belongs to its own drive, so `tape` also sets `drive` |
 | `dependsOn`  | Id of one parent that must be `COMPLETED` first                                      |
 | `waitFor`    | Ids of further parents (a barrier, e.g. "all checksums are done")                    |
 | `runlist`    | Id of the request the entry belongs to (one write, one restore)                      |
@@ -59,7 +61,7 @@ not count).
 2. **Entries that feed a tape** (checksum, encryption before a write).
 3. **Everything else** (decrypt, verify after the tape).
 
-Within a class it is first come, first serve. CPU and disk work is limited by `Job.limit`
+The three classes are fixed, a request has no priority of its own. Within a class it is first come, first serve. CPU and disk work is limited by `Job.limit`
 (default: the number of cores); every running entry without a drive takes one slot.
 
 Who ticks: `Job.Work()` starts a thread that calls `Refresh()` every 500 ms (it does not start by
@@ -86,7 +88,8 @@ They are not meant for the regular case.
 
 - A queued command has no deadline. Stopping a running job is a matter of the API (abort, kill), not of the queue.
 - Nothing is stored. The registry lives in memory and a new write or read request replaces it
-  (`Job.Flush()`: `killRunning=True` kills and removes everything, `False` removes the finished entries only).
+  (`Job.Flush()`: `killRunning=True` kills and removes everything, `False` removes the finished entries only;
+  `drive=` limits it to the entries of one drive, so the request of another drive is not touched).
 - It does not know what a command means. Drive state and tape order are the business of `TapeDrive` and the jobs on top.
 
 ## Typical flow: write one file

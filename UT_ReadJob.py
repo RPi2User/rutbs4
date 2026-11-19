@@ -186,6 +186,7 @@ class UT_ReadJob(unittest.TestCase):
             self.assertEqual(header["first"]["fingerprint"], write.toc.header.fingerprint)
 
             job.queue(self.PASSPHRASE)
+            self.assertTrue(all(Job.Get(i).drive == td.id for i in job.entries))     # decrypt, checksum, closing step too
             self.assertTrue(job.wait(600))
             self.assertEqual(job.state, "COMPLETED", str(job))
             self.assertEqual(job.messages, [])

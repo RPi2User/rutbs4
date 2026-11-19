@@ -164,7 +164,9 @@ Global scheduler for `Command` objects. `Job` is used as a singleton: all method
 static, the queue is shared process-wide. One queue for the whole host is what keeps the
 thread limit.
 
-- `Job.Add(cmd, tape="", dependsOn="", runlist="", always=False, prepare=None, waitFor=None)` → entry id.
+- `Job.Add(cmd, tape="", dependsOn="", runlist="", always=False, prepare=None, waitFor=None, drive="")` → entry id.
+  `drive` is the wwid of the drive whose request this is (a tape entry gets it from `tape`);
+  `Job.Registry(drive=)` and `Job.Flush(drive=)` filter by it.
   An entry may depend on one parent and wait for more entries (`waitFor`, a list of ids, for example
   "all checksums are done"). All of them must be added first and `COMPLETED`; one `FAILED` fails the entry.
 - `runlist` groups the entries of one request. If one of them fails, the entries of that

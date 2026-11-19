@@ -9,3 +9,5 @@ figure out how to
 
 
 path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sein!)
+
+- Drive state machine: ask the drive for its state before every action except trivial ones (CM read, status). Find the SCSI query that shows "busy" while a write runs. See DESIGN.md, "Drives".

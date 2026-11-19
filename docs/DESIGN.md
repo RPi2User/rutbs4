@@ -143,8 +143,10 @@ when the number of running commands equals the thread limit, or when the drive a
 needs is already busy.
 
 The registry (`Job.queue` and `Job.urgent`) is not archived. A new write or read request replaces the
-registry of the previous one; the frontend archives finished runs if it wants to (the output is verbose
-enough for that).
+registry of the previous request **of the same drive**; the frontend archives finished runs if it wants to
+(the output is verbose enough for that). Every entry carries the id (wwid) of the drive of its request
+(`Entry.drive`, set by the job also for checksums and closing steps), so the API calls
+`Job.Flush(killRunning=False, drive=id)` and a running request on another drive is not touched.
 
 A queued command has no deadline: a running step is finished or stopped by the operator. Two requests
 are planned for that, **abort** (finish the current step, then end peacefully) and **kill** (terminate),
@@ -292,7 +294,7 @@ Everything below comes after the milestones and is postponed:
    no zeros are written over the tape. The tape is only registered (fingerprint, version in the
    chip). The old `format` step of the run list is therefore gone for now.
 4. **The REST API** on the new core; then remove `write_folder_to_tape.py` and `read_tape_to_folder.py`.
-5. The drive is asked for its state before each step (see "Drives").
+5. **Drive state machine.** The drive is asked for its state before each step (see "Drives"). Next big item.
 6. Spool: hold back the encryption while the tape is slower, delete spool files after they were written.
 7. System commands: done, see "System commands". What stays: `Host` (REST layer, still on the old `tbk`) has its own `subprocess.run` calls until it is rebuilt on the new core.
 8. Abort and kill of a running job as API requests (see "Job").

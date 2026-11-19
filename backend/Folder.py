@@ -58,9 +58,9 @@ class Folder:
         for file in self.files:
             file.encryption_scheme = Encryption(Key(empty=True), E_Mode.NONE)
 
-    def queueChecksums(self, runlist: str = "") -> List[str]:
+    def queueChecksums(self, runlist: str = "", drive: str = "") -> List[str]:
         """Queues the checksum of every File and returns the entry ids (in the order of the Files)."""
-        return [file.Validate(runlist=runlist) for file in self.files]
+        return [file.Validate(runlist=runlist, drive=drive) for file in self.files]
 
     def queueWrite(self, tapeDrive: TapeDrive, runlist: str = "", spool: Spool | None = None,
                    checksums: List[str] | None = None) -> List[str]:
@@ -82,8 +82,8 @@ class Folder:
         write_entries: List[str] = []
 
         for n, file in enumerate(self.files):
-            entry: str = checksums[n] if checksums else file.Validate(runlist=runlist)
-            entry = file.Encrypt(spool.file(file.id) if spool else "", runlist=runlist, dependsOn=entry)
+            entry: str = checksums[n] if checksums else file.Validate(runlist=runlist, drive=tapeDrive.id)
+            entry = file.Encrypt(spool.file(file.id) if spool else "", runlist=runlist, dependsOn=entry, drive=tapeDrive.id)
             write_entries.append(file.Write(tapeDrive, runlist=runlist, dependsOn=entry))
 
         return write_entries

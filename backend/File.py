@@ -96,7 +96,8 @@ class File:
     | `Read(tapeDrive, target)`                | next tape file -> `target`                     |
     | `Decrypt(target)`                        | encrypted file -> `target`                     |
 
-    All take `runlist=""` and `dependsOn=""`. `Read()` reads at the current tape position,
+    All take `runlist=""` and `dependsOn=""`; Validate, Encrypt and Decrypt also `drive=""` (the drive id of the
+    request, see `Job`; Write and Read take it from the TapeDrive). `Read()` reads at the current tape position,
     positioning is the job of the TapeDrive.
 
     `File.state` is derived from the Job entries of the phases, it never has to be set:
@@ -197,7 +198,7 @@ class File:
 
 # === PHASES ===================================================================
 
-    def Validate(self, runlist: str = "", dependsOn: str = "") -> str:
+    def Validate(self, runlist: str = "", dependsOn: str = "", drive: str = "") -> str:
         self._accept()
         if self.cksum.type is ChecksumType.NONE:
             return dependsOn
@@ -212,9 +213,9 @@ class File:
             self.cksum.create()
             phase = FileState.CKSUM_CALC
         self.cksum.cmd.filesize = self.size
-        return self._queue(phase, self.cksum.cmd, runlist, dependsOn)
+        return self._queue(phase, self.cksum.cmd, runlist, dependsOn, drive)
 
-    def Encrypt(self, target: str = "", runlist: str = "", dependsOn: str = "") -> str:
+    def Encrypt(self, target: str = "", runlist: str = "", dependsOn: str = "", drive: str = "") -> str:
         self._accept()
         if self.encryption_scheme.mode is E_Mode.NONE:
             return dependsOn
@@ -224,7 +225,7 @@ class File:
         self.encryption_scheme.encrypt(self.path.path, target)
         self.cryptPath = self.encryption_scheme.targetPath
         self.encryption_scheme.cmd.filesize = self.size
-        return self._queue(FileState.ENCRYPT, self.encryption_scheme.cmd, runlist, dependsOn)
+        return self._queue(FileState.ENCRYPT, self.encryption_scheme.cmd, runlist, dependsOn, drive)
 
     def Write(self, tapeDrive: "TapeDrive", runlist: str = "", dependsOn: str = "") -> str:
         self._accept()
@@ -245,7 +246,7 @@ class File:
 
         return self._record(FileState.READ, tapeDrive.Read(target, self.size, runlist, dependsOn))
 
-    def Decrypt(self, target: str, runlist: str = "", dependsOn: str = "") -> str:
+    def Decrypt(self, target: str, runlist: str = "", dependsOn: str = "", drive: str = "") -> str:
         self._accept()
         if self.encryption_scheme.mode is E_Mode.NONE:
             return dependsOn
@@ -257,7 +258,7 @@ class File:
         self.encryption_scheme.decrypt(self.cryptPath, target)
         self.where = target
         self.encryption_scheme.cmd.filesize = self.size
-        return self._queue(FileState.DECRYPT, self.encryption_scheme.cmd, runlist, dependsOn)
+        return self._queue(FileState.DECRYPT, self.encryption_scheme.cmd, runlist, dependsOn, drive)
 
 # === FILE SYSTEM (instant, no Job) ============================================
 
@@ -322,8 +323,8 @@ class File:
         if self.state in {FileState.INIT, FileState.ERROR, FileState.MISMATCH, FileState.REMOVED}:
             raise RuntimeError("[ERROR] File " + str(self.id) + " is " + self.state.name + ", no further phase possible")
 
-    def _queue(self, phase: FileState, cmd: Command, runlist: str, dependsOn: str) -> str:
-        return self._record(phase, Job.Add(cmd, dependsOn=dependsOn, runlist=runlist))
+    def _queue(self, phase: FileState, cmd: Command, runlist: str, dependsOn: str, drive: str = "") -> str:
+        return self._record(phase, Job.Add(cmd, dependsOn=dependsOn, runlist=runlist, drive=drive))
 
     def _record(self, phase: FileState, entry: str) -> str:
         self.entries.append((phase, entry))

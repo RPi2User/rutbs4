@@ -23,11 +23,13 @@ class Entry():
 
     Entry.__init__(command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
                    prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None,
-                   startAfterCreate: bool = False, deadlineMs: int = 0):
+                   startAfterCreate: bool = False, deadlineMs: int = 0, drive: str = ""):
     - Requires
         - A Command that has not been started yet
     - Supports
-        - tape:      tape device (e.g. "/dev/nst0") if this Command uses a drive
+        - tape:      id of the drive if this Command uses it (scheduling: one at a time, in order)
+        - drive:     id of the drive (its wwid) whose request the Entry belongs to, also for checksum,
+                     encryption and closing steps. A tape Entry belongs to its own drive. `""` = no drive
         - dependsOn: id of the parent Entry, which must be COMPLETED first
         - waitFor:   ids of further Entries that must be COMPLETED first (a barrier: "all checksums are done")
         - runlist:   id of the request this Entry belongs to (e.g. one tape write)
@@ -42,7 +44,8 @@ class Entry():
     |------------------|--------------|-------------------------------------------------|
     | `self.id`        | `str`        | UUID, returned by `Job.Add()`                   |
     | `self.command`   | `Command`    | The work itself                                 |
-    | `self.tape`      | `str`        | Tape device, `""` for CPU/Disk work             |
+    | `self.tape`      | `str`        | Drive id, `""` for CPU/Disk work                |
+    | `self.drive`     | `str`        | Drive id of the request, see `drive` above      |
     | `self.dependsOn` | `str`        | Parent id, `""` if there is no parent           |
     | `self.waitFor`   | `List[str]`  | Further ids to wait for, `[]` if none           |
     | `self.runlist`   | `str`        | Request id, `""` if the Entry stands alone      |
@@ -56,12 +59,13 @@ class Entry():
 
     def __init__(self, command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
                  prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None,
-                 startAfterCreate: bool = False, deadlineMs: int = 0) -> None:
+                 startAfterCreate: bool = False, deadlineMs: int = 0, drive: str = "") -> None:
         self.id: str = str(uuid.uuid4())
         self.prepare: Callable[[], None] | None = prepare
         self.error: str = ""
         self.command: Command = command
         self.tape: str = tape
+        self.drive: str = drive or tape
         self.dependsOn: str = dependsOn
         self.waitFor: List[str] = list(waitFor or [])
         self.runlist: str = runlist
@@ -85,6 +89,7 @@ class Entry():
             "id": self.id,
             "state": self.state.name,
             "tape": self.tape,
+            "drive": self.drive,
             "dependsOn": self.dependsOn,
             "waitFor": self.waitFor,
             "runlist": self.runlist,
@@ -160,7 +165,7 @@ class Job():
     | `Job.Failed()`     | True if an Entry of a runlist failed (closing steps excluded) |
     | `Job.Get()`        | Returns the Entry of an id, raises LookupError           |
     | `Job.Registry()`   | Returns all Entries as dict                              |
-    | `Job.Flush()`      | Kills & removes all, or (killRunning=False) removes done |
+    | `Job.Flush()`      | Kills & removes all, or (killRunning=False) removes done; `drive=` limits it to one drive |
     | `Job.Refresh()`    | One scheduler tick: update states, start Entries         |
     | `Job.Wait()`       | Blocks until the given Entries are COMPLETED or FAILED   |
     | `Job.Work()`       | Starts the JobScheduler thread (calls Refresh)           |
@@ -184,7 +189,7 @@ class Job():
     @staticmethod
     def Add(cmd: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
             prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None,
-            urgent: bool = False, deadlineMs: int = DEFAULT_DEADLINE_MS) -> str:
+            urgent: bool = False, deadlineMs: int = DEFAULT_DEADLINE_MS, drive: str = "") -> str:
         with Job.lock:
             if any(e.command is cmd for e in Job.queue + Job.urgent):
                 raise ValueError("ERROR: Command already queued, create a new Command object")
@@ -192,7 +197,7 @@ class Job():
             if urgent:
                 if tape or dependsOn or runlist or always or prepare or waitFor:
                     raise ValueError("ERROR: An urgent Entry stands alone: no tape, parent, runlist or prepare")
-                _u: Entry = Entry(cmd, startAfterCreate=True, deadlineMs=deadlineMs)    # starts the Command
+                _u: Entry = Entry(cmd, startAfterCreate=True, deadlineMs=deadlineMs, drive=drive)    # starts the Command
                 Job.urgent.append(_u)
                 Job._trimUrgent()
                 return _u.id
@@ -200,7 +205,7 @@ class Job():
             for parent in ([dependsOn] if dependsOn else []) + list(waitFor or []):
                 Job.Get(parent)         # raises LookupError if the parent is unknown
 
-            _e: Entry = Entry(cmd, tape, dependsOn, runlist, always, prepare, waitFor)
+            _e: Entry = Entry(cmd, tape, dependsOn, runlist, always, prepare, waitFor, drive=drive)
             Job.queue.append(_e)
             Job._updateStates()         # parent might already be COMPLETED
             Job._updateJobState()
@@ -235,23 +240,30 @@ class Job():
         raise LookupError("Entry not found: " + entryId)
 
     @staticmethod
-    def Registry() -> dict:
+    def Registry(drive: str = "") -> dict:
+        """All Entries as dict; with `drive` only those of that drive."""
         with Job.lock:
-            return {entry.id: entry._asdict() for entry in Job.queue + Job.urgent}
+            return {entry.id: entry._asdict() for entry in Job.queue + Job.urgent if not drive or entry.drive == drive}
 
     @staticmethod
-    def Flush(killRunning: bool = True) -> None:
+    def Flush(killRunning: bool = True, drive: str = "") -> None:
+        """
+        Removes Entries of both lists: all of them, or with `drive` only those of that drive (the
+        request of another drive keeps running). killRunning=True kills the running ones first,
+        False removes the finished ones only.
+        """
         with Job.lock:
+            mine = lambda e: not drive or e.drive == drive
             if killRunning:
                 for entry in Job.queue + Job.urgent:
-                    if entry.state is EntryState.RUNNING:
+                    if mine(entry) and entry.state is EntryState.RUNNING:
                         entry.command.kill()
-                Job.queue.clear()
-                Job.urgent.clear()
+                Job.queue[:] = [e for e in Job.queue if not mine(e)]
+                Job.urgent[:] = [e for e in Job.urgent if not mine(e)]
             else:
                 Job._updateStates()     # a WAITING child never loses its unfinished parent
-                Job.queue[:] = [e for e in Job.queue if e.state not in Job.FINISHED]
-                Job.urgent[:] = [e for e in Job.urgent if e.state not in Job.FINISHED]
+                Job.queue[:] = [e for e in Job.queue if not (mine(e) and e.state in Job.FINISHED)]
+                Job.urgent[:] = [e for e in Job.urgent if not (mine(e) and e.state in Job.FINISHED)]
             Job._updateJobState()
 
     @staticmethod

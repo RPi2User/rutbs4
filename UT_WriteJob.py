@@ -86,6 +86,8 @@ class UT_WriteJob(unittest.TestCase):
 
             self.assertEqual(job.state, "NEW")
             job.queue()
+            self.assertTrue(all(Job.Get(i).drive == td.id for i in job.entries))     # also checksum, encryption, closing steps
+            self.assertEqual(set(Job.Registry(td.id)), set(job.entries))
             self.assertTrue(job.wait(60))
 
             self.assertEqual(job.state, "COMPLETED", str(job))

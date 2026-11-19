@@ -118,8 +118,8 @@ class WriteJob:
         r: str = self.runlist
         self.spool.create()
 
-        checksums: List[str] = self.folder.queueChecksums(r)
-        known: str = Job.Add(Command("true"), runlist=r, waitFor=[c for c in checksums if c])      # all checksums are known
+        checksums: List[str] = self.folder.queueChecksums(r, self.drive.id)
+        known: str = Job.Add(Command("true"), runlist=r, waitFor=[c for c in checksums if c], drive=self.drive.id)      # all checksums are known
 
         self.drive.Rewind(runlist=r, dependsOn=known)
         self.firstToc = self.drive.Write(os.path.join(self.spool.path, "toc_start.json"), runlist=r, prepare=self._firstToc)
@@ -128,7 +128,7 @@ class WriteJob:
         rewound: str = self.drive.Rewind(runlist=r, always=True)
         if self.eject:
             self.drive.Eject(runlist=r)                 # only after success: a failed job aborts it
-        Job.Add(Command("true"), runlist=r, dependsOn=rewound, always=True, prepare=self.spool.remove)
+        Job.Add(Command("true"), runlist=r, dependsOn=rewound, always=True, prepare=self.spool.remove, drive=self.drive.id)
 
         with Job.lock:
             self.entries = [e.id for e in Job.queue if e.runlist == r]
