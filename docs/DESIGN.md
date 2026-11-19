@@ -246,10 +246,13 @@ There is no second, blocking way to run a phase. The phases are implemented in
   operator, and the result is kept in the cartridge memory of the tape, so it is measured once. It is a separate
   request, never a side effect of registering: it **writes test data over the tape from its begin** and must be
   refused for a tape that holds data (a registered tape with a TOC) unless the operator says so. Sketch: per
-  candidate (64K to 4M) rewind, `dd` a fixed amount of incompressible data (a cipher stream, not zeros: the drive
+  candidate (multiples of 64K up to 512K, then 768K, 1M, 2M, 4M; powers of two alone would miss values like
+  384K) rewind, `dd` a fixed amount of incompressible data (a cipher stream, not zeros: the drive
   compresses), take the speed `dd` reports, then pick the smallest size within about 5 % of the best. Proposal for
   the chip: `0x080B` application format version (16 ASCII), e.g. `bs=262144`; to be checked on the drive. The
-  value is a hint (drive, host and source disk decide the speed more than the cartridge), the operator can measure again.
+  value belongs to the cartridge: the same drive and host reached the full speed with 384K on one make of LTO-3
+  tape and with 256K on another (operator's measurement). It is probably valid for the drive it was measured on
+  only, the operator can measure again.
 
 ## Host and REST API
 
