@@ -133,6 +133,8 @@ class Tape():
             data.update({"native_capacity": self.native_capacity})
         if type(self.native_capacity) is E_LTO_Cap:
             data.update({"native_capacity": self.native_capacity.value}) # type: ignore
+        if type(self.cartridgeMemory) is CartridgeMemory:
+            data.update({"cartridgeMemory": self.cartridgeMemory._asdict()})
         return data
     
     def __str__(self):
