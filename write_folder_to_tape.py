@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Write a folder to tape: one WriteJob (rewind, first TOC, every file checksummed, encrypted with
+Write a folder to tape: one WriteJob (every file checksummed, rewind, first TOC, every file encrypted with
 its own key and written, last TOC, rewind). The passphrase comes from RUTBS_PASSPHRASE or is
 asked for. The tape is NOT ejected unless --eject is given.
 

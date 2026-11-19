@@ -6,7 +6,7 @@ from typing import List, Set, Tuple, TYPE_CHECKING
 
 from backend.Checksum import Checksum, ChecksumState, ChecksumType
 from backend.Command import Command
-from backend.Encryption import E_Mode, E_State, Encryption, Key
+from backend.Encryption import E_Mode, E_State, Encryption, Key, KeyLength
 from backend.Job import EntryState, Job
 
 if TYPE_CHECKING:       # TapeDrive imports File
@@ -115,6 +115,11 @@ class File:
 
     Plain file system operations are instant and need no Job: `touch()`, `remove()`,
     `append(text)`, `readSize()`.
+
+    `File.Restore(entry, targetDir)` builds a File from its entry in a TOC (see `_asdict()`) for a
+    restore: `size`, checksum (type and value) and the key of the encryption come from the TOC, the
+    file is `<targetDir>/<relPath>` and is created empty. Restore a file with
+    `Read()` -> `Decrypt()` -> `Validate()`, the last one compares to the checksum of the TOC.
     """
 
     def __init__(self, id: int, path: str, path_context: str, createFile: bool = False) -> None:
@@ -140,6 +145,26 @@ class File:
         self.readSize()
 
         self._state = FileState.IDLE
+
+    @staticmethod
+    def Restore(entry: dict, targetDir: str) -> "File":
+        relPath: str = entry["path"]["relPath"]
+        target: str = os.path.join(targetDir, relPath)
+        root: str = os.path.realpath(targetDir)
+        if not os.path.realpath(target).startswith(root + os.sep):
+            raise ValueError("[ERROR] '" + relPath + "' would leave the target directory")
+
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        file: File = File(entry["id"], target, targetDir, createFile=True)
+        file.size = entry["size"]
+
+        cksum: dict = entry["cksum"]
+        file._cksum = Checksum(target, ChecksumType[cksum["type"]], cksum["value"])
+        file._cksum.cmd.filesize = file.size
+
+        key: dict = entry["encryption"]["key"]
+        file._encryption = Encryption(Key(KeyLength[key["length"]], key["value"], key["iv"]), E_Mode[entry["encryption"]["mode"]])
+        return file
 
     @property
     def state(self) -> FileState:

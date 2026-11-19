@@ -37,5 +37,8 @@ python3 UT_TD_Pool.py
 echo WriteJob
 python3 UT_WriteJob.py
 
+echo ReadJob
+python3 UT_ReadJob.py
+
 echo TapeDrive
 python3 UT_TapeDrive.py

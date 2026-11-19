@@ -4,6 +4,7 @@ import platform
 import subprocess
 import uuid
 
+from typing import List
 from datetime import datetime
 from enum import Enum
 
@@ -96,9 +97,11 @@ class TableOfContent:
         | `store(directory)`          | Writes `sealed` to YYYYMMDD_hhmmss_<fingerprint>.json |
         | `TableOfContent.readHeader(text)` | Header only, no passphrase needed              |
         | `TableOfContent.open(text, passphrase)` | Header and body as dicts                 |
+        | `TableOfContent.differences(first, last)` | What the plan of the first and the last TOC disagrees on |
 
-        The first TOC is sealed with state IDLE before anything ran, the trailing one
-        with state COMPLETE or FAILED after everything ran.
+        The first TOC is sealed with state IDLE when the checksums are known and before the first file
+        is written, the trailing one with state COMPLETE or FAILED after everything ran. Apart from
+        the state and the command log they are equivalent.
     """
 
 
@@ -170,3 +173,47 @@ class TableOfContent:
             return {"header": header, "body": json.loads(plain)}
         except (TOC_WrongPassphrase, ValueError) as e:  # json.JSONDecodeError and UnicodeDecodeError are ValueErrors
             raise TOC_WrongPassphrase("Wrong passphrase or damaged TOC") from e
+
+    @staticmethod
+    def differences(first: dict, last: dict) -> List[str]:
+        """
+        Compares two opened TOCs (the first and the last one of a tape). Both must describe the same
+        plan: the same tape, the same folder and, for every file, the same id, paths, size, cipher,
+        key, IV and checksum (type and value; the write job knows every checksum before the first
+        TOC is written). What may differ is the result: the state of the header, the state and the
+        commands of the files.
+        Returns what differs, an empty list means "the same tape, the same files".
+        """
+        out: List[str] = []
+
+        for key in sorted(set(first["header"]) | set(last["header"])):
+            if key != "state" and first["header"].get(key) != last["header"].get(key):
+                out.append("header." + key + ": " + str(first["header"].get(key)) + " <> " + str(last["header"].get(key)))
+
+        a: dict = first["body"]["folder"]
+        b: dict = last["body"]["folder"]
+        for key in ("path", "encryption_type"):
+            if a.get(key) != b.get(key):
+                out.append("folder." + key + ": " + str(a.get(key)) + " <> " + str(b.get(key)))
+        if len(a["files"]) != len(b["files"]):
+            out.append("folder has " + str(len(a["files"])) + " files in the first and " + str(len(b["files"])) + " in the last TOC")
+            return out
+
+        for x, y in zip(a["files"], b["files"]):
+            name: str = "file " + str(x["id"]) + ": "
+            fields: dict = {
+                "id": (x["id"], y["id"]),
+                "size": (x["size"], y["size"]),
+                "path": (x["path"], y["path"]),
+                "cksum.type": (x["cksum"]["type"], y["cksum"]["type"]),
+                "encryption.mode": (x["encryption"]["mode"], y["encryption"]["mode"]),
+                "key": (x["encryption"]["key"]["value"], y["encryption"]["key"]["value"]),
+                "iv": (x["encryption"]["key"]["iv"], y["encryption"]["key"]["iv"]),
+            }
+            for field, (left, right) in fields.items():
+                if left != right:
+                    out.append(name + field + " differs")
+            if x["cksum"]["value"] != y["cksum"]["value"]:
+                out.append(name + "cksum.value differs")
+
+        return out

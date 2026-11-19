@@ -11,12 +11,22 @@ class KeyLength(Enum):
 
 class Key:
 
-    def __init__(self, length: KeyLength = KeyLength.medium):
+    def __init__(self, length: KeyLength = KeyLength.medium, value: str = "", iv: str = ""):
+        """Without `value` and `iv` a new random pair is made. With them it is a key read back from a TOC."""
+        self.length: KeyLength = length
+
+        if value:
+            self.cmd = Command("")      # nothing was run, the pair comes from the TOC
+            self.value: str = value
+            self.iv: str = iv
+            if len(self.value) != self.length.value * 2 or not self.iv:
+                raise ValueError("[ERROR] Key from the TOC has the wrong length")
+            return
+
         # Generate Key
         self.cmd = Command("openssl rand " + str(length.value), raw=True)
         self.cmd.wait()
-        self.length: KeyLength = length
-        self.value: str = self.cmd.stdout[0]
+        self.value = self.cmd.stdout[0]
 
         if len(self.value) != self.length.value * 2:
             self.iv = "CRASHED"
@@ -27,7 +37,7 @@ class Key:
         self.cmd.reset()
         self.cmd.cmd = "openssl rand 16"
         self.cmd.wait()
-        self.iv: str = self.cmd.stdout[0]
+        self.iv = self.cmd.stdout[0]
 
     def _asdict(self) -> dict:
         data = {

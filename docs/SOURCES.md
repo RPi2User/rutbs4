@@ -10,7 +10,7 @@ rutbs4 writes files to LTO tape. Everything is done by shelling out to standard 
 tracks their state.
 
 ```
-WriteJob                         <- one write request: the whole run list
+WriteJob / ReadJob               <- one write / restore request: the whole run list
   ├─ TapeDrive ── Tape           drive + inserted tape (found by TD_Pool)
   ├─ Folder ── File              what to write
   │             ├─ Checksum
@@ -25,7 +25,7 @@ There are two generations of code in the repository:
 
 | Status | Files |
 |--------|-------|
-| **Current**, importable, unit tests pass | `Version`, `Command`, `Checksum`, `Encryption`, `File`, `Folder`, `Spool`, `Mount`, `Job`, `Tape`, `TapeDrive`, `TD_Pool`, `TableOfContent`, `WriteJob`, `write_folder_to_tape.py` |
+| **Current**, importable, unit tests pass | `Version`, `Command`, `Checksum`, `Encryption`, `File`, `Folder`, `Spool`, `Mount`, `Job`, `Tape`, `TapeDrive`, `TD_Pool`, `TableOfContent`, `WriteJob`, `ReadJob`, `write_folder_to_tape.py`, `read_tape_to_folder.py` |
 | **To be ported**, not importable | `Host`, `rbs_backend.py` — the REST layer. Still written against the package `tbk`, which no longer exists (renamed to `_old_tbk/`, git-ignored). `Response` belongs to it. |
 
 Conventions used by all current classes:
@@ -143,8 +143,10 @@ is the TOC.
 
 - `Folder(path, checksumType=SHA256, encryptionMode=E_Mode.NONE)`. Both are decided with the
   request and read-only afterwards (assigning raises `AttributeError`); build a new `Folder`.
-- `queueWrite(tapeDrive, runlist="", spool=None)` queues, per file, the phases `Validate()` →
-  `Encrypt()` → `Write()` and returns the ids of the tape-write entries. Nothing is started here.
+- `queueChecksums(runlist="")` queues the checksum of every file and returns the entry ids.
+- `queueWrite(tapeDrive, runlist="", spool=None, checksums=None)` queues, per file, the phases
+  `Validate()` → `Encrypt()` → `Write()` (with `checksums` from `queueChecksums()` the first one is
+  queued already) and returns the ids of the tape-write entries. Nothing is started here.
   With a runlist id, a failing file stops the files after it. With a spool, the encrypted
   files go there (`0001.crypt`), else next to the originals.
 
@@ -158,8 +160,9 @@ Global scheduler for `Command` objects. `Job` is used as a singleton: all method
 static, the queue is shared process-wide. One queue for the whole host is what keeps the
 thread limit.
 
-- `Job.Add(cmd, tape="", dependsOn="", runlist="", always=False, prepare=None)` → entry id. An entry may
-  depend on one parent, which must be added first.
+- `Job.Add(cmd, tape="", dependsOn="", runlist="", always=False, prepare=None, waitFor=None)` → entry id.
+  An entry may depend on one parent and wait for more entries (`waitFor`, a list of ids, for example
+  "all checksums are done"). All of them must be added first and `COMPLETED`; one `FAILED` fails the entry.
 - `runlist` groups the entries of one request. If one of them fails, the entries of that
   runlist which have not started yet fail too; `always=True` marks closing steps that
   still run.
@@ -198,7 +201,9 @@ Notes:
 One tape drive. It does four things, each one a step in the Job queue that returns the entry
 id (pass it as `dependsOn`): `Rewind()` (SCSI REWIND), `Eject()` (SCSI LOAD/UNLOAD), `Write(source)`
 (`dd` to the `nst` device, one tape file) and `Read(target)` (`dd` from the `nst` device, the
-next tape file). Everything is SCSI through `sg_raw` and `dd`, there is no `mt`.
+next tape file). For reading it also seeks: `Space(files)` (SCSI SPACE over file marks, backward
+if negative) and `SpaceEnd()` (to the end of the data). Everything is SCSI through `sg_raw` and
+`dd`, there is no `mt`.
 The long comment at the top of the file explains the SCSI commands and is worth reading.
 
 - `TapeDrive(path, generic_path, drive_override=False, blocksize="256K", paths=None, wwid="")` —
@@ -215,6 +220,11 @@ The long comment at the top of the file explains the SCSI commands and is worth 
   may then be a regular file.
 
 Notes:
+- **`Read()` must not use `dd iflag=fullblock`** and **nothing may read at the end of the data.**
+  `fullblock` swallows the file mark after a short last block and reads on into the next tape
+  file (first test: one `dd` returned the TOC and all 15 files in one piece). A read at the end
+  of the data makes the kernel driver answer every later read with an I/O error, even after
+  `Rewind()`, until the driver itself is repositioned (`mt rewind`, by the operator).
 - Whether the drive can take a step is not asked before it yet (see DESIGN.md).
 - A regular file as tape is truncated by every `Write()`.
 - `Eject()` exists and is never part of a test run on the real drive.
@@ -293,7 +303,7 @@ importable.
 ### WriteJob.py
 
 The complete run list of one write request, queued in one go:
-`rewind → first TOC → per file: checksum, encrypt, write → last TOC → rewind [→ eject]`.
+`all checksums → rewind → first TOC → per file: encrypt, write → last TOC → rewind [→ eject]`.
 
 ```python
 job = WriteJob(input_dir, td, "passphrase", "/stornvme")     # td from TD_Pool().gatherDrives()[0]
@@ -304,14 +314,41 @@ print(job)       # state and the state of every file
 
 - `WriteJob(inputDir, tapeDrive, passphrase, spoolMount, tocDir="", checksum=SHA256,
   encryption=AES256CBC, eject=False)`.
-- The first TOC is sealed in `queue()` (state IDLE, nothing ran). The last TOC is made by a
-  `prepare` hook right before it is written, so it holds all results; its state is COMPLETE, or
-  FAILED if any step failed. After a failure no further file is written, the last TOC and the
-  rewind still run, the eject does not. A copy of the last TOC goes to `tocDir`.
+- The drive idles until every checksum is known (a barrier entry waits for them, the rewind depends on
+  it). The first TOC is sealed by a `prepare` hook right before it is written (state IDLE, all
+  checksums inside). The last TOC is made the same way after the files, with the results; its state
+  is COMPLETE, or FAILED if any step failed. Both are equivalent except for the state and the command log.
+- If a checksum fails, the tape is not touched: no TOC is written (the last TOC checks that the first
+  one is on the tape), only the closing rewind runs. After a later failure no further file is
+  written, the last TOC and the rewind still run, the eject does not. A copy of the last TOC goes to `tocDir`.
 - `queue()` refuses: no files, no tape, write protected tape, files larger than the native
   capacity, spool mount with less free space than the input.
 - The spool directory is removed at the end.
 - `eject=True` is the only way a WriteJob ejects.
+
+### ReadJob.py
+
+The restore of a whole tape. Two steps, because the operator is asked for the passphrase after
+seeing which tape is loaded.
+
+```python
+job = ReadJob(td, "/data/restore", "/stornvme", tocDir="/data/tocs")
+job.open()                    # rewind, first TOC, to the end, last TOC, rewind -> the clear text headers
+job.queue("passphrase")       # TOC_WrongPassphrase: nothing was queued, ask again
+job.wait()                    # then job.state: COMPLETED only if every file is IDLE (checksum ok)
+```
+
+- `open()` reaches the last TOC with SPACE to the end, two file marks back, one forward. It
+  never reads at the end of the data. A tape without a last TOC is not complete; the copy in
+  `tocDir` (named by the fingerprint) is used instead, with a warning in `messages`.
+- `queue()` opens both TOCs, compares them (`TableOfContent.differences()`: same tape, same files,
+  same keys; checksums and states are results and may differ) and queues
+  `skip first TOC → per file: Read → Decrypt → Validate → rewind`. The checksums come from the last TOC (the same as in the first).
+- Refused: the TOCs disagree, the writing job had failed, a file exists already in the target,
+  target or spool mount too small. `File.Restore()` keeps every file inside the target directory.
+- With `tocDir` both TOCs are also kept there in clear text, `*.first.plain.json` and
+  `*.last.plain.json`, mode 0600. They contain the keys of every file: delete them when done.
+- Not restored: modification time and permissions (the TOC does not record them yet).
 
 ### write_folder_to_tape.py
 
@@ -326,6 +363,16 @@ RUTBS_PASSPHRASE=... python3 write_folder_to_tape.py --dir /data/in --spool /mnt
 
 Options: `--checksum`, `--encryption`, `--threads` (default 4), `--toc-dir`, `--eject` (off by
 default), and for a regular file as tape `--tape`, `--rewind-cmd`, `--eject-cmd`, `--lto-version`.
+
+### read_tape_to_folder.py
+
+Command line wrapper around one `ReadJob`, goes away together with `write_folder_to_tape.py`. Shows
+the tape (fingerprint, date, host, state of both TOCs), then asks for the passphrase (three
+tries) or takes `RUTBS_PASSPHRASE`. The tape is rewound, never ejected.
+
+```
+python3 read_tape_to_folder.py --target /data/restore --spool /stornvme --toc-dir /data/tocs
+```
 
 ### rbs_backend.py — to be ported
 
@@ -350,16 +397,17 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 | `UT_Tape.py` | hardware id parsing | — |
 | `UT_TD_Pool.py` | fake sysfs: two paths of one drive, natural sg order, nothing hidden | — |
 | `UT_Spool.py` | `/mnt/daten` is found as mount, spool create / remove, refusals | `findmnt`, `/mnt/daten` as mount |
-| `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, scheduler thread, `prepare`, `Failed()` | — |
-| `UT_TapeDrive.py` | the commands of the four steps, derived state, override template, error cleared by the next good step | — |
-| `UT_WriteJob.py` | the whole run list on a fake drive: order, last TOC, eject only on request, a failing file, refused requests | `openssl`, `/mnt/daten` as mount |
+| `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, `waitFor`, scheduler thread, `prepare`, `Failed()` | — |
+| `UT_TapeDrive.py` | the commands of the steps (incl. seeking), derived state, override template, error cleared by the next good step | — |
+| `UT_ReadJob.py` | key and file restored from the TOC, checksum mismatch, comparison of the two TOCs, no escape from the target; **on the real drive** (`RUTBS_TEST_TAPE=1`, overwrites the tape from its begin): write, read back, wrong passphrase | `openssl`, `/mnt/daten` (or `RUTBS_TEST_MOUNT`) |
+| `UT_WriteJob.py` | the whole run list on a fake drive: order, last TOC, eject only on request, a failing file, refused requests, both TOCs equivalent, an unreadable file leaves the tape alone | `openssl`, `/mnt/daten` as mount |
 | `UT_Folder.py` | file collection, recursion and order, odd file names, own key per file, write chain against a fake tape, spool, abort | `openssl`, `/mnt/daten` as mount |
 | `UT_TableOfContent.py` | header, seal / open round trip, wrong passphrase, TOC directory | `openssl` |
 
 - Fixtures live in `/mnt/daten/testfiles/rutbs4` (absolute path, outside the repository).
 - `UT_File` creates and deletes files in its fixture folder while running; `UT_Encryption` leaves the fixture as it was (it writes `.crypt` / `.restored` next to it and removes them).
 - `UnitTest.sh` runs everything but always exits 0; read the output.
-- Verified on 2026-11-18: all thirteen test files pass.
+- Verified on 2026-11-18: all fourteen test files pass; `UT_ReadJob` also on the real LTO-8.
 
 ---
 
@@ -368,8 +416,9 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 Reproduced on 2026-11-16 unless marked "(read)". Most of them are settled by the target
 design and disappear with the steps listed in [DESIGN.md](DESIGN.md).
 
-1. **Nothing can be restored yet.** A sealed TOC can be opened from text, but there is no
-   read from tape, no positioning and no restore of a folder.
+1. **Restore:** modification time and permissions are not restored (not in the TOC), a single
+   file cannot be restored on its own yet (the seeking exists), the spool is not emptied while
+   the restore runs.
 2. With a regular file as fake tape, each `dd` truncates the file: only the last file
    written remains (the last TOC). Tests without hardware can therefore not read back several files.
 3. **The spool needs as much free space as the whole input.** Nothing holds back the
@@ -380,6 +429,15 @@ design and disappear with the steps listed in [DESIGN.md](DESIGN.md).
 5. `Host` and `rbs_backend.py` cannot be imported.
 6. `docs/classDiagram.md`, `docs/sequenceDiagrams.md`, `docs/JOB.MD` and `docs/todo.md`
    describe older designs and no longer match the code.
+
+Changed on 2026-11-19: the first and the last TOC are equivalent. The drive idles until every
+checksum is known, then the first TOC (with the checksums) is written; before, the checksums were
+only in the last TOC. `Job` got `waitFor`. A failed checksum leaves the tape untouched.
+
+Fixed on 2026-11-18 (second part): restoring works, checked on the real LTO-8 (`diff -r` identical).
+The old test tape had no last TOC at all (the first test called `writeTOC` a second time and it
+returned silently because the tape was not at its begin; that method is gone). It could be restored
+with the copy from the TOC directory.
 
 Fixed on 2026-11-18: the job did not do everything (rewind, first and last TOC, rewind and
 an optional eject were typed by hand) - `WriteJob` queues the whole run list; `TapeDrive` has only

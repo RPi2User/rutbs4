@@ -47,9 +47,16 @@ class Folder:
     def encMode(self) -> E_Mode:
         return self._encMode
 
-    def queueWrite(self, tapeDrive: TapeDrive, runlist: str = "", spool: Spool | None = None) -> List[str]:
+    def queueChecksums(self, runlist: str = "") -> List[str]:
+        """Queues the checksum of every File and returns the entry ids (in the order of the Files)."""
+        return [file.Validate(runlist=runlist) for file in self.files]
+
+    def queueWrite(self, tapeDrive: TapeDrive, runlist: str = "", spool: Spool | None = None,
+                   checksums: List[str] | None = None) -> List[str]:
         """
         Queues the phases Validate -> Encrypt -> Write of every File in this Folder (see File).
+        With `checksums` (from `queueChecksums()`) the Validate phase is queued already: Encrypt
+        then waits for the checksum of its File.
         Nothing is started here, Job.Work()/Job.Refresh() drives the actual execution.
 
         All Entries get the given runlist id: if one File fails, the Files after it are
@@ -63,8 +70,8 @@ class Folder:
         """
         write_entries: List[str] = []
 
-        for file in self.files:
-            entry: str = file.Validate(runlist=runlist)
+        for n, file in enumerate(self.files):
+            entry: str = checksums[n] if checksums else file.Validate(runlist=runlist)
             entry = file.Encrypt(spool.file(file.id) if spool else "", runlist=runlist, dependsOn=entry)
             write_entries.append(file.Write(tapeDrive, runlist=runlist, dependsOn=entry))
 

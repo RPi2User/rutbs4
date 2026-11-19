@@ -24,20 +24,27 @@ One version for backend, tape format and cartridge memory, stored as 16 bit
 ## Tape layout
 
 ```
-tape file 0      TOC, state IDLE        the plan: order, sizes, keys
+tape file 0      TOC, state IDLE        order, sizes, keys, checksums
 tape file 1..N   the files, in exactly the order of the TOC
-tape file N+1    TOC, state COMPLETE    the result: same content plus checksums
+tape file N+1    TOC, state COMPLETE    the same content, plus the result of the writing
 ```
 
 - The **tape file number** is the position of a file. It is stored in the TOC, and a SCSI
   SPACE command (file marks) jumps to it.
 - The order is fixed when the job is created (sorted by relative path). Nothing about it
-  depends on timing, so the first TOC can be written before any file is processed.
+  depends on timing.
+- **Both TOCs are equivalent.** The drive idles until it could, in theory, write both of them,
+  that is until the checksum of every file is known. Only then the first TOC is written. The two
+  differ in the header state and in the log of the commands, nothing else (a reader compares them
+  with `TableOfContent.differences()`). If a checksum fails, the tape is not touched.
 - The second TOC gives redundancy (a damaged begin of tape does not lose the tape) and is
   the final write test: if it is on the tape, everything before it fits.
+- Reading: the first TOC is read at the begin; the last one is reached with SPACE to the end of
+  the data, two file marks back, one forward. A tape without the last TOC is incomplete (the write
+  did not finish); a restore refuses it unless the TOC directory holds a copy.
 - **Tape cannot be changed in place.** Writing at the begin of tape makes everything
-  behind it unreadable. The first TOC therefore always says `IDLE`: it is a plan, nothing
-  is finished. A tape is good only if a trailing TOC with state `COMPLETE` exists. On a failed job the trailing TOC is
+  behind it unreadable. The first TOC therefore cannot be completed afterwards: it says `IDLE`
+  and holds everything that is known before the first file is written. A tape is good only if a trailing TOC with state `COMPLETE` exists. On a failed job the trailing TOC is
   written with state `FAILED` if the drive still accepts it; if not, the missing trailing
   TOC is the failure marker. With a cartridge memory the failure is noted there as well.
 - A tape that already carries a fingerprint is only overwritten after it is explicitly registered anew
@@ -74,7 +81,8 @@ the job; for every file it shows which step failed and why. Its size does not ma
   restore the directory tree), `parent` (differs from `context` for files in sub
   directories), `context` (the input directory of the request).
 - `id` of a file is its tape file number.
-- The first TOC is frozen before anything ran, the trailing one after everything ran.
+- The first TOC is made when all checksums are known and before the first file is written, the
+  trailing one after everything ran.
 - Key hierarchy: passphrase (from the API request) → TOC body → key and IV of each file.
   Every file has its own pair; all pairs are protected by the passphrase alone.
   A wrong passphrase shows as a body that is not valid JSON.
@@ -96,16 +104,26 @@ A slim TOC with only the fields needed for a restore is an idea for a later vers
 A job is the complete run list of one request, for example a write:
 
 ```
-rewind → write TOC → per file: checksum → encrypt → write → write TOC → rewind → eject (on request)
+all checksums → rewind → write TOC → per file: encrypt → write → write TOC → rewind → eject (on request)
 ```
 
 This is `backend/WriteJob.py`. A tape is not formatted (see "Milestone and what comes after").
+The restore is `backend/ReadJob.py`, in two steps because the passphrase is asked after the tape was
+seen:
+
+```
+open():   rewind → read first TOC → to the end, 2 file marks back, 1 forward → read last TOC → rewind
+queue():  open and compare both TOCs → skip first TOC → per file: read → decrypt → checksum → rewind
+```
+
+The checksum of each file is compared with the one in the last TOC. A restore is refused up front if
+the two TOCs disagree about the plan, if the writing job failed, or if a target file exists.
 
 - The run list fixes the tape order; the final TOC is the result of the job.
 - Everything that can run in parallel does, limited by the thread limit of the host.
   A drive handles one command at a time, strictly in the order of the run list.
-  Typically many checksums run first, encryption follows, and finished files wait in
-  the spool until the drive takes them.
+  Checksums run first and the drive waits for all of them (`Job.Add(waitFor=...)`), encryption
+  follows, and finished files wait in the spool until the drive takes them.
 - If a step fails the job is aborted: no further file is written, the trailing TOC is
   written with state `FAILED`, the tape is rewound, it is not ejected.
 - Jobs live in memory. A job that is interrupted by a restart of the backend has failed.
@@ -194,8 +212,15 @@ There is no second, blocking way to run a phase. The phases are implemented in
   runs. Today `TapeDrive` only looks at the state of its own `Command`, there is no
   query to the drive yet.
 - A `TapeDrive` does four things, as steps in the Job queue: `Rewind()`, `Eject()`, `Write()` (a
-  data stream with `dd`), `Read()` (a data stream with `dd`). Everything else is optional: reading the cartridge memory, seeking
-  (one file forward / backward, file n), formatting. Eject is never part of a test run.
+  data stream with `dd`), `Read()` (a data stream with `dd`). Reading also needs seeking, which exists as
+  `Space(files)` and `SpaceEnd()` (SCSI SPACE over file marks). Everything else is optional: reading the
+  cartridge memory, formatting. Eject is never part of a test run.
+- **Reading rules, learned on the real drive:** `Read()` must not use `dd iflag=fullblock` (it reads on
+  behind the file mark after a short last block and returns several tape files as one). And no `dd` may read
+  at the end of the data: the kernel driver (`st`) latches that and answers every later read with an I/O
+  error, even after a rewind with `sg_raw`, until the driver itself is repositioned (`mt rewind` by the
+  operator). Because of that the last TOC is reached by SPACE, never by reading until it fails.
+  Open: whether `Rewind()` should go through the driver so that this cannot happen at all.
 - SCSI only: the code sends SCSI commands (`sg_raw`) and uses `dd` on the `nst` device. It
   does not use `mt`; the operator may. Horizon: a Python SCSI library instead of `sg_raw`.
 - Position: the backend only knows "at begin of tape" or "not". It rewinds itself before
@@ -238,17 +263,22 @@ eject only on request. Tested by hand on the drive, then corrected: the job now 
 the steps itself, `TapeDrive` has only its four steps, `__str__` is always `indent=2`, the
 checksum defaults to SHA256.
 
-Everything below comes after the milestone and is postponed:
+**Milestone 2 (2026-11-18): restoring works.** `ReadJob` restores a whole tape: both TOCs, the
+passphrase, `Read` → `Decrypt` → `Validate` per file, rewind. Tested on the real LTO-8: a tape with
+1.4 GB in 15 files, byte-identical (`diff -r`) after the round trip, tape rewound and not ejected.
+Found on the way: the `dd iflag=fullblock` read, the end-of-data latch of the `st` driver (see "Drives") and
+a test tape without last TOC (restored with the copy from the TOC directory).
 
-1. **Read back and validate.** Reading the TOC from tape, positioning (optional, SCSI SPACE),
-   `Read` → `Decrypt` → `Validate` of a whole folder (a `File` is built from the TOC entry, it
-   needs an existing file today), restore of metadata. The steps for one file exist.
+Everything below comes after the milestones and is postponed:
+
+1. **Restore, the rest.** Modification time and permissions (not in the TOC yet), restoring a single file
+   (jump to its tape file number, the seeking exists), emptying the spool while the restore runs.
 2. **Cartridge memory before the fingerprint.** Read the chip (LTO-CM) first; if it holds a
    fingerprint the TOC uses it, else a new one is made and set. See "Fingerprint and cartridge memory".
 3. **Registering a tape in the cartridge memory.** This is NOT a format in the classic sense:
    no zeros are written over the tape. The tape is only registered (fingerprint, version in the
    chip). The old `format` step of the run list is therefore gone for now.
-4. **The REST API** on the new core; then remove `write_folder_to_tape.py`.
+4. **The REST API** on the new core; then remove `write_folder_to_tape.py` and `read_tape_to_folder.py`.
 5. The drive is asked whether it can take a step before each one (see "Drives").
 6. Spool: hold back the encryption while the tape is slower, delete spool files after they were written.
 7. System commands: every command goes through the Job system, see "Todo: system commands".

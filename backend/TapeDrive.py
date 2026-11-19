@@ -145,6 +145,7 @@ class TD_State(Enum):
     EJECT = 3
     WRITE = 4
     READ = 5
+    SPACE = 6
     ERROR = -1      # the last finished order failed
 
 class TapeDrive:
@@ -162,13 +163,27 @@ class TapeDrive:
     | `Write(source)`               | `dd if=<source> of=<nst>`: one tape file                        |
     | `Read(target)`                | `dd if=<nst> of=<target>`: the next tape file                   |
 
-    All take `runlist=""`, `dependsOn=""`, `always=False` (closing step, runs even if its runlist was
-    aborted) and `prepare=None` (called right before the step starts, see Job). Everything else is
-    optional and not here (cartridge memory, seeking, formatting). No `mt`, SCSI only.
+    Seeking, needed to reach the last TOC and to restore (all in file marks, `sg_raw <sg> 0x11 ...`, SPACE):
+
+    | `TapeDrive.`                  | Meaning                                                         |
+    |-------------------------------|-----------------------------------------------------------------|
+    | `Space(files)`                | forward (>0) or backward (<0) over that many file marks         |
+    | `SpaceEnd()`                  | to the end of the recorded data (EOD), behind the last file mark |
+
+    Backward over n file marks ends on the begin-of-tape side of the n-th mark. All take `runlist=""`,
+    `dependsOn=""`, `always=False` (closing step, runs even if its runlist was aborted) and
+    `prepare=None` (called right before the step starts, see Job). Everything else is optional and not
+    here (cartridge memory, formatting). No `mt`, SCSI only.
+
+    **Never read at the end of the data.** The kernel driver (`st`) latches that and answers every
+    later read with an I/O error, even after a rewind with `sg_raw`, until it is repositioned
+    through the driver itself (`mt rewind`, for the operator). `dd` must also not use
+    `iflag=fullblock` on the tape: after a short last block it swallows the file mark and goes on
+    reading the next tape file. `Read()` therefore stops at the file mark by itself.
 
     The drive is asked for vendor / model / serial (INQUIRY) and the tape (MODE SENSE) when it is
     created. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running step
-    (`REWIND`, `EJECT`, `WRITE`, `READ`), or `ERROR` if the last finished step failed.
+    (`REWIND`, `EJECT`, `WRITE`, `READ`, `SPACE`), or `ERROR` if the last finished step failed.
 
     The two paths of a drive with two cables are in `paths`, the first one is used (see TD_Pool).
     `id` is the key the Job uses, one step at a time runs per id.
@@ -209,6 +224,7 @@ class TapeDrive:
     error: str = ""                 # why INQUIRY failed, "" if it did not
 
     SYSFS: str = "/sys/class/scsi_generic"
+    READ_BLOCK: str = "8M"          # the drive hands out each block as it was written, up to its limit of 8 MiB
 
     @staticmethod
     def sysfsRead(generic_path: str, attribute: str, root: str = SYSFS) -> str:
@@ -266,11 +282,30 @@ class TapeDrive:
                                "iflag=fullblock status=none bs=" + self.blocksize, filesize=size)
         return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
 
-    def Read(self, target: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        """The next tape file, from the current position, into `target`."""
+    def Read(self, target: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None,
+             count: int = 0) -> str:
+        """
+        The next tape file, from the current position, into `target`. Ends at its file mark.
+        `count` > 0 stops after that many blocks, for a tape file that may be something else than expected.
+        """
+        # No iflag=fullblock: it reads on behind the file mark. A buffer bigger than the written block is harmless.
         cmd: Command = Command("dd if=" + Command.quote(self.path) + " of=" + Command.quote(target) + " " +
-                               "iflag=fullblock status=none bs=" + self.blocksize, filesize=size)
+                               "status=none bs=" + self.READ_BLOCK + (" count=" + str(count) if count else ""), filesize=size)
         return self._queue(TD_State.READ, cmd, runlist, dependsOn, always, prepare)
+
+    def Space(self, files: int, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
+        """SPACE over file marks, forward (>0) or backward (<0). The count is a signed 24 bit number."""
+        if not -0x800000 <= files < 0x800000:
+            raise ValueError("Cannot space over " + str(files) + " file marks")
+        count: int = files & 0xFFFFFF
+        cmd: Command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x11 0x01 " +
+                               " ".join("0x%02x" % b for b in (count >> 16, count >> 8 & 0xFF, count & 0xFF)) + " 0")
+        return self._queue(TD_State.SPACE, cmd, runlist, dependsOn, always, prepare)
+
+    def SpaceEnd(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
+        """SPACE to the end of the recorded data. Positioned there, do not read: go back with Space(-n) first."""
+        cmd: Command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x11 0x03 0 0 0 0")
+        return self._queue(TD_State.SPACE, cmd, runlist, dependsOn, always, prepare)
 
     # === STATE ===============================================================
 
@@ -309,7 +344,7 @@ class TapeDrive:
                 lastFailed = True
             elif entry.state is EntryState.RUNNING:
                 active = step
-                if step in {TD_State.WRITE, TD_State.READ}:
+                if step in {TD_State.WRITE, TD_State.READ, TD_State.SPACE}:
                     self.tape.begin_of_tape = False
             else:
                 queued = True
@@ -325,7 +360,7 @@ class TapeDrive:
         match step:
             case TD_State.REWIND:
                 self.tape.begin_of_tape = True
-            case TD_State.WRITE | TD_State.READ:
+            case TD_State.WRITE | TD_State.READ | TD_State.SPACE:
                 self.tape.begin_of_tape = False
             case TD_State.EJECT:
                 self.tape.state = E_Tape.NO_TAPE

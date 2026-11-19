@@ -94,6 +94,28 @@ class UT_Job(unittest.TestCase):
         self.assertEqual(Job.Get(child).state, EntryState.COMPLETED)
         print("B_DEP_1:1")
 
+    def test_AB_WAITFOR(self) -> None:
+        """
+        A barrier: the child starts when ALL of its parents are COMPLETED, and fails if one of them fails
+        """
+        a: str = Job.Add(Command("sleep 0.3"))
+        b: str = Job.Add(Command(self.AB_DEP))
+        barrier: str = Job.Add(Command(self.AB_DEP), waitFor=[a, b])
+        self.assertEqual(Job.Get(barrier).state, EntryState.WAITING_FOR_PARENT)
+        with self.assertRaises(LookupError):
+            Job.Add(Command(self.AB_DEP), waitFor=[a, "---"])
+
+        self._refreshUntilDone()
+        self.assertEqual(Job.Get(barrier).state, EntryState.COMPLETED)
+
+        bad: str = Job.Add(Command("false"))
+        good: str = Job.Add(Command(self.AB_DEP))
+        child: str = Job.Add(Command(self.AB_DEP), dependsOn=good, waitFor=[bad])
+        self._refreshUntilDone()
+        self.assertEqual(Job.Get(good).state, EntryState.COMPLETED)
+        self.assertEqual(Job.Get(child).state, EntryState.FAILED)
+        print("B_WAITFOR")
+
     def test_AC_Chain(self) -> None:
         """
         The 6 steps of a tape write must run strictly in order, even with many CPU slots
