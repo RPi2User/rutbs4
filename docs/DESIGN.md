@@ -52,7 +52,7 @@ tape file N+1    TOC, state COMPLETE    the same content, plus the result of the
 
 ## Fingerprint and cartridge memory
 
-- Every tape gets a fingerprint (random UUID) when it is registered. Registering writes the chip only, never the tape. It is stored in clear
+- Every tape gets a fingerprint (random UUID) when it is formatted (see [TapeFormat.md](TapeFormat.md)). The fingerprint itself is written to the chip only. It is stored in clear
   text in the TOC header, so operator and changer can check that the right tape is loaded.
 - `Tape.cartridgeMemory` is an optional object for the chip in the cartridge. Reading it
   is attempted; if that fails the tape works without it.
@@ -242,22 +242,9 @@ There is no second, blocking way to run a phase. The phases are implemented in
   it starts a job.
 - Block size belongs to the tape and is stored in the TOC header. Default `256K`. Reading does not depend on it
   (`Read()` uses an 8 MiB buffer and gets each block as it was written), only writing does.
-- **Bandwidth measurement / block size benchmark (decided 2026-11-19, not implemented, wanted for the release
-  candidate):** it is part of the backend, not a script for the operator. It is a request of its own and it is
-  **destructive on purpose**: it writes test data over the tape from its begin, and the operator knows that (no
-  guard against tapes that hold data). Two stages:
-  1. The benchmark: per candidate block size (multiples of 64K up to 512K, then 768K, 1M, 2M, 4M; powers of two alone
-     would miss values like 384K) rewind, `dd` a fixed amount of incompressible data (a cipher stream, not
-     zeros: the drive compresses), take the speed `dd` reports. The answer is the table (block size, MB/s) and the
-     pick: the smallest size within about 5 % of the best.
-  2. The pick goes into the cartridge memory of the tape, so it is measured once, and a write uses it as the block
-     size (the TOC header keeps it, as now). Proposal for the chip: `0x080B` application format version (16 ASCII),
-     e.g. `bs=262144`; to be checked on the drive.
-
-  Why per tape: the same LTO-3 drive and host reached the full speed with 384K on one make of tape and with 256K on
-  another (operator's measurement, LTO-3: 80 MB/s with 384K on Dell tapes, but 50 MB/s on HP tapes, where 256K is
-  right). So the value belongs to the cartridge, and probably to the drive it was measured on; the operator can
-  measure again.
+- **Block size benchmark (wanted for the release candidate):** a tape is formatted once and the format measures
+  the bandwidth for several block sizes and keeps the best in the cartridge memory. The block size depends on
+  the cartridge, not only on the drive. See [TapeFormat.md](TapeFormat.md).
 
 ## Host and REST API
 
@@ -306,16 +293,15 @@ Everything below comes after the milestones and is postponed:
    (jump to its tape file number, the seeking exists), emptying the spool while the restore runs.
 2. **Cartridge memory before the fingerprint.** Read the chip (LTO-CM) first; if it holds a
    fingerprint the TOC uses it, else a new one is made and set. See "Fingerprint and cartridge memory".
-3. **Registering a tape in the cartridge memory.** This is NOT a format in the classic sense:
-   no zeros are written over the tape. The tape is only registered (fingerprint, version in the
-   chip). The old `format` step of the run list is therefore gone for now. (The block size benchmark is a
-   different thing: it is destructive, and that is accepted, see "Drives".)
+3. **Format a tape**, see [TapeFormat.md](TapeFormat.md): fingerprint and version into the cartridge memory,
+   plus the block size benchmark. No zeros are written over the whole tape, but the benchmark is destructive
+   on purpose. The old `format` step of the run list is gone: a format is a request of its own.
 4. **The REST API** on the new core; then remove `write_folder_to_tape.py` and `read_tape_to_folder.py`.
 5. **Drive state machine.** The drive is asked for its state before each step (see "Drives"). Next big item.
 6. Spool: hold back the encryption while the tape is slower, delete spool files after they were written.
 7. System commands: done, see "System commands". What stays: `Host` (REST layer, still on the old `tbk`) has its own `subprocess.run` calls until it is rebuilt on the new core.
 8. Abort and kill of a running job as API requests (see "Job").
-9. **(RC)** Bandwidth measurement / block size benchmark, then its result in the cartridge memory (see "Drives").
+9. **(RC)** The block size benchmark inside the format (see 3).
 
 ## System commands
 

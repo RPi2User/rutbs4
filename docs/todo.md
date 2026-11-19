@@ -11,4 +11,4 @@ figure out how to
 path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sein!)
 
 - Drive state machine: ask the drive for its state before every action except trivial ones (CM read, status). Find the SCSI query that shows "busy" while a write runs. See DESIGN.md, "Drives".
-- **RC:** Bandwidth measurement / block size benchmark for the loaded tape (destructive on purpose), first the benchmark alone, then its result into the cartridge memory (0x080B) and used by the write. See DESIGN.md, "Drives".
+- **RC:** Tape format with the bandwidth measurement / block size benchmark (destructive on purpose), result into the cartridge memory. See [TapeFormat.md](TapeFormat.md).
