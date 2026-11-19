@@ -282,12 +282,13 @@ class Host():
 
     def drive_eject(self, alias) -> Response:
         """_summary_
-        This relays the eject call to correct TapeDrive
+        This relays the eject call to correct TapeDrive. It does NOT wait: the eject is issued
+        and the answer says exactly that. Whether it worked shows in the state of the drive.
         Args:
             alias (str): alias of Tape Drive
 
         HTTP-Codes:
-            - 200:  success
+            - 202:  eject command issued
             - 404:  drive not found
             - 409:  Tape Drive in invalid state
             - 503:  drive busy, retry
@@ -314,30 +315,15 @@ class Host():
             _response_mime = "text/plain"
             _response_text = "Drive is busy. Please try again later."
         else:
-            _response_code = 200
-            _response_mime = "text/plain"
-            _response_text = "Eject Command queued."
-
             last_command = _drive.eject()
-            if self.last_command is None:
+            if last_command is None:
                 _response_code = 409
                 _response_mime = "text/plain"
                 _response_text = "Eject: TapeDrive in Invalid State:" + str(_drive.status)
-            last_command.status()
-
-            while last_command.running:
-                last_command.status()
-                time.sleep(0.1)
-
-            if (last_command.exitCode != 0):
-                _response_code = 500
-                _response_mime = "application/json"
-
-                data = {
-                    "description": f"Eject command at {_drive.path} failed!",
-                    "command" : last_command._asdict()
-                }
-                _response_text = json.dumps(data)
+            else:
+                _response_code = 202
+                _response_mime = "text/plain"
+                _response_text = "Issued Eject Command to TapeDrive."
 
         response = Response(
             response=_response_text,

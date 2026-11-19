@@ -217,10 +217,14 @@ def post_drive_eject(alias):
         required: true
         description: Alias of the tape drive
     responses:
-      200:
-        description: Drive ejected successfully
+      202:
+        description: Eject command issued (not waited for, the drive state shows the result)
       404:
         description: Drive not found
+      409:
+        description: Drive in invalid state
+      503:
+        description: Drive busy, retry
     """
     return host.drive_eject(alias)
 

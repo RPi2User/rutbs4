@@ -1,14 +1,15 @@
 import json
 import os
 import platform
-import subprocess
 import uuid
 
 from typing import List
 from datetime import datetime
 from enum import Enum
 
+from backend.Command import Command
 from backend.Encryption import Encryption, E_Mode
+from backend.Job import Job
 from backend.TapeDrive import TapeDrive
 from backend.Folder import Folder
 from backend.Version import Version
@@ -78,6 +79,8 @@ class TOC_Header:
 
 class TableOfContent:
 
+    CIPHER_DEADLINE_MS: int = 60000     # the whole TOC goes through openssl, it can be big
+
     """_summary_
         A TableOfContent is stored as one JSON document:
 
@@ -140,11 +143,13 @@ class TableOfContent:
     def _openssl(mode: E_Mode, decrypt: bool, passphrase: str, data: bytes) -> bytes:
         cmd: str = (Encryption.MODE_CMD[mode] + ("-d" if decrypt else "-e") +
                     " -a -A -pass env:" + Encryption.KEY_ENV)
-        result = subprocess.run(cmd, shell=True, input=data, capture_output=True,
-                                env={**os.environ, Encryption.KEY_ENV: passphrase})
-        if result.returncode != 0:
-            raise TOC_WrongPassphrase("openssl failed: " + result.stderr.decode(errors="replace").strip())
-        return result.stdout
+        # raw: the answer comes back as hex, so any bytes survive
+        result: Command = Job.Run(Command(cmd, raw=True, env={Encryption.KEY_ENV: passphrase}, stdin=data),
+                                  TableOfContent.CIPHER_DEADLINE_MS)
+        if result.exitCode != 0:
+            why: str = bytes.fromhex(result.stderr[0]).decode(errors="replace") if result.stderr else ""    # raw: hex
+            raise TOC_WrongPassphrase("openssl failed: " + " ".join(result.status_msg + [why]).strip())
+        return bytes.fromhex(result.stdout[0]) if result.stdout else b""
 
     # WRITE
     def seal(self, passphrase: str = "") -> str:

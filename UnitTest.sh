@@ -42,3 +42,6 @@ python3 UT_ReadJob.py
 
 echo TapeDrive
 python3 UT_TapeDrive.py
+
+echo Host
+python3 UT_Host.py

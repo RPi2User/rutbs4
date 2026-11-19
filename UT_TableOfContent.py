@@ -24,6 +24,7 @@ class UT_TableOfContent(unittest.TestCase):
         - D:     header is readable without passphrase, state can change for the trailing TOC
         - E:     TOC directory
         - F:     removeEncryption(): a plain TOC without keys, no passphrase to seal or to open
+        - G:     passphrase and plain body (keys) reach openssl by environment and stdin, never the Job registry
     Depdencies:
     - openssl
     """
@@ -126,6 +127,29 @@ class UT_TableOfContent(unittest.TestCase):
             with open(path) as f:
                 stored: dict = TableOfContent.open(f.read(), self.PASSPHRASE)
             self.assertEqual(stored["header"]["fingerprint"], toc.header.fingerprint)
+
+    def test_G_secretsStayOutOfTheJobRegistry(self) -> None:
+        "The plain body (it holds the keys) and the passphrase go through openssl; neither is kept by the Job system"
+        from backend.Job import Job
+        with tempfile.TemporaryDirectory() as tmp:
+            toc: TableOfContent = self._toc(tmp)
+            key: str = toc.folder.files[0].encryption_scheme.key.value
+            Job.Flush()
+            text: str = toc.seal(self.PASSPHRASE)
+            TableOfContent.open(text, self.PASSPHRASE)
+            with self.assertRaises(TOC_WrongPassphrase):
+                TableOfContent.open(text, "wrong")
+            with self.assertRaises(TOC_WrongPassphrase) as why:             # openssl itself fails: its own words, not hex
+                TableOfContent._openssl(E_Mode.AES256CBC, True, self.PASSPHRASE, b"@@@ not base64 @@@")
+            self.assertEqual(str(why.exception), "openssl failed: error reading input file")
+
+            self.assertEqual(len(Job.urgent), 4)                    # seal, open, wrong passphrase, broken input
+            seen: str = json.dumps(Job.Registry()) + " ".join(" ".join(e.command.cmd.split()) for e in Job.urgent)
+            self.assertNotIn(self.PASSPHRASE, seen)
+            self.assertNotIn('"wrong"', seen)
+            self.assertNotIn(key, seen)
+            self.assertTrue(all(e.command.stdin is None for e in Job.urgent))
+            Job.Flush()
 
     def test_F_removeEncryption(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
