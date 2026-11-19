@@ -6,6 +6,7 @@ from typing import List
 from backend.Encryption import E_Mode, Encryption, Key
 from backend.File import File
 from backend.Command import Command
+from backend.Job import Job
 from backend.Checksum import ChecksumType
 from backend.Spool import Spool
 from backend.TapeDrive import TapeDrive
@@ -19,6 +20,8 @@ class Folder:
     The checksum defaults to SHA256 (pass `ChecksumType.NONE` to switch it off).
     """
 
+    SCAN_DEADLINE_MS: int = 60000   # a big tree on a slow disk; not a system command in the 2 s sense
+
     def __init__(self, path: str, checksumType: ChecksumType = ChecksumType.SHA256, encryptionMode: E_Mode = E_Mode.NONE):
         self.files: List[File] = []
         self.path: str = path
@@ -26,7 +29,9 @@ class Folder:
         self._encMode: E_Mode = encryptionMode
 
         find_files: Command = Command("find " + Command.quote(path) + " -type f")
-        find_files.wait()   # wait until the find process is finished, shall be instant
+        Job.Run(find_files, deadlineMs=self.SCAN_DEADLINE_MS)
+        if find_files.killed:   # an incomplete list would write an incomplete tape
+            raise SystemError("[ERROR] Scanning " + path + " failed: " + " ".join(find_files.status_msg))
 
         # find does not promise any order, the tape order must not depend on it
         ordered: List[str] = sorted(find_files.stdout, key=lambda p: os.path.relpath(p, path))

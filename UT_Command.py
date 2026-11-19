@@ -1,9 +1,11 @@
 import json
+import os
 import unittest
 from time import sleep, time
 
 # Module imports
 from backend.Command import Command
+from backend.Job import EntryState, Job
 
 
 class UT_Command(unittest.TestCase):
@@ -17,7 +19,7 @@ class UT_Command(unittest.TestCase):
     AG_STDERR: str = "echo b32fea58-45ec-4276-a129-ee4f1ee441ae 1>&2"
     AH_DD128MIB: str = "dd if=/dev/urandom of=/dev/null bs=1M count=128"
     AI_DD256MIB: str = "dd if=/dev/urandom of=/dev/null bs=1M count=256"
-    AJ_WAITTIME: str = "sleep 10"
+    AJ_WAITTIME: str = "ping localhost -c 10"
     AK_KILL: str = "ping localhost"
     AL_HEXOUT: str = "dd if=/dev/urandom bs=512 count=1 2>/dev/null"
     AN_CLEANUP: str = "echo 0"
@@ -25,6 +27,8 @@ class UT_Command(unittest.TestCase):
     AO_RAW_NL: str = "cat /mnt/daten/testfiles/rutbs4/cmd/00_0f.txt" 
     AP_RAW_EXTREME: str = "cat /mnt/daten/testfiles/rutbs4/cmd/00_ff.txt"
     AR_RAW_ALLERR: str = ">&2 cat /mnt/daten/testfiles/rutbs4/cmd/00_ff.txt"
+
+    RUN_MS: int = 60000     # deadline for tests whose runtime does not matter
 
     """_summary_
     Depdencies:
@@ -135,7 +139,7 @@ class UT_Command(unittest.TestCase):
 
         Does NOT test:
             - validate stdout/stderr
-            - c.wait()
+            - Job.Run()
         """
 
         c: Command = Command(self.AD_BACK)
@@ -163,12 +167,12 @@ class UT_Command(unittest.TestCase):
 
     def test_AE_Wait(self) -> None:
         """
-        Does the same as AD but instead of the while loop it uses c.wait()
+        Does the same as AD but instead of the while loop it uses Job.Run()
         """
 
         c: Command = Command(self.AE_WAIT)
         self.assertEqual(c.cmd, self.AE_WAIT)
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         # Exit validation
         self.assertNotEqual(c.pid, 0)
@@ -186,7 +190,7 @@ class UT_Command(unittest.TestCase):
 
         c: Command = Command(self.AF_STDOUT)
         self.assertEqual(c.cmd, self.AF_STDOUT)
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         self.assertEqual(c.exitCode, 0)
         self.assertEqual(c.stdout[0], "b32fea58-45ec-4276-a129-ee4f1ee441ae")
@@ -200,7 +204,7 @@ class UT_Command(unittest.TestCase):
 
         c: Command = Command(self.AG_STDERR)
         self.assertEqual(c.cmd, self.AG_STDERR)
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         self.assertEqual(c.exitCode, 0)
         self.assertEqual(c.stdout, [])
@@ -240,7 +244,7 @@ class UT_Command(unittest.TestCase):
         """
         c: Command = Command(self.AH_DD128MIB)
         self.assertEqual(c.cmd, self.AH_DD128MIB)
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         self.assertEqual(c.exitCode, 0)
         self.assertEqual(c.stdout, [])  # dd writes to stderr everything
@@ -265,7 +269,7 @@ class UT_Command(unittest.TestCase):
         """
         c: Command = Command(self.AI_DD256MIB)
         self.assertEqual(c.cmd, self.AI_DD256MIB)
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         self.assertEqual(c.exitCode, 0)
         self.assertEqual(c.stdout, [])  # dd writes to stderr everything
@@ -290,30 +294,47 @@ class UT_Command(unittest.TestCase):
 
         print("I_IO_256")
 
-    def test_AJ_WaitTimeout(self) -> None:
+    def test_AJ_Deadline(self) -> None:
         """
-        This test does terminate cmd mid-way with the c.wait(timeout=xxx) (xxx in 10ms)
-        Default Value 100 -> 1sec / 1000ms
+        Job.Run() kills a Command that is not finished in time:
+            - returns after the deadline (1 s), not after the ping (10 s)
+            - Command.killed, status_msg says why, the exit code is not 0
+            - the Entry is KILLED, which is not FAILED
         """
 
         c: Command = Command(self.AJ_WAITTIME)
         self.assertEqual(c.cmd, self.AJ_WAITTIME)
 
         beg_time = time()
-        c.wait(100)
+        Job.Run(c, deadlineMs=1000)
         end_time = time()
 
         try:
-            self.assertLess((end_time - beg_time), 1.5)   # sleep 10, timeout of 1sec -> should be max 1500ms (rounding errors)
+            self.assertGreater((end_time - beg_time), 0.9)
+            self.assertLess((end_time - beg_time), 1.5)
+            self.assertEqual(c.killed, True)
             self.assertEqual(len(c.status_msg), 1)
-            self.assertEqual(c.status_msg[0], "Timeout reached, process killed")
+            self.assertIn("Deadline of 1000 ms exceeded", c.status_msg[0])
             self.assertNotEqual(c.exitCode, 0)
+            self.assertEqual(c.running, False)
+            entry = [e for e in Job.urgent if e.command is c][0]
+            self.assertIs(entry.state, EntryState.KILLED)
         except AssertionError:
             c.quiet = False
             print(c)
             raise
 
-        print("J_WAITTIMEOUT")
+        print("J_DEADLINE")
+
+    def test_AJ_Urgent(self) -> None:
+        """A quick Command is COMPLETED, not killed, and does not need the scheduler"""
+        beg_time = time()
+        c: Command = Job.Run(Command(self.AF_STDOUT))
+        self.assertLess(time() - beg_time, 0.5)
+        self.assertEqual(c.stdout[0], "b32fea58-45ec-4276-a129-ee4f1ee441ae")
+        self.assertEqual(c.killed, False)
+        self.assertEqual([e for e in Job.urgent if e.command is c][0].state, EntryState.COMPLETED)
+        print("J_URGENT")
 
     def test_AK_Kill(self) -> None:
         """
@@ -346,7 +367,7 @@ class UT_Command(unittest.TestCase):
         """
 
         c: Command = Command(self.AL_HEXOUT, raw=True)
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         try:
             self.assertEqual(len(c.status_msg), 0)
@@ -370,7 +391,7 @@ class UT_Command(unittest.TestCase):
         """
 
         c: Command = Command(self.AL_HEXOUT)
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         try:
             self.assertNotEqual(len(c.status_msg), 0)
@@ -389,13 +410,16 @@ class UT_Command(unittest.TestCase):
 
     def test_AN_cleanup(self) -> None:
         # This tests Command.reset() clears stdout
-        c: Command = Command(self.AN_CLEANUP)
-        c.wait()
+        c: Command = Job.Run(Command(self.AN_CLEANUP), self.RUN_MS)
         try:
             self.assertEqual(c.stdout[0], "0")
             c.reset()
+            self.assertEqual((c.stdout, c.didRun, c.exitCode), ([], False, -1))
             c.cmd = self.AN_CLEANUP1
-            c.wait()
+            c.start()                   # Command level test: reset() makes the same object startable again
+            while c.running:
+                sleep(.01)
+                c.status()
             self.assertNotEqual(c.stdout[0], "0")
 
         except AssertionError:
@@ -408,7 +432,7 @@ class UT_Command(unittest.TestCase):
     def test_AO_rawWithNewLines(self) -> None:
         c: Command = Command(self.AO_RAW_NL, raw=True)
 
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         try:
             self.assertEqual(len(c.stdout), 1)
@@ -424,7 +448,7 @@ class UT_Command(unittest.TestCase):
     def test_AP_rawExtreme(self) -> None:
         c: Command = Command(self.AP_RAW_EXTREME, raw=True)
 
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         try:
             self.assertEqual(len(c.stdout), 1)
@@ -440,7 +464,7 @@ class UT_Command(unittest.TestCase):
     def test_AQ_rawAllFail(self) -> None:
         c: Command = Command(self.AP_RAW_EXTREME, raw=False)
 
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         try:
             self.assertEqual(len(c.stdout), 1)
@@ -456,7 +480,7 @@ class UT_Command(unittest.TestCase):
     def test_AR_rawAllFail(self) -> None:
         c: Command = Command(self.AR_RAW_ALLERR, raw=False)
 
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         try:
             self.assertEqual(len(c.stdout), 0)
@@ -474,7 +498,7 @@ class UT_Command(unittest.TestCase):
         Secrets go through env: readable by the process, never part of str(Command)
         """
         c: Command = Command("printenv UT_SECRET", env={"UT_SECRET": "b32fea58"})
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         self.assertEqual(c.stdout, ["b32fea58"])
         shown: dict = json.loads(str(c))
@@ -488,10 +512,77 @@ class UT_Command(unittest.TestCase):
         Command.quote() keeps spaces and single quotes of a path intact
         """
         c: Command = Command("echo " + Command.quote("it's a test"))
-        c.wait()
+        Job.Run(c, self.RUN_MS)
 
         self.assertEqual(c.stdout, ["it's a test"])
         print("T_QUOTE")
+
+    def test_AU_stdin(self) -> None:
+        """stdin: the bytes arrive, an empty input is an input too, no stdin is /dev/null (no hang on a terminal)"""
+        c: Command = Job.Run(Command("cat", stdin=b"hello\nworld\n"))
+        self.assertEqual((c.exitCode, c.stdout, c.stderr), (0, ["hello", "world"], []))
+
+        c = Job.Run(Command("cat", stdin=b""))
+        self.assertEqual((c.exitCode, c.stdout, c.killed), (0, [], False))
+
+        beg: float = time()
+        c = Job.Run(Command("cat"))             # would wait for the terminal, if stdin was inherited
+        self.assertEqual((c.exitCode, c.stdout, c.killed), (0, [], False))
+        self.assertLess(time() - beg, 1)
+        print("U_STDIN")
+
+    def test_AV_stdin_binary(self) -> None:
+        """Every byte value goes in and comes out unchanged (raw)"""
+        data: bytes = bytes(range(256)) * 4
+        c: Command = Job.Run(Command("cat", raw=True, stdin=data), self.RUN_MS)
+        self.assertEqual(c.exitCode, 0)
+        self.assertEqual(bytes.fromhex(c.stdout[0]), data)
+        print("V_STDIN_BINARY")
+
+    def test_AW_stdin_big(self) -> None:
+        """Input and output far bigger than the pipe buffers (64 KiB) must not block each other"""
+        data: bytes = os.urandom(4 * 1024 * 1024)
+        c: Command = Job.Run(Command("cat", raw=True, stdin=data), self.RUN_MS)
+        self.assertEqual((c.exitCode, c.killed), (0, False))
+        self.assertEqual(bytes.fromhex(c.stdout[0]), data)
+
+        c = Job.Run(Command("wc -c", stdin=data), self.RUN_MS)      # reads all, writes a little
+        self.assertEqual(c.stdout, [str(len(data))])
+        print("W_STDIN_BIG")
+
+    def test_AX_stdin_unread(self) -> None:
+        """A process that never reads its input: the writer ends quietly, the exit code tells the truth"""
+        c: Command = Job.Run(Command("true", stdin=b"x" * 1024 * 1024), self.RUN_MS)
+        self.assertEqual((c.exitCode, c.killed, c.status_msg), (0, False, []))
+        c = Job.Run(Command("false", stdin=b"x" * 1024 * 1024), self.RUN_MS)
+        self.assertEqual((c.exitCode, c.killed), (1, False))
+        print("X_STDIN_UNREAD")
+
+    def test_AY_stdin_deadline(self) -> None:
+        """A killed Command with a big input leaves no stuck writer behind"""
+        c: Command = Command(self.AJ_WAITTIME, stdin=b"x" * 4 * 1024 * 1024)
+        beg: float = time()
+        Job.Run(c, deadlineMs=500)
+        self.assertLess(time() - beg, 1.5)
+        self.assertTrue(c.killed)
+        c.cleanup()
+        self.assertTrue(all(not t.is_alive() for t in c.readers))
+        print("Y_STDIN_DEADLINE")
+
+    def test_AZ_stdin_is_secret(self) -> None:
+        """The input may hold keys: only its size is shown, and it is released once the process has it"""
+        secret: bytes = b"SECRET-KEY-0123456789"
+        c: Command = Command("cat", stdin=secret)
+        self.assertEqual(c.stdinSize, len(secret))
+        Job.Run(c)
+        self.assertEqual(c.stdout, ["SECRET-KEY-0123456789"])       # the answer is the caller's business
+        self.assertIsNone(c.stdin)
+        self.assertNotIn("SECRET-KEY", str(c.process.args))
+        self.assertEqual(c._asdict()["stdin_bytes"], len(secret))
+        self.assertNotIn("SECRET", str(c._asdict()["cmd"]) + json.dumps({k: v for k, v in c._asdict().items() if k not in {"stdout"}}))
+        self.assertEqual(Command("cat")._asdict()["stdin_bytes"], -1)
+        print("Z_STDIN_SECRET")
+
 
 if __name__ == '__main__':
     unittest.main()

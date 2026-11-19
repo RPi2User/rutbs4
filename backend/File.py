@@ -302,9 +302,7 @@ class File:
             self.readSize()
 
     def readSize(self) -> None:
-        self.cmd.reset()
-        self.cmd.cmd = "stat -c %s " + Command.quote(self.path.path)
-        self.cmd.wait()
+        self.cmd = Job.Run(Command("stat -c %s " + Command.quote(self.path.path)))
 
         try:
             self.size = int(self.cmd.stdout[0])

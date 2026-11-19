@@ -23,6 +23,7 @@ class UT_Job(unittest.TestCase):
         - AE-AF: Scheduling (tape priority, one Entry per drive)
         - AG-AH: Flush(killRunning=False) and the JobScheduler thread
         - AI-AJ: Tape order, abort of a runlist
+        - AM-AP: Urgent Entries (system commands): own list, no slot, deadline, from a prepare hook
 
     Most tests call Job.Refresh() by hand, this keeps them deterministic.
     Depdencies:
@@ -314,6 +315,90 @@ class UT_Job(unittest.TestCase):
         self._refreshUntilDone()
         self.assertFalse(Job.Failed("c"))
         print("L_FAILED")
+
+    def test_AM_urgent(self) -> None:
+        """Add(urgent=True) starts at once, stands alone and lives outside the queue"""
+        c: Command = Command(self.AB_DEP)
+        e: str = Job.Add(c, urgent=True)
+        self.assertTrue(c.didRun)                       # started by the Entry constructor, no Refresh needed
+        self.assertEqual(Job.Get(e).urgent, True)
+        self.assertEqual(Job.queue, [])
+        self.assertEqual(Job.state, JobState.EMPTY)
+        self.assertTrue(Job.Wait([e], 5))
+        self.assertEqual(Job.Get(e).state, EntryState.COMPLETED)
+        self.assertIn(e, Job.Registry())
+        self.assertTrue(Job.Registry()[e]["Entry"]["urgent"])
+
+        with self.assertRaises(ValueError):             # same object twice
+            Job.Add(c, urgent=True)
+        for bad in [{"tape": "/dev/nst0"}, {"dependsOn": e}, {"runlist": "r"}, {"always": True}, {"waitFor": [e]}]:
+            with self.assertRaises(ValueError):
+                Job.Add(Command(self.AB_DEP), urgent=True, **bad)
+        print("M_URGENT")
+
+    def test_AN_urgent_no_slot(self) -> None:
+        """An urgent Entry does not wait for the thread limit and does not take a slot"""
+        Job.limit = 1
+        busy: str = Job.Add(Command("sleep 0.5"))
+        Job.Refresh()
+        self.assertEqual(Job.Get(busy).state, EntryState.RUNNING)
+
+        beg: float = time()
+        c: Command = Job.Run(Command(self.AB_DEP))
+        self.assertLess(time() - beg, 0.4)
+        self.assertEqual(c.stdout, ["dep"])
+        self.assertEqual(Job.Get(busy).state, EntryState.RUNNING)   # the slot was not touched
+
+        waiting: str = Job.Add(Command(self.AB_DEP))
+        Job.Refresh()
+        self.assertEqual(Job.Get(waiting).state, EntryState.READY4EXEC)    # still no slot for queued work
+        print("N_URGENT_NO_SLOT")
+
+    def test_AO_deadline(self) -> None:
+        """A late urgent Entry is KILLED (not FAILED), by Run, by Get and by Refresh"""
+        c: Command = Job.Run(Command("ping localhost -c 10"), deadlineMs=300)
+        self.assertTrue(c.killed)
+        self.assertFalse(c.running)
+
+        e: str = Job.Add(Command("ping localhost -c 10"), urgent=True, deadlineMs=200)
+        self.assertEqual(Job.Get(e).state, EntryState.RUNNING)
+        sleep(.3)
+        Job.Refresh()                                   # the scheduler thread does this every tick
+        self.assertEqual(Job.Get(e).state, EntryState.KILLED)
+        self.assertIn(EntryState.KILLED, Job.FINISHED)
+
+        child: str = Job.Add(Command(self.AB_DEP), dependsOn=e)     # a KILLED parent fails the child
+        self.assertEqual(Job.Get(child).state, EntryState.FAILED)
+        print("O_DEADLINE")
+
+    def test_AP_urgent_in_prepare(self) -> None:
+        """Constructors and prepare hooks run under the Job lock: Run() there must not disturb the queue"""
+        seen: list = []
+
+        def hook() -> None:
+            seen.append(Job.Run(Command("echo from-hook")).stdout[0])
+
+        e: str = Job.Add(Command(self.AB_DEP), prepare=hook)
+        after: str = Job.Add(Command(self.AB_DEP), dependsOn=e)
+        self._refreshUntilDone()
+        self.assertEqual(seen, ["from-hook"])
+        self.assertEqual((Job.Get(e).state, Job.Get(after).state), (EntryState.COMPLETED, EntryState.COMPLETED))
+        print("P_URGENT_IN_PREPARE")
+
+    def test_AQ_registry_limit(self) -> None:
+        """The registry of system commands keeps only the last URGENT_KEEP finished ones; Flush empties it"""
+        keep: int = Job.URGENT_KEEP
+        Job.URGENT_KEEP = 5
+        try:
+            for n in range(8):
+                Job.Run(Command("echo " + str(n)))
+            self.assertLessEqual(len(Job.urgent), 6)
+            self.assertEqual(Job.urgent[-1].command.stdout, ["7"])
+        finally:
+            Job.URGENT_KEEP = keep
+        Job.Flush()
+        self.assertEqual(Job.urgent, [])
+        print("Q_REGISTRY_LIMIT")
 
 
 if __name__ == '__main__':

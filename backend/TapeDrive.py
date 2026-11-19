@@ -312,7 +312,7 @@ class TapeDrive:
     @staticmethod
     def _like(template: Command | None) -> Command | None:
         """An override is a template: every step needs its own Command, Job refuses the same object twice."""
-        return None if template is None else Command(template.cmd, env=dict(template.env))
+        return None if template is None else Command(template.cmd, template.filesize, template.raw, dict(template.env))
 
     def _queue(self, step: TD_State, cmd: Command, runlist: str, dependsOn: str, always: bool, prepare) -> str:
         entry: str = Job.Add(cmd, tape=self.id, dependsOn=dependsOn, runlist=runlist, always=always, prepare=prepare)
@@ -381,19 +381,16 @@ class TapeDrive:
             return
 
         # Sensible to override
-        if not self.inquiryCommand:
-            self.command = Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 12 1 83 0 2a 0", 0, True)
-        else:
-            self.command = self.inquiryCommand
+        def inquiry() -> Command:   # a new Command each time, Job refuses the same object twice
+            return self._like(self.inquiryCommand) or Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 12 1 83 0 2a 0", 0, True)
 
-        self.command.wait()
+        self.command = Job.Run(inquiry())
 
         for n in range(5):      # a drive that was just reset may need a moment
             if self.command.exitCode == 0 and self.command.stdout:
                 break
             sleep(.5)
-            self.command.reset()
-            self.command.wait()
+            self.command = Job.Run(inquiry())
 
         if self.command.exitCode != 0 or not self.command.stdout:
             self.error = "INQUIRY failed: " + " ".join(self.command.stderr)
@@ -410,19 +407,15 @@ class TapeDrive:
             return
 
         # Sensible to override
-        if not self.readModeSenseCommand:
-            self.command = Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 5a 0 0 0 0 0 0 0 4 0", 0, True)
-        else:
-            self.command = self.readModeSenseCommand
+        def modeSense() -> Command:
+            return self._like(self.readModeSenseCommand) or Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 5a 0 0 0 0 0 0 0 4 0", 0, True)
 
-        self.command.wait()
+        self.command = Job.Run(modeSense())
 
         # When ModeSense needs an Inquiry than make one :3
         if self.command.exitCode == 6:
             self._inquiry()
-            # Ugly, but I don't know "nicer" way currently
-            self.command = Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 5a 0 0 0 0 0 0 0 4 0", 0, True)
-            self.command.wait()
+            self.command = Job.Run(modeSense())
 
         if self.tape.state == E_Tape.NO_TAPE:
             try:

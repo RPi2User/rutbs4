@@ -59,7 +59,7 @@ class UT_ReadJob(unittest.TestCase):
         toc: TableOfContent = TableOfContent(folder, TOC_Header(self._fakeDrive(), 2))
         for f in folder.files:                      # the write job knows every checksum before the first TOC
             f.cksum.create()
-            f.cksum.cmd.wait()
+            Job.Run(f.cksum.cmd, 60000)
             f.cksum._status()
         first: dict = {"header": toc.header._asdict(), "body": {"folder": folder._asdict()}}
         last: dict = {"header": copy.deepcopy(first["header"]), "body": {"folder": folder._asdict()}}

@@ -2,7 +2,6 @@ import os
 import subprocess
 import json
 import threading
-from time import sleep
 from typing import List
 
 class Command:
@@ -10,7 +9,7 @@ class Command:
     """
     #### === COMMAND ==========================================================
 
-    Command.__init__(cmd: str, filesize: int = -1, raw: bool = False, env: dict = None):
+    Command.__init__(cmd: str, filesize: int = -1, raw: bool = False, env: dict = None, stdin: bytes = None):
     - Requires
         - The command e.g. "cat foo.txt"
     - Supports
@@ -18,16 +17,24 @@ class Command:
         - Binary / RAW output (0xa5 6a -> "a56a")
         - env: extra environment variables, the place for secrets.
                They never show up in `ps`, _asdict() or str()
+        - stdin: bytes for the standard input, e.g. a TOC that goes through `openssl`.
+               Written by a thread (a big input and a big output cannot block each other), then
+               the input is closed. It may hold secrets: it never shows up in `ps`, _asdict()
+               or str() (only its size), and it is released once handed to the process, so
+               a second run needs a new Command. Without `stdin` the input is /dev/null, so a
+               command that reads it ends at once instead of waiting for a terminal.
 
     Command.quote(text) wraps a path in single quotes for the command string.
     
+    A Command only describes and observes a process. It is started by `Job` and nobody else:
+    `Job.Add()` for queued work, `Job.Run()` for a small request that is needed at once.
+
     | `Command.`             | Description                                                            |
     |------------------------|------------------------------------------------------------------------|
-    | `Command.start()`      | Starts the command in the background                                   |
-    | `Command.wait()`       | Blocks until command has exited                                        |
-    | `Command.kill()`       | Blocks until command is killed (SIGTERM, timeout 100ms)                |
+    | `Command.start()`      | Starts the command in the background, ONLY `Job` calls this            |
+    | `Command.kill()`       | SIGTERM, after `KILL_GRACE` SIGKILL, then gives up. Never blocks longer |
     | `Command.cleanup()`    | Get called before running ← false, does close STDOUT/STDERR            |
-    | `Command.reset()`      | Calls self.cleanup() and clears all vars EXCEPT cmd, filesize, raw, env |
+    | `Command.reset()`      | Calls self.cleanup() and clears all vars EXCEPT cmd, filesize, raw, env (stdin is gone after a run) |
     | `Command.status()`     | Refreshes all vars, always call this!                                  |
 
     ### --- VARIABLES ---------------------------------------------------------
@@ -39,7 +46,8 @@ class Command:
     | `self.cmd`     | `str`              | Main command string                                        |
     | `self.running` | `bool`             | Set by `wait()` or `start()`, cleared by `self.refresh()`  |
     | `self.pid`     | `int`              | Process ID provided by `self.process`                      |
-    | `self.readers` | `List[Thread]`     | STDOUT/STDERR reader, joined by `cleanup()` before closing |
+    | `self.readers` | `List[Thread]`     | STDOUT/STDERR reader and STDIN writer, joined by `cleanup()` |
+    | `self.stdinSize` | `int`            | Size of the given stdin in bytes, `-1` if there was none   |
 
     **Command Results**
     | Var              | Type         | Description                  |
@@ -61,6 +69,7 @@ class Command:
     | `self.status_msg` | `List[str]` | Message string for error handling                   |
     | `self.permError`  | `bool`      | Set if the backend lacks permission to read a file  |
     | `self.didRun`     | `bool`      | Tracks whether the command has already been started |
+    | `self.killed`     | `bool`      | `Job` killed it because its deadline was over       |
     | `self.closed`     | `bool`      | Monitors whether STDIN or STDOUT streams are closed |
 
     Are self.didRun and self.closed equal?
@@ -81,8 +90,12 @@ class Command:
     self.didRun is a "sticky bit" that shows if a cmd got exectuted AT LEAST ONCE
     """
 
-    def __init__(self, cmd: str, filesize: int = -1, raw: bool = False, env: dict = None) -> None: # type: ignore
+    KILL_GRACE: float = 0.1     # seconds to wait after SIGTERM, and again after SIGKILL
+
+    def __init__(self, cmd: str, filesize: int = -1, raw: bool = False, env: dict = None, stdin: bytes = None) -> None: # type: ignore
         self.cmd: str = cmd
+        self.stdin: bytes | None = stdin        # released by start(), see the class doc
+        self.stdinSize: int = -1 if stdin is None else len(stdin)
         self.filesize: int = filesize
         self.raw: bool = raw
         self.env: dict = env or {}
@@ -100,9 +113,13 @@ class Command:
             # Constructor needs a string but a literal "" is valid, but not for me!
             raise ValueError("ERROR: Process cannot be initiated, command string empty")
 
+        data: bytes | None = self.stdin
+        self.stdin = None       # secrets are not kept longer than needed
+
         self.process = subprocess.Popen(
             args="exec " + self.cmd,
             shell=True,
+            stdin=subprocess.DEVNULL if data is None else subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=False,
@@ -117,63 +134,31 @@ class Command:
         # Get Status of Process after spawn
         self.readers = [threading.Thread(target=self._read_stdout, daemon=True),
                         threading.Thread(target=self._read_stderr, daemon=True)]
+        if data is not None:
+            self.readers.append(threading.Thread(target=self._write_stdin, args=(data,), daemon=True))
         for reader in self.readers:
             reader.start()
         self.status()
         if not self.quiet:
             print("[EXEC] " + json.dumps(self._asdict(), indent=2))
 
-    def wait(self, timeout: int = 0) -> None:
-        """
-        Command.wait(timeout=XXX)
-        This wait for Command to complete or terminates the process if Timeout is reached
-        - Does start the process if needed
-        - Timeout is N in 10ms
-        - Command.reset() needed when restarting a process
-
-        Command("sleep 10").wait(500) -> Does wait for 5000ms (5sec) until this process gets terminated
-        Command.status_msg will contain the "Timeout reached" string
-
-        Three Design scenarios:
-        1. Command finishes semi-instant (run time <10ms)
-        2. Command runs as long as it takes (like a dd process) -> timeout=0, inf. runtime, DEFAULT
-        3. Command needs to finish within n * 10 ms
-        """
-
-        # Start only if process did not run prior
-        if not self.didRun:
-            self.start()
-
-        sleep(.01)      # Wait 10ms for early completion
-        self.status()   # Fill status vars
-
-        if not self.running:    # Case 1)   Process finishes semi-instant
-            return
-
-        if timeout == 0:        # Case 2)   inf. loop until process finishes
-            while self.running:
-                sleep(.01)
-                self.status()
-            return
-
-        if timeout != 0:        # Case 3)   Command.kill() on timeout reached
-            for n in range(timeout - 1):    # minus first one from 1)
-                self.status()
-                if not self.running:
-                    return
-                sleep(.01)
-            self.kill()
-            self.status_msg.append("Timeout reached, process killed")
-            self.status()
-
     def kill(self) -> None:
+        """
+        Never blocks longer than 2 * KILL_GRACE. A process in uninterruptible sleep (hung mount,
+        busy drive) survives even SIGKILL: it is given up and `running` stays True.
+        """
         self.status()
         if self.running:    # never signal a finished PID, the kernel may have reused it
-            try:
-                self.process.terminate()    # SIGTERM
-                self.exitCode = self.process.wait()
-            except Exception as e:
-                self.status_msg.append(f"[ERROR] killing process: {str(e)}")
+            for sig in (self.process.terminate, self.process.kill):     # SIGTERM, then SIGKILL
+                try:
+                    sig()
+                    self.process.wait(timeout=self.KILL_GRACE)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+                except Exception as e:
+                    self.status_msg.append(f"[ERROR] killing process: {str(e)}")
+                    break
         self.status()
 
     def cleanup(self) -> None:
@@ -214,9 +199,11 @@ class Command:
             "process": str(type(self.process)),
             "closed": self.closed,
             "did_ran": self.didRun,
+            "killed": self.killed,
             "status_msg": self.status_msg,
 
             "filesize": self.filesize,
+            "stdin_bytes": self.stdinSize,
             "permission_error": self.permError,
             "io_path": self.io_path,
             "io": self.io,
@@ -245,6 +232,7 @@ class Command:
 
         self.closed: bool = True
         self.didRun: bool = False
+        self.killed: bool = False
         self.status_msg: List[str] = []
 
         self.permError: bool = False
@@ -264,46 +252,42 @@ class Command:
                 self.status_msg.append("[INFO] Insufficient Permissions: Can't read file " + self.io_path)
                 self.permError = True
 
+    def _write_stdin(self, data: bytes) -> None:
+        try:
+            self.process.stdin.write(data)  # type: ignore
+        except OSError:
+            pass    # the process ended (or was killed) before it read everything: its exit code tells
+        finally:
+            try:
+                self.process.stdin.close()  # type: ignore
+            except OSError:
+                pass
+
     def _read_stdout(self):
-        _current : str = ""
-        for element in self.process.stdout: # type: ignore
-
-            if self.raw:
-                _current = ''.join(format(byte, '02x') for byte in element)
-                if len(self.stdout) == 0:
-                    self.stdout.append("")
-                self.stdout[0] += _current
-
-            else:
-                try:
-                    _current = element.decode('utf-8').rstrip('\n')
-                    self.stdout.append(_current)
-
-                except UnicodeDecodeError:
-                    self.status_msg.append("[ERROR] String cannot be parsed, STDOUT converted to hex")
-                    self.raw = True
-                    self._convertToRaw(element)
+        self._read(self.process.stdout, stderr=False)   # type: ignore
 
     def _read_stderr(self):
-        _current : str = ""
-        for element in self.process.stderr: # type: ignore
+        self._read(self.process.stderr, stderr=True)    # type: ignore
 
+    def _read(self, stream, stderr: bool) -> None:
+        out: List[str] = self.stderr if stderr else self.stdout
+        name: str = "STDERR" if stderr else "STDOUT"
+        parts: List[str] = []   # raw output is joined once at the end: `+=` on a big string is quadratic
+
+        for element in stream:
             if self.raw:
-                _current = ''.join(format(byte, '02x') for byte in element)
-                if len(self.stderr) == 0:
-                    self.stderr.append("")
-                self.stderr[0] += _current
+                parts.append(element.hex())
+                continue
+            try:
+                out.append(element.decode('utf-8').rstrip('\n'))
+            except UnicodeDecodeError:
+                self.status_msg.append("[ERROR] String cannot be parsed, " + name + " converted to hex")
+                self.raw = True
+                self._convertToRaw(element, stderr=stderr)
 
-            else:
-                try:
-                    _current = element.decode('utf-8').rstrip('\n')
-                    self.stderr.append(_current)
+        if parts:
+            out[:] = [(out[0] if out else "") + "".join(parts)]
 
-                except UnicodeDecodeError:
-                    self.status_msg.append("[ERROR] String cannot be parsed, STDERR converted to hex")
-                    self.raw = True
-                    self._convertToRaw(element, stderr=True)
-                
     def _convertToRaw(self, element: bytes, stderr: bool = False) -> None:
         _tmp: List[str] = []
         _current: str = ""

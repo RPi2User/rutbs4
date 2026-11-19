@@ -5,6 +5,7 @@ import unittest
 
 # Module imports
 from backend.CartridgeMemory import CartridgeMemory
+from backend.Job import Job
 from backend.TD_Pool import TD_Pool
 from backend.Tape import E_LTOv, E_Tape, Tape
 from backend.Version import Version
@@ -188,8 +189,7 @@ class UT_Tape(unittest.TestCase):
             cm.format()
             self.assertEqual(cm.fingerprint, "")           # still writing
             self.assertRaises(RuntimeError, cm.format)
-            assert cm.cmd is not None
-            cm.cmd.wait()
+            Job.Wait([cm.entry])
 
             with open(record) as f:
                 args: list = f.read().split()
@@ -200,7 +200,7 @@ class UT_Tape(unittest.TestCase):
             self.assertEqual((cm.appName, cm.version, cm.error), ("rutbs", Version.text(), ""))
 
             cm.format()
-            cm.cmd.wait()
+            Job.Wait([cm.entry])
             self.assertNotEqual(cm.fingerprint, first)
 
             out: dict = json.loads(str(cm))
@@ -214,14 +214,13 @@ class UT_Tape(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             cm: CartridgeMemory = CartridgeMemory("/dev/sgX", writeTool=self._tool(d, "write", "exit 0"))
             cm.format()
-            assert cm.cmd is not None
-            cm.cmd.wait()
+            Job.Wait([cm.entry])
             old: str = cm.fingerprint
             self.assertNotEqual(old, "")
 
             cm.writeTool = self._tool(d, "failing", "echo 'Write attribute: Medium error' >&2; exit 1")
             cm.format()
-            cm.cmd.wait()
+            Job.Wait([cm.entry])
             self.assertEqual(cm.fingerprint, old)
             self.assertIn("Medium error", cm.error)
         print("IA_FORMAT_FAILS")

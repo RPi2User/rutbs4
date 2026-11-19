@@ -2,6 +2,7 @@ import json
 from typing import List
 
 from backend.Command import Command
+from backend.Job import Job
 
 class Mount:
 
@@ -26,8 +27,7 @@ class Mount:
 
     @staticmethod
     def _parse(cmd: str) -> List["Mount"]:
-        command: Command = Command(cmd)
-        command.wait()
+        command: Command = Job.Run(Command(cmd))
         if command.exitCode != 0 or not command.stdout:
             return []
 

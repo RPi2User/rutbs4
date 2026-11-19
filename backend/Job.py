@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 from backend.Command import Command
 
 class EntryState(Enum):
+    KILLED = -2     # urgent Entry: deadline exceeded, the process was killed (or given up)
     FAILED = -1
     WAITING_FOR_PARENT = 0
     READY4EXEC = 1
@@ -21,7 +22,8 @@ class Entry():
     #### === ENTRY ============================================================
 
     Entry.__init__(command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
-                   prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None):
+                   prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None,
+                   startAfterCreate: bool = False, deadlineMs: int = 0):
     - Requires
         - A Command that has not been started yet
     - Supports
@@ -32,6 +34,9 @@ class Entry():
         - always:    closing step, runs even if its runlist was aborted
         - prepare:   called right before the Command starts, e.g. to write the file the Command
                      reads. If it raises, the Entry FAILED and the Command never ran
+        - startAfterCreate: the constructor starts the Command as its last step (urgent Entry,
+                     see `Job.Add(urgent=True)`); the Entry is RUNNING from the first moment
+        - deadlineMs: urgent Entry only: killed after this time, state KILLED
 
     | Var              | Type         | Description                                     |
     |------------------|--------------|-------------------------------------------------|
@@ -44,11 +49,14 @@ class Entry():
     | `self.always`    | `bool`       | `True`: is not aborted with its runlist         |
     | `self.prepare`   | `callable`   | Runs just before the start, `None` if unused    |
     | `self.error`     | `str`        | Why `prepare` failed, `""` otherwise            |
+    | `self.urgent`    | `bool`       | Started at once, outside the queue and the slots |
+    | `self.deadlineMs`| `int`        | Urgent: time until the kill, `0` for queued work |
     | `self.state`     | `EntryState` | See `Job` for the state flow                    |
     """
 
     def __init__(self, command: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
-                 prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None) -> None:
+                 prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None,
+                 startAfterCreate: bool = False, deadlineMs: int = 0) -> None:
         self.id: str = str(uuid.uuid4())
         self.prepare: Callable[[], None] | None = prepare
         self.error: str = ""
@@ -59,6 +67,14 @@ class Entry():
         self.runlist: str = runlist
         self.always: bool = always
         self.state: EntryState = EntryState.WAITING_FOR_PARENT if dependsOn or self.waitFor else EntryState.READY4EXEC
+        self.urgent: bool = startAfterCreate
+        self.deadlineMs: int = deadlineMs
+        self.deadline: float = 0.0              # time.monotonic() of the kill, urgent only
+
+        if startAfterCreate:                    # LAST step: everything else is set when the process runs
+            self.command.start()
+            self.deadline = time.monotonic() + deadlineMs / 1000
+            self.state = EntryState.RUNNING
 
     @property
     def parents(self) -> List[str]:
@@ -73,6 +89,8 @@ class Entry():
             "waitFor": self.waitFor,
             "runlist": self.runlist,
             "always": self.always,
+            "urgent": self.urgent,
+            "deadlineMs": self.deadlineMs,
             "error": self.error,
             "command": self.command._asdict(),
         }
@@ -116,6 +134,18 @@ class Job():
         always=True are closing steps (final TOC, rewind) and still run.
         Other runlists are not affected.
 
+    Urgent (system commands):
+        Small requests (a few random bytes, `stat`, `findmnt`, a SCSI query) must not wait for a slot.
+        `Job.Add(cmd, urgent=True)` starts the Command at once, in the caller's thread, outside the queue
+        and outside `Job.limit`; the Entry lives in its own list (`Job.urgent`, the last
+        `URGENT_KEEP` finished ones are kept). Whoever looks at it (`Job.Get()`, `Job.Refresh()`)
+        enforces the deadline: SIGTERM, SIGKILL, then the Entry is KILLED, a process that
+        does not die is given up. `Job.Run(cmd)` is Add + wait for the result.
+        An urgent Entry takes no part in dependencies, runlists, drives or `prepare`, so it can be
+        used from constructors and from `prepare` hooks (they run under the Job lock).
+        Not for the regular case: whatever is needed often belongs in a small list that is
+        refreshed periodically. Never rewind, eject, dd, checksum or encryption.
+
     Scheduling (every tick, in this order):
         1. Tape Entries          -> one Entry per drive, strictly in the order they were added,
                                     so the order on tape is known before anything is written
@@ -125,7 +155,8 @@ class Job():
 
     | `Job.`             | Description                                              |
     |--------------------|----------------------------------------------------------|
-    | `Job.Add()`        | Adds a Command, returns the Entry id                     |
+    | `Job.Add()`        | Adds a Command, returns the Entry id (`urgent=True`: starts it now) |
+    | `Job.Run()`        | Urgent Command, blocks, returns the finished Command     |
     | `Job.Failed()`     | True if an Entry of a runlist failed (closing steps excluded) |
     | `Job.Get()`        | Returns the Entry of an id, raises LookupError           |
     | `Job.Registry()`   | Returns all Entries as dict                              |
@@ -137,10 +168,13 @@ class Job():
     """
 
     DEFAULT_THREADLIMIT: int = os.cpu_count() or 1
-    FINISHED = {EntryState.COMPLETED, EntryState.FAILED}
+    FINISHED = {EntryState.COMPLETED, EntryState.FAILED, EntryState.KILLED}
+    DEFAULT_DEADLINE_MS: int = 2000             # urgent Entries; `find` of a folder gets 60 s from its caller
+    URGENT_KEEP: int = 200                      # finished urgent Entries that stay in the registry
 
     state: JobState = JobState.EMPTY
     queue: List[Entry] = []
+    urgent: List[Entry] = []                    # started by Add(urgent=True), never part of the queue
     limit: int = DEFAULT_THREADLIMIT            # max. parallel CPU/Disk Entries
     lock: threading.RLock = threading.RLock()   # Add() and the scheduler thread share the queue
     scheduler: Optional["JobScheduler"] = None
@@ -149,10 +183,20 @@ class Job():
 
     @staticmethod
     def Add(cmd: Command, tape: str = "", dependsOn: str = "", runlist: str = "", always: bool = False,
-            prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None) -> str:
+            prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None,
+            urgent: bool = False, deadlineMs: int = DEFAULT_DEADLINE_MS) -> str:
         with Job.lock:
-            if any(e.command is cmd for e in Job.queue):
+            if any(e.command is cmd for e in Job.queue + Job.urgent):
                 raise ValueError("ERROR: Command already queued, create a new Command object")
+
+            if urgent:
+                if tape or dependsOn or runlist or always or prepare or waitFor:
+                    raise ValueError("ERROR: An urgent Entry stands alone: no tape, parent, runlist or prepare")
+                _u: Entry = Entry(cmd, startAfterCreate=True, deadlineMs=deadlineMs)    # starts the Command
+                Job.urgent.append(_u)
+                Job._trimUrgent()
+                return _u.id
+
             for parent in ([dependsOn] if dependsOn else []) + list(waitFor or []):
                 Job.Get(parent)         # raises LookupError if the parent is unknown
 
@@ -163,6 +207,18 @@ class Job():
             return _e.id
 
     @staticmethod
+    def Run(cmd: Command, deadlineMs: int = DEFAULT_DEADLINE_MS) -> Command:
+        """
+        An urgent Entry and the wait for it. Returns the finished Command: check its `exitCode`
+        (a killed Command has the exit code of the signal, or -1 if it could not be killed;
+        `status_msg` says why). Does not drive the queue, so it is safe inside `prepare` hooks.
+        """
+        _id: str = Job.Add(cmd, urgent=True, deadlineMs=deadlineMs)
+        while Job.Get(_id).state not in Job.FINISHED:
+            time.sleep(0.002)
+        return cmd
+
+    @staticmethod
     def Failed(runlist: str) -> bool:
         """True if an Entry of the runlist failed. Closing steps (always=True) do not count."""
         with Job.lock:
@@ -171,32 +227,38 @@ class Job():
     @staticmethod
     def Get(entryId: str) -> Entry:
         with Job.lock:
-            for entry in Job.queue:
+            for entry in Job.queue + Job.urgent:
                 if entry.id == entryId:
+                    if entry.urgent:
+                        Job._checkUrgent(entry)     # whoever looks drives the deadline
                     return entry
         raise LookupError("Entry not found: " + entryId)
 
     @staticmethod
     def Registry() -> dict:
         with Job.lock:
-            return {entry.id: entry._asdict() for entry in Job.queue}
+            return {entry.id: entry._asdict() for entry in Job.queue + Job.urgent}
 
     @staticmethod
     def Flush(killRunning: bool = True) -> None:
         with Job.lock:
             if killRunning:
-                for entry in Job.queue:
+                for entry in Job.queue + Job.urgent:
                     if entry.state is EntryState.RUNNING:
                         entry.command.kill()
                 Job.queue.clear()
+                Job.urgent.clear()
             else:
                 Job._updateStates()     # a WAITING child never loses its unfinished parent
                 Job.queue[:] = [e for e in Job.queue if e.state not in Job.FINISHED]
+                Job.urgent[:] = [e for e in Job.urgent if e.state not in Job.FINISHED]
             Job._updateJobState()
 
     @staticmethod
     def Refresh() -> None:
         with Job.lock:
+            for entry in Job.urgent:
+                Job._checkUrgent(entry)
             Job._updateStates()
             Job._startEntries()
             Job._updateJobState()
@@ -242,7 +304,7 @@ class Job():
 
             elif e.state is EntryState.WAITING_FOR_PARENT:
                 parents: List[EntryState] = [Job.Get(p).state for p in e.parents]
-                if EntryState.FAILED in parents:
+                if EntryState.FAILED in parents or EntryState.KILLED in parents:
                     e.state = EntryState.FAILED
                 elif all(p is EntryState.COMPLETED for p in parents):
                     e.state = EntryState.READY4EXEC
@@ -252,6 +314,32 @@ class Job():
         for e in Job.queue:
             if e.runlist in aborted and not e.always and e.state in {EntryState.WAITING_FOR_PARENT, EntryState.READY4EXEC}:
                 e.state = EntryState.FAILED
+
+    @staticmethod
+    def _checkUrgent(e: Entry) -> None:
+        """Takes over the result of an urgent Entry, or kills it when its deadline is over. Never touches the queue."""
+        if e.state is not EntryState.RUNNING:
+            return
+        e.command.status()
+        if not e.command.running:
+            e.state = EntryState.COMPLETED if e.command.exitCode == 0 else EntryState.FAILED
+        elif time.monotonic() > e.deadline:
+            e.command.kill()
+            e.command.killed = True
+            e.command.status_msg.append("Deadline of " + str(e.deadlineMs) + " ms exceeded, " +
+                                        ("process killed" if not e.command.running else "process does not die, given up"))
+            e.state = EntryState.KILLED
+
+    @staticmethod
+    def _trimUrgent() -> None:
+        # The registry of system commands must not grow without end: the oldest finished ones go first
+        if len(Job.urgent) <= Job.URGENT_KEEP:
+            return
+        for e in Job.urgent:
+            Job._checkUrgent(e)
+        finished: List[Entry] = [e for e in Job.urgent if e.state in Job.FINISHED]
+        for old in finished[:max(0, len(Job.urgent) - Job.URGENT_KEEP)]:
+            Job.urgent.remove(old)
 
     @staticmethod
     def _startEntries() -> None:

@@ -3,6 +3,7 @@ import uuid
 from typing import Dict, List
 
 from backend.Command import Command
+from backend.Job import EntryState, Job
 from backend.Version import Version
 
 class CartridgeMemory:
@@ -24,7 +25,7 @@ class CartridgeMemory:
         cm = CartridgeMemory("/dev/sg12")
         if cm.fingerprint == "":
             cm.format()         # ALWAYS a new fingerprint, starts sg_write_attr
-            cm.cmd.wait()       # no timeout, the chip is slow
+            Job.Wait([cm.entry])    # the chip is slow, the write has `WRITE_DEADLINE_MS`
         print(cm)
 
     The fields change when the write is finished and succeeded, not before. A failed write keeps
@@ -32,9 +33,9 @@ class CartridgeMemory:
 
     | `CartridgeMemory.`  | Description                                                          |
     |---------------------|----------------------------------------------------------------------|
-    | `read()`            | Reads the chip, waits at most `READ_TIMEOUT`                         |
-    | `format()`          | Starts writing name, version and a NEW fingerprint, see `cmd`        |
-    | `cmd`               | The last `Command`, `None` if there was none                         |
+    | `read()`            | Reads the chip, an urgent `Job` Entry with `READ_DEADLINE_MS`        |
+    | `format()`          | Starts writing name, version and a NEW fingerprint, see `entry`      |
+    | `cmd`, `entry`      | The last `Command` and its `Job` Entry id, `None` / `""` if none     |
     | `appName`, `version`, `fingerprint`, `error` | `""` if unknown                            |
     """
 
@@ -42,13 +43,15 @@ class CartridgeMemory:
     ID_VERSION: int = 0x0802
     ID_LABEL: int = 0x0803
     APP_NAME: str = "rutbs"
-    READ_TIMEOUT: int = 200     # N * 10 ms, a query takes a few ms on a healthy drive
+    READ_DEADLINE_MS: int = 2000        # a query takes a few ms on a healthy drive
+    WRITE_DEADLINE_MS: int = 60000      # the chip is slow
 
     def __init__(self, device: str = "", readTool: str = "sg_read_attr", writeTool: str = "sg_write_attr") -> None:
         self.device: str = device               # generic device of the drive, e.g. /dev/sg12
         self.readTool: str = readTool
         self.writeTool: str = writeTool
         self.cmd: Command | None = None
+        self.entry: str = ""
         self._appName: str = ""
         self._version: str = ""
         self._fingerprint: str = ""
@@ -88,8 +91,7 @@ class CartridgeMemory:
             raise ValueError("ERROR: No device to read the cartridge memory from")
 
         self._appName = self._version = self._fingerprint = ""
-        self.cmd = Command(self.readTool + " -R -H " + Command.quote(self.device))
-        self.cmd.wait(self.READ_TIMEOUT)
+        self.cmd = Job.Run(Command(self.readTool + " -R -H " + Command.quote(self.device)), self.READ_DEADLINE_MS)
         if self.cmd.exitCode != 0:
             self._error = "READ ATTRIBUTE failed: " + " ".join(self.cmd.status_msg + self.cmd.stderr)
             return
@@ -121,7 +123,7 @@ class CartridgeMemory:
                            " AppName=" + pending["appName"] +
                            " AppVersion=" + "%04x" % Version.word() +
                            " UserLabel=" + pending["fingerprint"])
-        self.cmd.start()
+        self.entry = Job.Add(self.cmd, urgent=True, deadlineMs=self.WRITE_DEADLINE_MS)
         self._pending = pending
 
     @staticmethod
@@ -160,10 +162,14 @@ class CartridgeMemory:
         """Takes over a finished write; a running one changes nothing yet."""
         if self._pending is None or self.cmd is None:
             return
+        try:
+            killed: bool = Job.Get(self.entry).state is EntryState.KILLED     # looking at it drives the deadline
+        except LookupError:
+            killed = False      # dropped from the registry, the Command itself knows the result
         self.cmd.status()
-        if self.cmd.running:
+        if self.cmd.running and not killed:
             return
-        if self.cmd.exitCode == 0:
+        if self.cmd.exitCode == 0 and not killed:
             self._appName = self._pending["appName"]
             self._version = self._pending["version"]
             self._fingerprint = self._pending["fingerprint"]

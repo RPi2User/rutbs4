@@ -77,10 +77,6 @@ class Checksum:
         self.state = ChecksumState.VALIDATE
         self._status()
 
-    def wait(self) -> None:
-        self.cmd.wait()
-        self._status()
-
     def _status(self) -> None:
         self.cmd.status()   # refresh current state
 

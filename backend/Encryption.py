@@ -3,6 +3,7 @@ from typing import List
 from enum import Enum
 
 from backend.Command import Command
+from backend.Job import Job
 
 class KeyLength(Enum):
     # aes does not allow larger keys
@@ -33,9 +34,8 @@ class Key:
             return
 
         # Generate Key
-        self.cmd = Command("openssl rand " + str(length.value), raw=True)
-        self.cmd.wait()
-        self.value = self.cmd.stdout[0]
+        self.cmd = Job.Run(Command("openssl rand " + str(length.value), raw=True))
+        self.value = self.cmd.stdout[0] if self.cmd.stdout else ""
 
         if len(self.value) != self.length.value * 2:
             self.iv = "CRASHED"
@@ -43,10 +43,8 @@ class Key:
             raise SystemError("[ERROR] Keylength wrong, check logs!")
 
         # Generate Init. Vektor
-        self.cmd.reset()
-        self.cmd.cmd = "openssl rand 16"
-        self.cmd.wait()
-        self.iv = self.cmd.stdout[0]
+        self.cmd = Job.Run(Command("openssl rand 16", raw=True))
+        self.iv = self.cmd.stdout[0] if self.cmd.stdout else "CRASHED"
 
     def _asdict(self) -> dict:
         data = {
