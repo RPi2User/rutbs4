@@ -35,7 +35,7 @@ class UT_File(unittest.TestCase):
         path: str = os.path.join(tmp, "faketape.bin")
         open(path, "wb").close()
         td: TapeDrive = TapeDrive(path=path, generic_path="", drive_override=True)
-        td.tapeOverride(Tape("3800"))
+        td.tapeOverride(Tape("3800", td.generic_path))
         return td
 
     def _source(self, tmp: str, content: bytes, mode: E_Mode) -> File:

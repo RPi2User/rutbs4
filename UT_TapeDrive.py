@@ -32,7 +32,7 @@ class UT_TapeDrive(unittest.TestCase):
     def _drive(self, tmp: str) -> TapeDrive:
         td: TapeDrive = TapeDrive(os.path.join(tmp, "fake.bin"), "/dev/sg99", drive_override=True)
         open(td.path, "wb").close()
-        td.tapeOverride(Tape("8800"))
+        td.tapeOverride(Tape("8800", td.generic_path))
         return td
 
     def test_A_commands(self) -> None:

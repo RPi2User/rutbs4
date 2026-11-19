@@ -42,7 +42,7 @@ class UT_Folder(unittest.TestCase):
         tape_path: str = os.path.join(tmp, "faketape.bin")
         open(tape_path, "wb").close()
         td: TapeDrive = TapeDrive(path=tape_path, generic_path="", drive_override=True)
-        td.tapeOverride(Tape("3800"))  # LTO-3, no write protect
+        td.tapeOverride(Tape("3800", td.generic_path))  # LTO-3, no write protect
         return td
 
     def _waitAll(self, entries, timeoutSec: float = 10) -> None:

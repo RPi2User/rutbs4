@@ -46,7 +46,7 @@ class UT_WriteJob(unittest.TestCase):
     def _drive(self, tmp: str, tape: str = "8800") -> TapeDrive:
         td: TapeDrive = TapeDrive(os.path.join(tmp, "fake.bin"), "", drive_override=True)
         open(td.path, "wb").close()
-        td.tapeOverride(Tape(tape))
+        td.tapeOverride(Tape(tape, td.generic_path))
         log: str = os.path.join(tmp, "log")
         td.rewindCommand = Command("sh -c 'echo rewind >> " + log + "'")
         td.ejectCommand = Command("sh -c 'echo eject >> " + log + "'")

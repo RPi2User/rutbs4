@@ -70,7 +70,7 @@ class UT_ReadJob(unittest.TestCase):
         from backend.Tape import Tape
         from backend.TapeDrive import TapeDrive
         td: TapeDrive = TapeDrive("/dev/null", "", drive_override=True)
-        td.tapeOverride(Tape("8800"))
+        td.tapeOverride(Tape("8800", td.generic_path))
         return td
 
     def test_A_keyFromTheToc(self) -> None:

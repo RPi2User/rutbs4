@@ -1,6 +1,8 @@
 import json
 from enum import Enum
 
+from backend.CartridgeMemory import CartridgeMemory
+
 class E_LTOv(Enum):
     NONE = 0
     LTO_1 = 1
@@ -45,7 +47,8 @@ class Tape():
 
     """#### === Tape ==========================================================
     This Class represents a physical tape.  
-    In order to create a proper tape object you need a "hardware ID".  
+    In order to create a proper tape object you need a "hardware ID" and the generic SCSI device
+    of the drive it sits in (a tape cannot exist without a drive), e.g. `Tape("8810", "/dev/sg12")`.  
     This ID is a 4-Char wide string containing the most important data:
 
         Tape("v8wx"):
@@ -81,10 +84,12 @@ class Tape():
     | begin_of_tape    | bool   | runtime parameter to keep track of rewinding   |
     | state            | E_Tape | Enum for basic state machine                   |
     | blocksize        | str    | Allows different blocksizes                    |
+    | generic_path     | str    | Generic SCSI device of the drive               |
+    | cartridgeMemory  | CartridgeMemory | The chip, read when a tape is in the drive |
 
     """
 
-    def __init__(self, hardware_id: str, blocksize: str = "256K")-> None:
+    def __init__(self, hardware_id: str, generic_path: str, blocksize: str = "256K")-> None:
 
         self.lto_version: E_LTOv = E_LTOv.NONE
         self.native_capacity: int = 0
@@ -92,6 +97,8 @@ class Tape():
         self.begin_of_tape: bool = False
         self.state: E_Tape = E_Tape.NO_TAPE
         self.blocksize: str = blocksize
+        self.generic_path: str = generic_path
+        self.cartridgeMemory: CartridgeMemory = CartridgeMemory()      # reads the chip once a tape is in
 
         _lto_version: int = int(hardware_id[0], 16)
         self.write_protect = (int(hardware_id[2], 16) & 0x8 > 0) # Isolated bit 4
@@ -110,6 +117,9 @@ class Tape():
         self.lto_version = E_LTOv(_lto_version)
         if self.lto_version.name in E_LTO_Cap.__members__:   # unknown capacity stays 0
             self.native_capacity = E_LTO_Cap[self.lto_version.name].value
+
+        if generic_path and self.state in (E_Tape.ONLINE, E_Tape.WRITE_PROTECT):
+            self.cartridgeMemory = CartridgeMemory(generic_path)
 
     def _asdict(self) -> dict:
         data = {

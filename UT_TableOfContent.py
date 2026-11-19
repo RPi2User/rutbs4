@@ -43,7 +43,7 @@ class UT_TableOfContent(unittest.TestCase):
         tape_path: str = os.path.join(tmp, "faketape.bin")
         open(tape_path, "wb").close()
         td: TapeDrive = TapeDrive(path=tape_path, generic_path="", drive_override=True)
-        td.tapeOverride(Tape("3800"))
+        td.tapeOverride(Tape("3800", td.generic_path))
         return td
 
     def test_AA_headerFields(self) -> None:

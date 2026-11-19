@@ -189,12 +189,12 @@ class TapeDrive:
     `id` is the key the Job uses, one step at a time runs per id.
 
     Without SCSI tooling or hardware: `drive_override=True`, then set `rewindCommand` /
-    `ejectCommand` (their command line is used for every step) and call `tapeOverride(Tape("8800"))`.
+    `ejectCommand` (their command line is used for every step) and call `tapeOverride(Tape("8800", td.generic_path))`.
     `path` may then be a regular file. A regular file is truncated by every `Write()`, so only one
     tape file fits.
 
         >>> td = TapeDrive("/tmp/fake", "", drive_override=True)
-        >>> td.tapeOverride(Tape("8800")); td.rewindCommand = Command("true")
+        >>> td.tapeOverride(Tape("8800", td.generic_path)); td.rewindCommand = Command("true")
         >>> step = td.Rewind()
         >>> step = td.Write("/tmp/some_file", dependsOn=step)
         >>> Job.Wait([step])
@@ -243,7 +243,7 @@ class TapeDrive:
         self.generic_path = generic_path
         self.paths = paths or [(path, generic_path)]
         self.wwid = wwid or self.sysfsRead(generic_path, "wwid")
-        self.tape = Tape("0000")
+        self.tape = Tape("0000", generic_path)
         self.drive_override = drive_override
         self.blocksize = blocksize
         self.entries: List[Tuple[TD_State, str]] = []   # (step, Job entry id), in the order added
@@ -426,9 +426,9 @@ class TapeDrive:
 
         if self.tape.state == E_Tape.NO_TAPE:
             try:
-                self.tape = Tape(self.command.stdout[0][4:])
+                self.tape = Tape(self.command.stdout[0][4:], self.generic_path)
             except IndexError:
-                self.tape = Tape("0000")
+                self.tape = Tape("0000", self.generic_path)
 
     def tapeOverride(self, _tape: Tape) -> None:
         self.tape_override = True

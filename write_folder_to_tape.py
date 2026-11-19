@@ -65,7 +65,7 @@ def main() -> int:
 
     if args.tape:
         td = TapeDrive(args.tape, "", drive_override=True)
-        td.tapeOverride(Tape(args.lto_version + "800"))     # <ltoVersion>800 -> valid Tape, no write protect
+        td.tapeOverride(Tape(args.lto_version + "800", td.generic_path))     # <ltoVersion>800 -> valid Tape, no write protect
         td.rewindCommand = Command(args.rewind_cmd or "true")
         td.ejectCommand = Command(args.eject_cmd or "true")
     else:
