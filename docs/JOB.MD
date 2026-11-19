@@ -1,212 +1,109 @@
-The Job Scheduling System should be a simple batch job system.
-A Process can Schedule a Job just by providing the Command Object.
-Each Job will get wrapped automagically.
-When the first Job gets queried the Scheduler will start the worker thread.
+# Job
 
-## Dependency Handling:
+`backend/Job.py` is the batch system of the backend. It is the only place that starts a `Command`
+on the host. A `Command` describes a process and observes it; `Job` wraps it in an `Entry`, decides
+when it runs, and takes over the result.
 
-TODO: Translate / Refactor
+There is **one queue for the whole host** (`Job.queue`), so the thread limit holds no matter how many
+requests are queued. System commands that cannot wait live in a second list (`Job.urgent`). Both are
+shown by `Job.Registry()`; `Job.Get()` and `Job.Wait()` find an id in either.
 
-Idee ist, dass man erstmal alle Entries soweit der Queue hinzufügt.
-Beim Aufruf von Job.Add() muss spezifiziert werden, ob dieser Eintrag eine Abhängigkeit hat.
-Standartmäßig hat ein Befehl keine Abhängikeit.
+## Entry
 
-Wenn der Entry eine Dependency hat, so kann dieser Job noch nicht ausgeführt werden (state ← ORPHAN).
-Der Entry ist solange ein Waise bis es einen Job gibt welcher ein Elternteil wird / fulfills
+`Job.Add(cmd, ...)` returns the id of the new `Entry`.
 
-Der Job ist dann initialisiert, wenn ein Entry angefügt wird welcher keine Abhängigkeit hat, aber eine Abhängigkeit für einen anderen Prozess darstellt.
-Also wenn der Entry ein Blatt des Abhängigkeitbaums darstellt.
+| Argument     | Meaning                                                                             |
+|--------------|-------------------------------------------------------------------------------------|
+| `cmd`        | The `Command`, not started yet. The same object is never queued twice                |
+| `tape`       | Drive id if the command uses a drive, `""` for CPU and disk work                     |
+| `dependsOn`  | Id of one parent that must be `COMPLETED` first                                      |
+| `waitFor`    | Ids of further parents (a barrier, e.g. "all checksums are done")                    |
+| `runlist`    | Id of the request the entry belongs to (one write, one restore)                      |
+| `always`     | Closing step (final TOC, rewind): runs even if its runlist was aborted               |
+| `prepare`    | Called right before the start, e.g. to make the final TOC. If it raises, the entry is `FAILED` and the command never ran |
+| `urgent`     | See "Urgent entries"                                                                 |
 
-Kurz zum Baum:
+Parents must be added before their children, so the queue is always in dependency order and a single
+pass over it resolves the whole tree. An unknown parent raises `LookupError`.
 
-Prozess A: Stammprozess. Dieser wird als erstes initialisiert
-
-_entryA  :str = Job.Add(Command("echo A"), needsDependency = True)
-_entryB  :str = Job.Add(Command("echo B"), needsDependency = True, fulfills = _entryA)
-_entryC1 :str = Job.Add(Command("echo c1"), needsDependency = True, fulfills = _entryB)
-_entryC2 :str = Job.Add(Command("echo c2"), needsDependency = True, fulfills = _entryB)
-_entryC3 :str = Job.Add(Command("echo c3"), needsDependency = True, fulfills = _entryB)
-_entryD : str = Job.Add(Command("echo D"), needsDependency = False, fulfills = {_entryC1, _entryC2, _entryC3})
-
-Problem: Wir wollen A ausühren.
-
-Ausführung:
-
-START(D)
-WAIT(D) -> D ist fertig
-
-START(C1)
-START(C2)
-START(C3) -> C* läuft parallel
-WAIT(C1, C2, C3)
-
-START(B)
-WAIT(B)
-
-START(A)
-IDLE.
-
-
-## ThreadLimit := 1
-
-Job works on "First Come, First Serve" unless a Childprocess can be started.
-
-## Typical flow with 4 concurrent tasks and 2 threads
-
-This shows how the Scheduler handles dependencies. As you can see only two tasks are running simultaneously.
-
-1. A and C
-2. B and C
-3. B and D
-4. only D
-
-Note: The worker thread from Job will always run and does not count as running task.
+## States
 
 ```mermaid
-sequenceDiagram
-Note over Caller, Job: ThreadLimit:=2
-
-Caller->>Job: Schedules Task A
-Job ->> Caller: A.uuid
-Caller->>Job: Schedules Task B depends on A
-Job ->> Caller: B.uuid
-Caller->>Job: Schedules Task C
-Job ->> Caller: C.uuid
-Caller->>Job: Schedules Task D
-Job ->> Caller: D.uuid
-
-create Participant A
-Job->>A: state = QUEUED
-create Participant B
-Job->>B: state = WAIT_FOR_PARENT
-create Participant C
-Job->>C: state = QUEUED
-create Participant D
-Job ->>D: state = QUEUED
-
-Caller->>Job: Work()
-activate Job
-Note over Job,A: A came first will be executed first
-Job->>A: state?
-A ->> Job: QUEUED
-Job->>A: Run()
-activate A
-    A->>A: state:= RUNNING
-    A->>A: works...
-    Note over Job,B: Job seeks for next Entry
-    Job->>B: state?
-    B ->> Job: WAIT_FOR_PARENT
-    Job->>B: parent?
-    B ->> Job: uuid(A)
-    Job ->> A: state?
-    A ->> Job: RUNNING
-    Note over Job,B: B cannot be scheduled, proceeds with C
-    Job ->> C: state?
-    C ->> Job: QUEUED
-    Job ->> C: Run()
-    activate C
-    C->>C: works...
-
-    Note over Job,C: Since all threads are currently working, Job is done.
-    Job->>Job: Tick: Refresh()
-    Note over Job,A: A finishes its task
-    A->>A: finished
-    A->>A: state := COMPLETED
-deactivate A
-Job->>Job: Tick: Refresh()
-Job->>A: state?
-A->>Job: COMPLETED
-Job->>B: state?
-B->>Job: WAIT_FOR_PARAENT
-Job->>B: parent?
-B->>Job: uuid(A)
-Job ->> A: state?
-A ->> Job: COMPLETED
-
-Job->>B: Run()
-activate B
-B->>B: state:=RUNNING
-B->>B: works...
-
-Job->>Job: Tick: Refresh()
-Note over Job,C: C finishes execution
-C ->> C: finished
-C ->> C: state := COMPLETED
-deactivate C
-
-Job->>Job: Tick: Refresh()
-Note over Job,D: Job seeks for next Entry
-Job ->> A: state?
-A ->> Job: COMPLETED
-
-Job ->> B: state?
-B ->> Job: RUNNING
-
-Job ->> C: state?
-C ->> Job: COMPLETED
-
-Job ->> D: state?
-D ->> Job: QUEUED
-note over Job,D: Note: This is the first time D get asked
-
-Job ->> D: Run()
-activate D
-
-D ->> D: works...
-
-Note over Job,D: Wait for any task to complete
-
-Job->>Job: Tick: Refresh()
-
-
-B ->> B: finished
-B ->> B: state := COMPLETED
-deactivate B
-
-Job->>Job: Tick: Refresh()
-Note over Job,D: Job asks A,B,C,D for their state<br> but no additional Entry is queried
-
-D ->> D: finished
-D ->> D: state := COMPLETED
-
-deactivate D
-Job ->> Job: Tick: Refresh()
-deactivate Job
+stateDiagram-v2
+    [*] --> WAITING_FOR_PARENT: has parents
+    [*] --> READY4EXEC: no parent
+    WAITING_FOR_PARENT --> READY4EXEC: all parents COMPLETED
+    WAITING_FOR_PARENT --> FAILED: a parent FAILED or KILLED
+    READY4EXEC --> RUNNING: slot free, drive free
+    READY4EXEC --> FAILED: prepare raised, runlist aborted
+    RUNNING --> COMPLETED: exit code 0
+    RUNNING --> FAILED: exit code not 0
+    RUNNING --> KILLED: urgent only, deadline over
 ```
 
-Priorities:
+`COMPLETED`, `FAILED` and `KILLED` are final (`Job.FINISHED`).
 
-The Scheduler is sensible to INTERNAL priorities.
+## Runlist
 
+All entries of one request share a runlist id. If one fails, every entry of that runlist that has not
+started yet fails as well; running ones finish. Entries with `always=True` still run. Other runlists
+are not affected. `Job.Failed(runlist)` tells whether an entry of the runlist failed (closing steps do
+not count).
 
-OOOE (OutOfOrderExecution)
-In order to prevent a critical Job from dangling "somewhere" in the Queue. All Jobs can promoted to an "URGENT" Job.
-But the Command Timeout will be set to 100ms. After that the process will be terminated forcefully.
+## Scheduling
 
-This project has implemented a flexible Framework to issue Commands (`class Command`) on the host system.
-Command has no scheduling capabilities. 
-When the System calls a Command to be executed this Scheduler (`Job`) wraps it around a `Entry`-Object.
+`Job.Refresh()` is one tick: it updates the states, then starts what may start. In this order:
 
-A Job contains the following:
+1. **Tape entries.** A drive works strictly in queue order, one entry at a time, so the order on the
+   tape is known before anything is written. Drives are not limited by `Job.limit`.
+2. **Entries that feed a tape** (checksum, encryption before a write).
+3. **Everything else** (decrypt, verify after the tape).
 
-```mermaid
-classDiagram
+Within a class it is first come, first serve. CPU and disk work is limited by `Job.limit`
+(default: the number of cores); every running entry without a drive takes one slot.
 
-class Entry{
-+ command: Command
-+ id: str→uuid
-+ dependsOn: str→uuid = ""
-+ state: EntryState = QUEUED
-}
+Who ticks: `Job.Work()` starts a thread that calls `Refresh()` every 500 ms (it does not start by
+itself). `Job.Wait(ids, timeoutSec)` blocks until the entries are finished and ticks by itself, so it
+works with or without the thread. `Job.Stop()` stops the thread.
 
-class Job{
-- DEFAULT_THREADLIMIT: int >= 1 
-- limit: int = DEFAULT_THREADLIMIT
-- queue: List[Entry]
-+ Add(_cmd: Command) str→uuid
-+ Get(uuid: str) dict 
-+ Registry(None) dict[queue]
-+ Flush(killAllRunning: bool = True) None
-}
+## Urgent entries (system commands)
 
+For small requests that must not wait for a slot: a few random bytes, `stat`, `findmnt`, a SCSI query.
+They are not meant for the regular case.
+
+- `Job.Add(cmd, urgent=True, deadlineMs=2000)` starts the command at once, in the caller's thread
+  (the `Entry` constructor does it, `startAfterCreate`). `Job.Run(cmd, deadlineMs)` adds and waits and
+  returns the finished `Command`.
+- An urgent entry stands alone: no drive, parent, runlist or `prepare`. It takes no slot and never goes
+  through the queue, so it can be used in constructors and in `prepare` hooks (they run under the Job lock).
+- The deadline is wall-clock time. Whoever looks at the entry (`Job.Get()`, `Job.Refresh()`) enforces it:
+  SIGTERM, 100 ms later SIGKILL, 100 ms later the entry is given up. State `KILLED`, `Command.killed`
+  is set, `status_msg` says why. A process in uninterruptible sleep survives SIGKILL; `Job` does not wait for it.
+- Deadlines: 2 s by default; 60 s for the `find` of a `Folder`, for writing the cartridge memory and for the TOC cipher.
+- `Job.urgent` keeps the last 200 finished entries (`Job.URGENT_KEEP`).
+
+## What Job does not do
+
+- A queued command has no deadline. Stopping a running job is a matter of the API (abort, kill), not of the queue.
+- Nothing is stored. The registry lives in memory and a new write or read request replaces it
+  (`Job.Flush()`: `killRunning=True` kills and removes everything, `False` removes the finished entries only).
+- It does not know what a command means. Drive state and tape order are the business of `TapeDrive` and the jobs on top.
+
+## Typical flow: write one file
+
+```python
+c = Job.Add(Command("openssl sha256 -r a"), runlist="w1")
+e = Job.Add(Command("openssl aes-256-cbc ..."), runlist="w1", dependsOn=c)
+w = Job.Add(Command("dd ... of=/dev/nst0"), runlist="w1", tape="drive-id", dependsOn=e)
+Job.Work()
+Job.Wait([w])
 ```
+
+With a thread limit of 2 and four entries A, B (depends on A), C, D, the ticks look like this:
+
+| Tick | Running | Why                                                    |
+|------|---------|--------------------------------------------------------|
+| 1    | A, C    | Both are ready, two slots; B waits for A, D has no slot |
+| 2    | B, C    | A completed, B takes its slot                           |
+| 3    | B, D    | C completed, D takes its slot                           |
+| 4    | D       | B completed                                             |

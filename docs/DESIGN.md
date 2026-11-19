@@ -8,7 +8,6 @@ For the current state of each source file see [SOURCES.md](SOURCES.md).
 
 - The backend is a plain REST server (Flask + Swagger). There is no other interface.
 - Keep it simple: shell out to standard tools, no database, no config file on the server.
-  (A database for the jobs is being considered, see "Todo: a database for the jobs".)
 - **Bring your own security.** The backend speaks HTTP and receives the passphrase in
   clear text. Whoever exposes it beyond a trusted LAN puts HTTPS in front of it.
 - We do what the operator asks for. Many small files are slow on tape; that is the
@@ -131,7 +130,8 @@ the two TOCs disagree about the plan, if the writing job failed, or if a target 
   follows, and finished files wait in the spool until the drive takes them.
 - If a step fails the job is aborted: no further file is written, the trailing TOC is
   written with state `FAILED`, the tape is rewound, it is not ejected.
-- Jobs live in memory. A job that is interrupted by a restart of the backend has failed.
+- Jobs live in memory, there is no database. The backend is restarted only outside of backup
+  jobs; a job that is interrupted by a restart has failed.
 - A write is rejected up front if the files do not fit the native capacity of the tape.
   Nothing is spread over several tapes.
 - Read-back verification after a write is optional and off by default.
@@ -141,6 +141,14 @@ jobs at once, for example one per drive, and the single queue is what keeps the 
 limit. An entry is started when it is ready and resources are free. Resources are used up
 when the number of running commands equals the thread limit, or when the drive an entry
 needs is already busy.
+
+The registry (`Job.queue` and `Job.urgent`) is not archived. A new write or read request replaces the
+registry of the previous one; the frontend archives finished runs if it wants to (the output is verbose
+enough for that).
+
+A queued command has no deadline: a running step is finished or stopped by the operator. Two requests
+are planned for that, **abort** (finish the current step, then end peacefully) and **kill** (terminate),
+both as API requests. Only urgent commands are killed by the system, see "System commands".
 
 The entries of one job share a runlist id. That id is what gets aborted on a failure, and
 what a client polls for progress. Closing steps (trailing TOC, rewind) are marked so they
@@ -208,14 +216,14 @@ There is no second, blocking way to run a phase. The phases are implemented in
   If it cannot be proven that two paths are one drive (no `wwid`, or the same `wwid` with
   a different vendor / model), they are listed as two, with a warning. Showing a drive twice
   is better than not showing it.
-- **The drive decides whether it can take an order.** Before every job step the drive is
-  asked, over SCSI, whether it is able to accept it, and the state machine acts on the
-  answer. That is what keeps a drive that is listed twice (or used by another process) from
-  getting two orders at once; the backend keeps no bookkeeping for it. The steps stay small
-  and atomic for this reason. Open: which query shows reliably that the drive is busy on its
-  other path (TEST UNIT READY, or RESERVE / RELEASE); to be tried on the drive while a write
-  runs. Today `TapeDrive` only looks at the state of its own `Command`, there is no
-  query to the drive yet.
+- **The drive is always mapped by a state machine, and the drive decides whether it can take an
+  order.** Nobody can prevent another process from holding a lock on the drive (or the second path of a
+  drive that is listed twice). Therefore the drive is asked over SCSI for its state before every action,
+  except trivial ones (reading the cartridge memory, a status query), and the state machine acts on the
+  answer. The backend keeps no bookkeeping for it; the steps stay small and atomic for this reason.
+  Not implemented yet. Open: which query shows reliably that the drive is busy on its other path
+  (TEST UNIT READY, or RESERVE / RELEASE); to be tried on the drive while a write runs. Today `TapeDrive`
+  only looks at the state of its own `Command`.
 - A `TapeDrive` does four things, as steps in the Job queue: `Rewind()`, `Eject()`, `Write()` (a
   data stream with `dd`), `Read()` (a data stream with `dd`). Reading also needs seeking, which exists as
   `Space(files)` and `SpaceEnd()` (SCSI SPACE over file marks). Everything else is optional: reading the
@@ -284,53 +292,42 @@ Everything below comes after the milestones and is postponed:
    no zeros are written over the tape. The tape is only registered (fingerprint, version in the
    chip). The old `format` step of the run list is therefore gone for now.
 4. **The REST API** on the new core; then remove `write_folder_to_tape.py` and `read_tape_to_folder.py`.
-5. The drive is asked whether it can take a step before each one (see "Drives").
+5. The drive is asked for its state before each step (see "Drives").
 6. Spool: hold back the encryption while the tape is slower, delete spool files after they were written.
-7. System commands: every command goes through the Job system, see "Todo: system commands".
-8. A database for the jobs, see "Todo: a database for the jobs".
+7. System commands: done, see "System commands". What stays: `Host` (REST layer, still on the old `tbk`) has its own `subprocess.run` calls until it is rebuilt on the new core.
+8. Abort and kill of a running job as API requests (see "Job").
 
-## Todo: system commands
+## System commands
 
-Decided on 2026-11-18, **not implemented**. All commands go through the Job system, so there is one
-place for deadline, kill and log. Small requests (a few random bytes, the size of a file, a SCSI
-query) must not wait for the thread limit and must not block the caller for long, much like the
-deadlines known from real-time systems: the Job system grants such a command direct execution
-because it may kill it once the deadline is over.
+Implemented on 2026-11-19, replacing the plan of 2026-11-18 (`Job.Run()` in the caller's thread, no flag).
+**Only `Job` starts a command**; `Command` describes and observes a process and has no `wait()`.
+There is one place for start, deadline, kill and log.
 
-- New call `Job.Run(cmd, deadlineMs=2000)`. It runs the command at once in the caller's thread,
-  takes no slot of the thread limit, kills it when the deadline is over and returns the finished
-  `Command`. It is not a flag of `Job.Add()`: it must work inside constructors and inside
-  `prepare` hooks, which run under the Job lock, so it never waits for the scheduler and never
-  holds the lock while waiting.
-- The default deadline is **2 s**. Measured: `openssl rand`, `stat`, `findmnt` take 2 to 4 ms and
-  the SCSI queries INQUIRY, MODE SENSE and TEST UNIT READY about 3.5 ms on the idle drive.
-- The deadline is wall-clock time, not CPU time: a command that waits on a hung mount or a busy
-  drive uses almost no CPU and would never be caught. `RLIMIT_CPU` can be a second guard.
-- The folder scan (`find`) is a system job as well, with a deadline of **60 s**.
-- Only small things are system commands. Never rewind, eject, `dd`, checksum or encryption. On a
-  drive only read-only SCSI queries; they may run while the drive works on its queue, which is also
-  the way to ask the drive before a step (see "Drives").
-- **New state:** a command that was killed because the system was not fast enough gets its own
-  state (working name `KILLED`, "deadline exceeded") in the state machine of `Command` / `Job`,
-  distinct from `FAILED` (exit code not 0). Open: whether a runlist treats it like `FAILED`
-  (probably yes).
-- The system commands get a registry of their own, see the next section.
-- Places to convert: `Key` (two `openssl rand`), `File.readSize()` (`stat`), `Mount` (`findmnt`),
-  `Folder` (`find`), `TapeDrive` (INQUIRY, MODE SENSE and its retry), and the TOC encryption, which
-  uses `subprocess.run` because `Command` has no stdin yet. `Command` needs stdin first (the
-  passphrase stays in the environment).
-
-## Todo: a database for the jobs
-
-Not decided, **not implemented**. The jobs (and the system commands) with their metadata are
-stored in an SQL database; the author has nothing against it. Today the jobs live in memory and a
-job that is interrupted by a restart has failed.
-
-- This breaks the principle "no database". If it is adopted, that line changes.
-- Suggestion: SQLite, because it is part of Python and needs no server. To decide: which database,
-  what exactly is stored, how long.
-- What would change: jobs and their history survive a restart, a frontend can list finished jobs,
-  and the system commands get their registry without growing the memory.
-- Never store secrets: the environment of a `Command` (the key of a file) stays out. The command
-  line is fine, it holds the IV but never a key or passphrase.
-
+- `Job.Add(cmd, urgent=True)`: the `Entry` constructor starts the command as its last step
+  (`startAfterCreate`), so there is no wait for the scheduler tick (500 ms). An urgent Entry takes no
+  slot of the thread limit and stands alone: no tape, parent, runlist or `prepare`.
+- `Job.Run(cmd, deadlineMs=2000)` is `Add(urgent=True)` plus the wait. It returns the finished `Command`.
+- Urgent Entries live in their own list (`Job.urgent`), never in the queue, so `Job.Run()` works inside
+  constructors and `prepare` hooks (they run under the Job lock) without a nested scheduler pass. The list
+  keeps the last 200 finished Entries (`Job.URGENT_KEEP`), `Job.Registry()` shows both lists.
+- The deadline is checked by whoever looks at the Entry (`Job.Get()`, `Job.Refresh()`, so also the
+  scheduler thread): SIGTERM, 100 ms later SIGKILL, 100 ms later the Entry is given up. The Entry gets the
+  state `KILLED` (not `FAILED`), `Command.killed` is set and `status_msg` says why. A process in
+  uninterruptible sleep (hung mount, busy drive) survives SIGKILL: `Job` never waits for it.
+  A `KILLED` parent fails its children like a `FAILED` one.
+- Deadlines are wall-clock and conservative: **2 s** by default (measured: `openssl rand`, `stat`,
+  `findmnt` 2 to 4 ms, SCSI queries about 3.5 ms), 60 s for the `find` of a `Folder` and for writing the
+  cartridge memory. The mechanism is not for the regular case: what is needed often belongs in a small
+  list that is built at start and refreshed periodically. A flood of urgent commands is felt by the
+  host; the design accepts that.
+- Only small things are system commands. Never rewind, eject, `dd`, checksum or encryption. On a drive
+  only read-only SCSI queries; they may run while the drive works on its queue, which is also the way to
+  ask the drive before a step (see "Drives").
+- Converted: `Key` (`openssl rand`), `File.readSize()` (`stat`), `Mount` (`findmnt`), `Folder` (`find`),
+  `TapeDrive` (INQUIRY, MODE SENSE), `CartridgeMemory` (read and write).
+- `Command(..., stdin=bytes)`: the TOC goes through `openssl` as stdin, the passphrase as environment.
+  A thread writes the input, so a big input and a big output cannot block each other. The input is
+  released once the process has it and only its size is shown (it holds the keys); without `stdin`
+  the input is `/dev/null`. The TOC encryption is converted (`TableOfContent._openssl`, raw output).
+- `Host.drive_eject()` does not wait for the eject. It answers `202 Issued Eject Command to TapeDrive.`
+  and the drive state shows whether it worked (it still calls the old `tbk` drive; `UT_Host` uses fake drives).

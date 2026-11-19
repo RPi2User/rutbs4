@@ -18,7 +18,7 @@ WriteJob / ReadJob               <- one write / restore request: the whole run l
   ├─ Spool ── Mount              where the encrypted files wait
   ├─ TableOfContent              JSON description, first and last file on tape
   └─ Job                         runs the queued Commands
-All of the above use Command (subprocess wrapper).
+All of the above use Command (subprocess wrapper); only Job starts one.
 ```
 
 There are two generations of code in the repository:
@@ -49,13 +49,17 @@ The backend version in one place. `Version.text()` → `"4.0.0"`, `Version.word(
 
 Wrapper around one shell command (`subprocess.Popen`, `shell=True`). Base of everything else.
 
-- `Command(cmd, filesize=-1, raw=False, env=None)` — does not start anything.
+- `Command(cmd, filesize=-1, raw=False, env=None, stdin=None)` — does not start anything.
 - `env` adds environment variables. Use it for secrets: they do not appear in `ps` or in
   `_asdict()`.
 - `Command.quote(path)` wraps a path in single quotes; use it for every path in a command.
-- `start()` runs it in the background, `wait(timeout=0)` blocks (starts it if needed;
-  timeout in units of 10 ms, 0 = wait forever), `kill()` sends SIGTERM,
-  `reset()` makes the object reusable, `status()` refreshes all fields.
+- `stdin` (bytes) is written to the standard input by a thread and released once the process has
+  it, so a second run needs a new `Command`; only its size (`stdinSize`) is shown. Without `stdin`
+  the input is `/dev/null`.
+- `start()` runs it in the background, but only `Job` calls it. There is no `wait()`: use
+  `Job.Add()` or `Job.Run()`. `kill()` sends SIGTERM, 100 ms later SIGKILL, then gives up
+  (`killed` is set by `Job` when a deadline was missed). `reset()` clears the results,
+  `status()` refreshes all fields.
 - Results: `stdout` / `stderr` (list of lines), `exitCode` (`-1` = not finished), `running`,
   `didRun`.
 - `raw=True` stores the output as one hex string in `stdout[0]`. Output that is not valid
@@ -74,7 +78,7 @@ Checksum of one file via `openssl <md5|sha256|sha512> -r`.
 
 - `Checksum(file_path, type=SHA256)`, `setType(type)`.
 - `create()` prepares a new calculation, `validate(target)` prepares a comparison against a
-  known value, `wait()` runs it and stores the result in `value`. Each builds a new
+  known value; `Job` runs it and `_status()` stores the result in `value`. Each builds a new
   `Command`, so the type can be changed at any time and the Job queue never sees the same
   object twice.
 - States (`ChecksumState`): `IDLE`, `CREATE`, `VALIDATE`, `MISMATCH`, `ERROR`.
@@ -90,7 +94,7 @@ Notes:
 File encryption via `openssl aes-{128,256}-{cbc,ctr} -pbkdf2`.
 
 - `Key(length=KeyLength.medium)` generates a random key and IV with `openssl rand`
-  (blocking, two subprocesses). Both are hex strings in `value` / `iv`.
+  (two urgent Job entries, `Job.Run`). Both are hex strings in `value` / `iv`.
 - `Encryption(key, mode=E_Mode.AES256CBC)`.
 - `encrypt(path, target="")` prepares `path` → `target`, by default `path + ".crypt"`;
   `decrypt(path, target="")` prepares the reverse (by default it strips the last extension).
@@ -175,13 +179,15 @@ thread limit.
   itself), `Job.Get(id)`, `Job.Registry()`, `Job.Flush(killRunning=True)`.
 - Entry states: `WAITING_FOR_PARENT → READY4EXEC → RUNNING → COMPLETED | FAILED`.
   A failed parent fails all of its children.
+- `Job.Add(cmd, urgent=True, deadlineMs=2000)` / `Job.Run(cmd, deadlineMs)` start a system command at once,
+  outside the queue and the thread limit; a late one is killed (state `KILLED`). They live in `Job.urgent`.
 - Scheduling: a tape device runs one entry at a time, strictly in the order of `Add()`.
   Everything else is limited by `Job.limit` (default: CPU count). Priority: tape entries,
   then entries that lead to a tape entry, then the rest.
 
 Notes:
-- Finished entries stay in the queue until `Flush()` is called.
-- The class docstring is accurate and more detailed than this section.
+- Finished entries stay in the queue until `Flush()` is called (a new write or read request replaces the registry).
+- [JOB.MD](JOB.MD) tells the whole story; this section is the short version.
 
 ### Tape.py
 
