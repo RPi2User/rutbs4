@@ -24,6 +24,8 @@ class UT_WriteJob(unittest.TestCase):
         - D: requests that are refused up front
         - E: the drive idles until every checksum is known; both TOCs are equivalent (checksums included)
         - F: a file that cannot be read: the tape is not touched at all, no TOC is written
+        - G: no passphrase needs unencrypted=True, and unencrypted excludes a passphrase
+        - H: unencrypted: plain files on the tape, plain TOC without keys, no spool
     The fake tape is truncated by every write, so only the last tape file (the last TOC) is left on it.
     Depdencies:
     - openssl, /mnt/daten as a mount point (spool)
@@ -217,6 +219,46 @@ class UT_WriteJob(unittest.TestCase):
             self.assertEqual(os.listdir(tocDir), [])
             self.assertFalse(os.path.exists(job.spool.path))
         print("F_TAPE_UNTOUCHED")
+
+    def test_G_passphraseRules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            src: str = self._input(tmp)
+            td: TapeDrive = self._drive(tmp)
+
+            with self.assertRaisesRegex(ValueError, "Passphrase for encryption required"):
+                WriteJob(src, td, "", self.MOUNT)
+            with self.assertRaises(ValueError):                                     # both at once
+                WriteJob(src, td, self.PASSPHRASE, self.MOUNT, unencrypted=True)
+            with self.assertRaises(ValueError):                                     # NONE is what unencrypted is for
+                WriteJob(src, td, self.PASSPHRASE, self.MOUNT, encryption=E_Mode.NONE)
+            WriteJob(src, td, "", self.MOUNT, unencrypted=True)                     # fine
+        print("G_PASSPHRASE_RULES")
+
+    def test_H_unencrypted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            td: TapeDrive = self._drive(tmp)
+            src: str = self._input(tmp)
+            job: WriteJob = WriteJob(src, td, "", self.MOUNT, unencrypted=True)
+            job.queue()
+            self.assertTrue(job.wait(60))
+            self.assertEqual(job.state, "COMPLETED", str(job))
+
+            commands: list = self._tapeCommands(job)
+            self.assertEqual(len(commands), 7)
+            self.assertTrue(all(".crypt" not in c for c in commands))               # the originals go to the tape
+            self.assertIn(os.path.join(src, "a.bin"), commands[2])
+
+            with open(td.path) as f:
+                text: str = f.read()
+            last: dict = TableOfContent.open(text)                                  # no passphrase
+            self.assertEqual(last["header"]["body_cipher"], "NONE")
+            self.assertEqual(last["header"]["state"], "COMPLETE")
+            files: list = last["body"]["folder"]["files"]
+            self.assertEqual([f["encryption"]["mode"] for f in files], ["NONE"] * 3)
+            self.assertTrue(all(f["encryption"]["key"]["value"] == "" for f in files))
+            self.assertEqual(os.listdir(src).count("a.bin"), 1)                     # nothing was added next to the originals
+            self.assertFalse(any(n.endswith(".crypt") for n in os.listdir(src)))
+        print("H_UNENCRYPTED")
 
 
 if __name__ == "__main__":

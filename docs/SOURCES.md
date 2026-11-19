@@ -242,9 +242,12 @@ passphrase of the tape (`openssl aes-256-ctr -pbkdf2`).
 - `TableOfContent(folder, header)` — `folder` is the one `Folder` of the request.
 - `seal(passphrase)` → the JSON text to put on tape; `store(directory)` keeps a copy as
   `YYYYMMDD_hhmmss_<fingerprint>.json`.
+- `removeEncryption()` — the unencrypted request: `body_cipher` and the mode of every file become
+  NONE, the keys are dropped. Before the job is queued and before the first `seal()`. A plain TOC
+  is sealed without passphrase (`seal()` refuses one) and its body is the JSON object, not base64.
 - `TableOfContent.readHeader(text)` needs no passphrase; `TableOfContent.open(text,
   passphrase)` returns `{"header", "body"}` as dicts, `TOC_WrongPassphrase` if the body
-  does not decrypt to JSON.
+  does not decrypt to JSON. A plain TOC needs no passphrase.
 
 Notes:
 - `_asdict()` is the whole TOC in clear text including keys. Tests and debugging only.
@@ -313,7 +316,10 @@ print(job)       # state and the state of every file
 ```
 
 - `WriteJob(inputDir, tapeDrive, passphrase, spoolMount, tocDir="", checksum=SHA256,
-  encryption=AES256CBC, eject=False)`.
+  encryption=AES256CBC, eject=False, unencrypted=False)`.
+- No passphrase is refused ("Passphrase for encryption required") unless `unencrypted=True`; then
+  the TOC removes all encryption and a passphrase is refused as well (they exclude each other).
+  `encryption=NONE` without `unencrypted` is refused too.
 - The drive idles until every checksum is known (a barrier entry waits for them, the rewind depends on
   it). The first TOC is sealed by a `prepare` hook right before it is written (state IDLE, all
   checksums inside). The last TOC is made the same way after the files, with the results; its state

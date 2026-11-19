@@ -139,6 +139,18 @@ class UT_Encryption(unittest.TestCase):
         self._roundtrip(self._file(E_Mode.AES256CTR, self.KEY_SHORT, self.IV, KeyLength.short))
         print("BD_AES256CTR")
 
+    def test_BE_none(self) -> None:
+        # NONE is a no-op: no command, no file, the state stays IDLE
+        scheme: Encryption = Encryption(Key(empty=True), E_Mode.NONE)
+        scheme.encrypt(self.PATH)
+        scheme.decrypt(self.PATH + ".crypt")
+        self.assertEqual((scheme.state, scheme.targetPath, scheme.cmd.didRun), (E_State.IDLE, "", False))
+        self.assertFalse(os.path.exists(self.PATH + ".crypt"))
+        self.assertEqual((scheme.key.value, scheme.key.iv), ("", ""))
+
+        self._roundtrip(self._file(E_Mode.NONE, self.KEY_SHORT, self.IV, KeyLength.short))
+        print("BE_NONE")
+
     def test_CA_ALL_MEDIUM(self) -> None:
         for scheme in E_Mode:
             self._roundtrip(self._file(scheme, self.KEY_MEDIUM, self.IV, KeyLength.medium))

@@ -11,9 +11,18 @@ class KeyLength(Enum):
 
 class Key:
 
-    def __init__(self, length: KeyLength = KeyLength.medium, value: str = "", iv: str = ""):
-        """Without `value` and `iv` a new random pair is made. With them it is a key read back from a TOC."""
+    def __init__(self, length: KeyLength = KeyLength.medium, value: str = "", iv: str = "", empty: bool = False):
+        """
+        Without `value` and `iv` a new random pair is made. With them it is a key read back from a TOC.
+        `empty=True` is no key at all, for files that are not encrypted.
+        """
         self.length: KeyLength = length
+
+        if empty:
+            self.cmd = Command("")
+            self.value: str = ""
+            self.iv: str = ""
+            return
 
         if value:
             self.cmd = Command("")      # nothing was run, the pair comes from the TOC
@@ -58,7 +67,7 @@ class E_State(Enum):
     ERROR = 3
 
 class E_Mode(Enum):
-    NONE = 0        # TODO Implement UnitTest for this option (so nothing breaks >.<)
+    NONE = 0        # nothing is encrypted, encrypt() and decrypt() do nothing
     AES128CBC = 1
     AES256CBC = 2
     AES128CTR = 3

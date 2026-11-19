@@ -38,9 +38,6 @@ class TOC_Header:
 
     def __init__(self, tapeDrive: TapeDrive, threadCount: int, fingerprint: str = "",
                  bodyCipher: E_Mode = E_Mode.AES256CTR):
-        if bodyCipher == E_Mode.NONE:
-            raise ValueError("The TOC body must be encrypted")
-
         self.version: int = Version.word()
         self.fingerprint: str = fingerprint or str(uuid.uuid4())
         self.state: TOC_State = TOC_State.IDLE
@@ -91,12 +88,17 @@ class TableOfContent:
         file, and is encrypted with the passphrase of the tape. A wrong passphrase shows as
         a body that is not valid JSON.
 
+        After `removeEncryption()` the TOC is plain: `body_cipher` is NONE, the body is the JSON
+        object itself, the files have no key, and no passphrase is needed to seal or open it.
+        Anybody holding the tape can then read the file names, paths and checksums.
+
         | `TableOfContent.`           | Description                                          |
         |-----------------------------|------------------------------------------------------|
+        | `removeEncryption()`        | Makes the TOC and all its files plain, before the first `seal()` |
         | `seal(passphrase)`          | Returns the JSON document, remembers it in `sealed`  |
         | `store(directory)`          | Writes `sealed` to YYYYMMDD_hhmmss_<fingerprint>.json |
         | `TableOfContent.readHeader(text)` | Header only, no passphrase needed              |
-        | `TableOfContent.open(text, passphrase)` | Header and body as dicts                 |
+        | `TableOfContent.open(text, passphrase="")` | Header and body as dicts              |
         | `TableOfContent.differences(first, last)` | What the plan of the first and the last TOC disagrees on |
 
         The first TOC is sealed with state IDLE when the checksums are known and before the first file
@@ -109,6 +111,17 @@ class TableOfContent:
         self.folder: Folder = folder    # all files below the input directory, in tape order
         self.header: TOC_Header = header
         self.sealed: str = ""
+
+    def removeEncryption(self) -> None:
+        """
+        The unencrypted request: the body cipher and the encryption of every file become NONE,
+        the keys are dropped. Has to run before the job is queued (the queue decides which phases
+        a file needs) and before the first seal().
+        """
+        if self.sealed:
+            raise RuntimeError("The TOC is sealed already")
+        self.header.bodyCipher = E_Mode.NONE
+        self.folder.removeEncryption()
 
     def _body(self) -> dict:
         return {"folder": self.folder._asdict()}
@@ -134,7 +147,13 @@ class TableOfContent:
         return result.stdout
 
     # WRITE
-    def seal(self, passphrase: str) -> str:
+    def seal(self, passphrase: str = "") -> str:
+        if self.header.bodyCipher is E_Mode.NONE:
+            if passphrase:
+                raise ValueError("A plain TOC takes no passphrase")
+            self.sealed = json.dumps({"header": self.header._asdict(), "body": self._body()}, indent=2)
+            return self.sealed
+
         if not passphrase:
             raise ValueError("A passphrase is required to seal the TOC")
 
@@ -164,10 +183,15 @@ class TableOfContent:
         return document["header"]
 
     @staticmethod
-    def open(text: str, passphrase: str) -> dict:
-        """Returns {"header": {...}, "body": {...}}. Raises TOC_WrongPassphrase if the body cannot be read."""
+    def open(text: str, passphrase: str = "") -> dict:
+        """
+        Returns {"header": {...}, "body": {...}}. Raises TOC_WrongPassphrase if the body cannot be read.
+        A plain TOC (body_cipher NONE) needs no passphrase, a given one is ignored.
+        """
         header: dict = TableOfContent.readHeader(text)
         mode: E_Mode = E_Mode[header["body_cipher"]]
+        if mode is E_Mode.NONE:
+            return {"header": header, "body": json.loads(text)["body"]}
         try:
             plain: bytes = TableOfContent._openssl(mode, True, passphrase, json.loads(text)["body"].encode())
             return {"header": header, "body": json.loads(plain)}

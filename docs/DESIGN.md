@@ -83,6 +83,11 @@ the job; for every file it shows which step failed and why. Its size does not ma
 - `id` of a file is its tape file number.
 - The first TOC is made when all checksums are known and before the first file is written, the
   trailing one after everything ran.
+- **Unencrypted request** (`unencrypted=true`, only without a passphrase): the TOC removes all
+  encryption (`removeEncryption()`), so `body_cipher` is `NONE`, the body is plain JSON, the files
+  have mode `NONE` and no key. The tape then holds the original files and a readable TOC (file names,
+  paths, checksums). A request without passphrase and without `unencrypted` is refused with
+  "Passphrase for encryption required"; passphrase and `unencrypted` together are refused as well.
 - Key hierarchy: passphrase (from the API request) → TOC body → key and IV of each file.
   Every file has its own pair; all pairs are protected by the passphrase alone.
   A wrong passphrase shows as a body that is not valid JSON.

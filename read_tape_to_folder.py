@@ -54,8 +54,9 @@ def main() -> int:
           f"first TOC {first['state']}, last TOC {last['state'] if last else 'MISSING'}")
 
     given = os.environ.get("RUTBS_PASSPHRASE")
-    for attempt in range(1 if given else 3):
-        passphrase = given or getpass.getpass("Passphrase for this tape: ")
+    plain = first["body_cipher"] == "NONE"      # nothing to ask for
+    for attempt in range(1 if given or plain else 3):
+        passphrase = "" if plain else given or getpass.getpass("Passphrase for this tape: ")
         try:
             job.queue(passphrase)
             break

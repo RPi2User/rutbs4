@@ -33,7 +33,7 @@ class ReadJob:
     | `ReadJob.`         | Description                                                          |
     |--------------------|----------------------------------------------------------------------|
     | `open()`           | Reads both TOCs from the tape, returns their headers (no passphrase) |
-    | `queue(passphrase)`| Opens and compares the TOCs, queues the restore, returns the ids     |
+    | `queue(passphrase)`| Opens and compares the TOCs, queues the restore, returns the ids (a plain tape needs no passphrase) |
     | `wait(timeout)`    | Blocks until everything is finished, False on timeout                |
     | `state`            | `NEW`, `OPEN`, `RUNNING`, `COMPLETED` or `FAILED`                    |
     | `messages`         | warnings, for example that the last TOC came from the TOC directory  |
@@ -159,7 +159,7 @@ class ReadJob:
         if any(e["encryption"]["mode"] != E_Mode.NONE.name for e in entries) and total > self.spool.mount.avail:
             raise ValueError("The spool mount has " + str(self.spool.mount.avail) + " bytes free, the files are " + str(total) + " bytes")
 
-    def queue(self, passphrase: str) -> List[str]:
+    def queue(self, passphrase: str = "") -> List[str]:
         if self.entries:
             raise RuntimeError("This job is queued already")
         if not self._opened:

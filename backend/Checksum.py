@@ -13,7 +13,7 @@ class ChecksumState(Enum):
 class ChecksumType(Enum):
     MD5 = 1
     SHA256 = 2
-    SHA512 = 3 # TODO Unit_Test!
+    SHA512 = 3
     NONE = 99
 
 class Checksum:

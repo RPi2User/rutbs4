@@ -29,7 +29,7 @@ class WriteJob:
     failure no further file is written, but the last TOC and the rewind still run. The eject only
     runs if the job succeeded and `eject=True`, it is off by default.
 
-        >>> job = WriteJob("/data/in", td, "passphrase", "/stornvme")
+        >>> job = WriteJob("/data/in", td, "passphrase", "/path/to/storage")
         >>> job.queue()
         >>> job.wait()
         >>> print(job)
@@ -45,11 +45,23 @@ class WriteJob:
     protected, the files do not fit the native capacity of the tape, or the spool mount has less
     free space than the input (the spool holds all encrypted files until the end).
     `tocDir` is where a copy of the last TOC is kept (optional).
+
+    Without a passphrase the request is refused ("Passphrase for encryption required"), unless
+    `unencrypted=True`: then the TOC removes all encryption (see `TableOfContent.removeEncryption()`),
+    nothing is encrypted and the TOC is not sealed. `unencrypted` and a passphrase exclude each
+    other, `encryption` is ignored with `unencrypted`.
     """
 
     def __init__(self, inputDir: str, tapeDrive: TapeDrive, passphrase: str, spoolMount: str, tocDir: str = "",
                  checksum: ChecksumType = ChecksumType.SHA256, encryption: E_Mode = E_Mode.AES256CBC,
-                 eject: bool = False):
+                 eject: bool = False, unencrypted: bool = False):
+        if unencrypted and passphrase:
+            raise ValueError("A passphrase and unencrypted exclude each other")
+        if not unencrypted and not passphrase:
+            raise ValueError("Passphrase for encryption required")
+        if not unencrypted and encryption is E_Mode.NONE:
+            raise ValueError("No encryption needs unencrypted=True")
+
         self.drive: TapeDrive = tapeDrive
         self.passphrase: str = passphrase
         self.tocDir: str = tocDir
@@ -60,6 +72,8 @@ class WriteJob:
 
         self.folder: Folder = Folder(inputDir, checksum, encryption)
         self.toc: TableOfContent = TableOfContent(self.folder, TOC_Header(tapeDrive, Job.limit))
+        if unencrypted:
+            self.toc.removeEncryption()
         self.spool: Spool = Spool(spoolMount, self.toc.header.fingerprint)
 
     def _check(self) -> None:

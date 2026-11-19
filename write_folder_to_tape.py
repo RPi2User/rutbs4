@@ -2,7 +2,7 @@
 """
 Write a folder to tape: one WriteJob (every file checksummed, rewind, first TOC, every file encrypted with
 its own key and written, last TOC, rewind). The passphrase comes from RUTBS_PASSPHRASE or is
-asked for. The tape is NOT ejected unless --eject is given.
+asked for; with --encryption none there is no passphrase and the TOC is plain. The tape is NOT ejected unless --eject is given.
 
 Example (real LTO drive, the first drive found):
     RUTBS_PASSPHRASE=... python3 write_folder_to_tape.py --dir /path/to/folder --spool /stornvme
@@ -60,7 +60,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    passphrase = os.environ.get("RUTBS_PASSPHRASE") or getpass.getpass("Passphrase for this tape: ")
+    unencrypted = args.encryption == "none"
+    passphrase = "" if unencrypted else os.environ.get("RUTBS_PASSPHRASE") or getpass.getpass("Passphrase for this tape: ")
     Job.limit = args.threads
 
     if args.tape:
@@ -80,7 +81,8 @@ def main() -> int:
 
     try:
         job = WriteJob(args.dir, td, passphrase, args.spool, tocDir=args.toc_dir,
-                       checksum=CHECKSUM_MAP[args.checksum], encryption=ENCRYPTION_MAP[args.encryption], eject=args.eject)
+                       checksum=CHECKSUM_MAP[args.checksum], encryption=ENCRYPTION_MAP[args.encryption], eject=args.eject,
+                       unencrypted=unencrypted)
         job.queue()
     except ValueError as e:
         print(f"[ERROR] {e}", file=sys.stderr)

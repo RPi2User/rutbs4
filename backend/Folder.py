@@ -3,7 +3,7 @@ import os
 from enum import Enum
 from typing import List
 
-from backend.Encryption import E_Mode
+from backend.Encryption import E_Mode, Encryption, Key
 from backend.File import File
 from backend.Command import Command
 from backend.Checksum import ChecksumType
@@ -38,7 +38,7 @@ class Folder:
             self.files.append(file)
 
     # Both are decided with the request and cannot be changed afterwards: assigning raises AttributeError.
-    # To change them, create a new Folder.
+    # To change them, create a new Folder. The one exception is removeEncryption(), see TableOfContent.
     @property
     def checksumType(self) -> ChecksumType:
         return self._checksumType
@@ -46,6 +46,12 @@ class Folder:
     @property
     def encMode(self) -> E_Mode:
         return self._encMode
+
+    def removeEncryption(self) -> None:
+        """Every File becomes a plain one: mode NONE and no key. Only before anything is queued."""
+        self._encMode = E_Mode.NONE
+        for file in self.files:
+            file.encryption_scheme = Encryption(Key(empty=True), E_Mode.NONE)
 
     def queueChecksums(self, runlist: str = "") -> List[str]:
         """Queues the checksum of every File and returns the entry ids (in the order of the Files)."""

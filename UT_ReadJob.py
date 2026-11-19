@@ -113,6 +113,17 @@ class UT_ReadJob(unittest.TestCase):
             self.assertEqual(bad.state, FileState.MISMATCH)
         print("B_RESTORE_FROM_ENTRY")
 
+    def test_BB_restorePlainEntry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            first, last, folder = self._tocs(tmp)
+            entry: dict = copy.deepcopy(last["body"]["folder"]["files"][0])
+            entry["encryption"] = {"mode": "NONE", "key": {"length": "medium", "value": "", "iv": ""}}
+
+            f: File = File.Restore(entry, os.path.join(tmp, "out"))      # an empty value must not become a random key
+            self.assertEqual((f.encryption_scheme.mode, f.encryption_scheme.key.value, f.encryption_scheme.key.iv), (E_Mode.NONE, "", ""))
+            self.assertEqual(f.Decrypt(f.path.path, dependsOn="x"), "x")     # nothing to do
+        print("BB_RESTORE_PLAIN_ENTRY")
+
     def test_C_differences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             first, last, _ = self._tocs(tmp)

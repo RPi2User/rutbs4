@@ -163,7 +163,8 @@ class File:
         file._cksum.cmd.filesize = file.size
 
         key: dict = entry["encryption"]["key"]
-        file._encryption = Encryption(Key(KeyLength[key["length"]], key["value"], key["iv"]), E_Mode[entry["encryption"]["mode"]])
+        mode: E_Mode = E_Mode[entry["encryption"]["mode"]]
+        file._encryption = Encryption(Key(empty=True) if mode is E_Mode.NONE else Key(KeyLength[key["length"]], key["value"], key["iv"]), mode)
         return file
 
     @property

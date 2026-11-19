@@ -23,6 +23,7 @@ class UT_TableOfContent(unittest.TestCase):
         - C:     wrong passphrase, empty passphrase, foreign document
         - D:     header is readable without passphrase, state can change for the trailing TOC
         - E:     TOC directory
+        - F:     removeEncryption(): a plain TOC without keys, no passphrase to seal or to open
     Depdencies:
     - openssl
     """
@@ -63,8 +64,7 @@ class UT_TableOfContent(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             td: TapeDrive = self._drive(tmp)
             self.assertEqual(TOC_Header(td, 1, fingerprint="abc").fingerprint, "abc")
-            with self.assertRaises(ValueError):
-                TOC_Header(td, 1, bodyCipher=E_Mode.NONE)
+            self.assertEqual(TOC_Header(td, 1, bodyCipher=E_Mode.NONE).bodyCipher, E_Mode.NONE)
 
     def test_B_roundTrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,6 +126,34 @@ class UT_TableOfContent(unittest.TestCase):
             with open(path) as f:
                 stored: dict = TableOfContent.open(f.read(), self.PASSPHRASE)
             self.assertEqual(stored["header"]["fingerprint"], toc.header.fingerprint)
+
+    def test_F_removeEncryption(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            toc: TableOfContent = self._toc(tmp)
+            toc.removeEncryption()
+
+            self.assertEqual(toc.folder.encMode, E_Mode.NONE)
+            self.assertTrue(all(f.encryption_scheme.mode is E_Mode.NONE for f in toc.folder.files))
+
+            with self.assertRaises(ValueError):
+                toc.seal(self.PASSPHRASE)           # a plain TOC has no passphrase
+            text: str = toc.seal()
+
+            document: dict = json.loads(text)
+            self.assertEqual(document["header"]["body_cipher"], "NONE")
+            self.assertIsInstance(document["body"], dict)       # the JSON itself, not base64
+            self.assertIn("a.txt", text)
+
+            for passphrase in ["", "ignored"]:
+                opened: dict = TableOfContent.open(text, passphrase)
+                files: list = opened["body"]["folder"]["files"]
+                self.assertEqual(opened["body"]["folder"]["encryption_type"], "NONE")
+                self.assertEqual([f["encryption"]["mode"] for f in files], ["NONE"] * 3)
+                self.assertEqual([(f["encryption"]["key"]["value"], f["encryption"]["key"]["iv"]) for f in files], [("", "")] * 3)
+
+            with self.assertRaises(RuntimeError):   # too late, the first TOC is out
+                toc.removeEncryption()
+        print("F_REMOVE_ENCRYPTION")
 
 
 if __name__ == "__main__":
