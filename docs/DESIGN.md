@@ -240,8 +240,16 @@ There is no second, blocking way to run a phase. The phases are implemented in
   does not use `mt`; the operator may. Horizon: a Python SCSI library instead of `sg_raw`.
 - Position: the backend only knows "at begin of tape" or "not". It rewinds itself before
   it starts a job.
-- Block size belongs to the tape and is stored in the TOC header. Default `256K`.
-  A benchmark that helps the operator choose is planned.
+- Block size belongs to the tape and is stored in the TOC header. Default `256K`. Reading does not depend on it
+  (`Read()` uses an 8 MiB buffer and gets each block as it was written), only writing does.
+- **Block size benchmark (decided 2026-11-19, not implemented):** it is part of the backend, not a script for the
+  operator, and the result is kept in the cartridge memory of the tape, so it is measured once. It is a separate
+  request, never a side effect of registering: it **writes test data over the tape from its begin** and must be
+  refused for a tape that holds data (a registered tape with a TOC) unless the operator says so. Sketch: per
+  candidate (64K to 4M) rewind, `dd` a fixed amount of incompressible data (a cipher stream, not zeros: the drive
+  compresses), take the speed `dd` reports, then pick the smallest size within about 5 % of the best. Proposal for
+  the chip: `0x080B` application format version (16 ASCII), e.g. `bs=262144`; to be checked on the drive. The
+  value is a hint (drive, host and source disk decide the speed more than the cartridge), the operator can measure again.
 
 ## Host and REST API
 
@@ -298,6 +306,7 @@ Everything below comes after the milestones and is postponed:
 6. Spool: hold back the encryption while the tape is slower, delete spool files after they were written.
 7. System commands: done, see "System commands". What stays: `Host` (REST layer, still on the old `tbk`) has its own `subprocess.run` calls until it is rebuilt on the new core.
 8. Abort and kill of a running job as API requests (see "Job").
+9. Block size benchmark, result in the cartridge memory (see "Drives").
 
 ## System commands
 
