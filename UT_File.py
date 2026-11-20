@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 # Module imports
-from backend.Checksum import Checksum, ChecksumState, ChecksumType
+from backend.Checksum import Checksum, ChecksumType
 from backend.Command import Command
 from backend.Encryption import E_Mode
 from backend.File import File, FileState, FilePath
@@ -107,7 +107,6 @@ class UT_File(unittest.TestCase):
 
         try:
             f.remove()
-            #str(f)      # TODO Currently deletion is blocking so an external refresh was necessary
 
             self.assertEqual(f.size, -1)
             self.assertEqual(f.state, FileState.REMOVED)

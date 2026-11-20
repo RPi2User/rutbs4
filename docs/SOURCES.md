@@ -26,7 +26,7 @@ There are two generations of code in the repository:
 | Status | Files |
 |--------|-------|
 | **Current**, importable, unit tests pass | `Version`, `Command`, `Checksum`, `Encryption`, `File`, `Folder`, `Spool`, `Mount`, `Job`, `Tape`, `TapeDrive`, `TD_Pool`, `TableOfContent`, `WriteJob`, `ReadJob`, `write_folder_to_tape.py`, `read_tape_to_folder.py` |
-| **To be ported**, not importable | `Host`, `rbs_backend.py` — the REST layer. Still written against the package `tbk`, which no longer exists (renamed to `_old_tbk/`, git-ignored). `Response` belongs to it. |
+| **To be ported**, not importable | `Host`, `rbs_backend.py` — the REST layer. Still written against the package `tbk`, which no longer exists. `Response` belongs to it. |
 
 Conventions used by all current classes:
 

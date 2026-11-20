@@ -69,7 +69,7 @@ class UT_Command(unittest.TestCase):
         self.assertEqual(c.stderr, [])
         self.assertEqual(c.filesize, -1)
         self.assertEqual(c.io, [])
-        self.assertEqual(c.exitCode, -1) # TODO Add new vars!
+        self.assertEqual(c.exitCode, -1)
 
         try:
             c.start()

@@ -1,6 +1,5 @@
 import json
 import os
-from enum import Enum
 from typing import List
 
 from backend.Encryption import E_Mode, Encryption, Key

@@ -1,7 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import uuid
 import json
-import os
 import time
 import subprocess
 import re
@@ -12,9 +10,7 @@ from backend.Response import Response
 from backend.Command import Command
 
 from backend.Mount import Mount
-from tbk.TDv2 import TapeDrive
-from tbk.TableOfContent import TableOfContent
-from backend.File import File
+from backend.TapeDrive import TapeDrive
 
 DEBUG: bool = False
 VERSION: str = "4.0.0"

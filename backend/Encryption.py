@@ -1,5 +1,4 @@
 import json
-from typing import List
 from enum import Enum
 
 from backend.Command import Command

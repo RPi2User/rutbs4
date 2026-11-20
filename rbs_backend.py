@@ -4,15 +4,7 @@ import time
 from flask import Flask, request
 from flasgger import Swagger # type: ignore
 
-from backend.File import File
-from tbk.TableOfContent import TableOfContent
-
-from tbk.TDv2 import TapeDrive
-
 from backend.Host import Host
-from tbk.Status import Status
-
-from Debugger import Debugger
 
 VERSION = "4.0.0"
 DEBUG = False
@@ -50,7 +42,7 @@ def get_host():
     """
     return '', 200
 
-@app.route('/host/threadlimit/<int:count>', methods=['POST']) # TODO: Documentation
+@app.route('/host/threadlimit/<int:count>', methods=['POST'])
 def post_host_threadlimit(count: int):
     """
     Get heartbeat
