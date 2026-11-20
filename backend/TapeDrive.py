@@ -158,7 +158,7 @@ class TapeDrive:
 
     | `TapeDrive.`                  | SCSI / tool                                                     |
     |-------------------------------|-----------------------------------------------------------------|
-    | `Rewind()`                    | `sg_raw <sg> 0x01 0 0 0 0 0` (REWIND)                           |
+    | `Rewind()`                    | `sg_raw -t 900 <sg> 0x01 0 0 0 0 0` (REWIND)                    |
     | `Eject()`                     | `sg_raw <sg> 0x1B 0 0 0 0 0` (LOAD/UNLOAD). Never part of a test. |
     | `Write(source)`               | `dd if=<source> of=<nst>`: one tape file                        |
     | `Read(target)`                | `dd if=<nst> of=<target>`: the next tape file                   |
@@ -225,6 +225,8 @@ class TapeDrive:
     error: str = ""                 # why INQUIRY failed, "" if it did not
 
     SYSFS: str = "/sys/class/scsi_generic"
+    LONG_TIMEOUT: int = 900         # seconds for sg_raw on REWIND, SPACE, LOAD/UNLOAD; its default is 20 s, and the
+                                    # kernel aborts a rewind from the end of a full tape after that (seen 2026-11-20)
     READ_BLOCK: str = "8M"          # the drive hands out each block as it was written, up to its limit of 8 MiB
 
     @staticmethod
@@ -270,11 +272,11 @@ class TapeDrive:
     # === THE FOUR STEPS ======================================================
 
     def Rewind(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        cmd: Command = self._like(self.rewindCommand) or Command("sg_raw " + Command.quote(self.generic_path) + " 0x01 0 0 0 0 0")
+        cmd: Command = self._like(self.rewindCommand) or Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x01 0 0 0 0 0")
         return self._queue(TD_State.REWIND, cmd, runlist, dependsOn, always, prepare)
 
     def Eject(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        cmd: Command = self._like(self.ejectCommand) or Command("sg_raw " + Command.quote(self.generic_path) + " 0x1B 0 0 0 0 0")
+        cmd: Command = self._like(self.ejectCommand) or Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x1B 0 0 0 0 0")
         return self._queue(TD_State.EJECT, cmd, runlist, dependsOn, always, prepare)
 
     def Write(self, source: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
@@ -311,13 +313,13 @@ class TapeDrive:
         if not -0x800000 <= files < 0x800000:
             raise ValueError("Cannot space over " + str(files) + " file marks")
         count: int = files & 0xFFFFFF
-        cmd: Command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x11 0x01 " +
+        cmd: Command = Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x11 0x01 " +
                                " ".join("0x%02x" % b for b in (count >> 16, count >> 8 & 0xFF, count & 0xFF)) + " 0")
         return self._queue(TD_State.SPACE, cmd, runlist, dependsOn, always, prepare)
 
     def SpaceEnd(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
         """SPACE to the end of the recorded data. Positioned there, do not read: go back with Space(-n) first."""
-        cmd: Command = Command("sg_raw " + Command.quote(self.generic_path) + " 0x11 0x03 0 0 0 0")
+        cmd: Command = Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x11 0x03 0 0 0 0")
         return self._queue(TD_State.SPACE, cmd, runlist, dependsOn, always, prepare)
 
     # === STATE ===============================================================

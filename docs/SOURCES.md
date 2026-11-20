@@ -234,6 +234,9 @@ Notes:
   of the data makes the kernel driver answer every later read with an I/O error, even after
   `Rewind()`, until the driver itself is repositioned (`mt rewind`, by the operator).
 - Whether the drive can take a step is not asked before it yet (see DESIGN.md).
+- Rewind, Space and Eject run `sg_raw -t 900`: `sg_raw` waits 20 s by default and the kernel aborts a rewind
+  from the end of a full tape after that (seen 2026-11-20: the closing rewind of a 214 GB write failed, the job said FAILED
+  although the data was on the tape).
 - A regular file as tape is truncated by every `Write()`.
 - `Eject()` exists and is never part of a test run on the real drive.
 

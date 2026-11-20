@@ -41,14 +41,14 @@ class UT_TapeDrive(unittest.TestCase):
         td.Read("/out/toc", count=4096); td.Space(1); td.Space(-2); td.SpaceEnd()
         commands: list = [Job.Get(e).command.cmd for _, e in td.entries]
 
-        self.assertEqual(commands[0], "sg_raw '/dev/sg12' 0x01 0 0 0 0 0")
-        self.assertEqual(commands[1], "sg_raw '/dev/sg12' 0x1B 0 0 0 0 0")
+        self.assertEqual(commands[0], "sg_raw -t 900 '/dev/sg12' 0x01 0 0 0 0 0")
+        self.assertEqual(commands[1], "sg_raw -t 900 '/dev/sg12' 0x1B 0 0 0 0 0")
         self.assertEqual(commands[2], "dd if='/in/some file' of='/dev/nst0' iflag=fullblock status=none bs=384K")
         self.assertEqual(commands[3], "dd if='/dev/nst0' of='/out/x' status=none bs=8M")                # no fullblock, see TapeDrive
         self.assertEqual(commands[4], "dd if='/dev/nst0' of='/out/toc' status=none bs=8M count=4096")
-        self.assertEqual(commands[5], "sg_raw '/dev/sg12' 0x11 0x01 0x00 0x00 0x01 0")                  # forward 1 file mark
-        self.assertEqual(commands[6], "sg_raw '/dev/sg12' 0x11 0x01 0xff 0xff 0xfe 0")                  # back 2 (24 bit, two's complement)
-        self.assertEqual(commands[7], "sg_raw '/dev/sg12' 0x11 0x03 0 0 0 0")                           # to the end of the data
+        self.assertEqual(commands[5], "sg_raw -t 900 '/dev/sg12' 0x11 0x01 0x00 0x00 0x01 0")                  # forward 1 file mark
+        self.assertEqual(commands[6], "sg_raw -t 900 '/dev/sg12' 0x11 0x01 0xff 0xff 0xfe 0")                  # back 2 (24 bit, two's complement)
+        self.assertEqual(commands[7], "sg_raw -t 900 '/dev/sg12' 0x11 0x03 0 0 0 0")                           # to the end of the data
         self.assertTrue(all(Job.Get(e).tape == td.id for _, e in td.entries))      # one at a time per drive
         self.assertFalse(any("mt " in c for c in commands))                         # SCSI only
         with self.assertRaises(ValueError):
