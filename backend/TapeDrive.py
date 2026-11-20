@@ -162,6 +162,7 @@ class TapeDrive:
     | `Eject()`                     | `sg_raw <sg> 0x1B 0 0 0 0 0` (LOAD/UNLOAD). Never part of a test. |
     | `Write(source)`               | `dd if=<source> of=<nst>`: one tape file                        |
     | `Read(target)`                | `dd if=<nst> of=<target>`: the next tape file                   |
+    | `WriteRandom(size, blocksize)` | incompressible test data to the tape, for the block size benchmark |
 
     Seeking, needed to reach the last TOC and to restore (all in file marks, `sg_raw <sg> 0x11 ...`, SPACE):
 
@@ -280,6 +281,18 @@ class TapeDrive:
         """One tape file: the content of `source`. `size` only serves the progress display."""
         cmd: Command = Command("dd if=" + Command.quote(source) + " of=" + Command.quote(self.path) + " " +
                                "iflag=fullblock status=none bs=" + self.blocksize, filesize=size)
+        return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
+
+    def WriteRandom(self, size: int, blocksize: int, runlist: str = "", dependsOn: str = "", always: bool = False,
+                    prepare=None) -> str:
+        """
+        About `size` bytes of incompressible test data (AES-CTR over zeros, a throw-away key from the
+        environment) in blocks of `blocksize` bytes, for the block size benchmark. `dd` reports the speed on stderr.
+        """
+        count: int = -(-size // blocksize)      # rounded up, the block size is what is tested
+        cmd: Command = Command("openssl enc -aes-128-ctr -pbkdf2 -pass env:RUTBS_BENCH_KEY < /dev/zero 2>/dev/null | " +
+                               "dd of=" + Command.quote(self.path) + " iflag=fullblock bs=" + str(blocksize) + " count=" + str(count),
+                               filesize=count * blocksize, env={"RUTBS_BENCH_KEY": os.urandom(16).hex(), "LC_ALL": "C"})
         return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
 
     def Read(self, target: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None,
