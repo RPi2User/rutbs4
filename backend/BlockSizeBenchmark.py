@@ -30,9 +30,10 @@ class BlockSizeBenchmark:
 
     The rule: every block size with at least 90 % of the ideal rate of the cartridge (`Tape.native_rate`)
     is good enough, of those the smallest is taken: a smaller block is kinder to the HBA and the driver
-    buffer. If the LTO version has no known ideal rate, the best measured speed is the yardstick. If no
-    block size is good enough, or nothing could be measured, `DEFAULT` is taken and the note says
-    that the tape should be replaced.
+    buffer. If the LTO version has no known ideal rate, the best measured speed is the yardstick.
+    If even the best block size stays below 90 %, the note warns how much of the bandwidth is usable (a
+    half height drive or a worn tape?) and the smallest block size within 90 % of the best one is taken.
+    Only if nothing could be measured, `DEFAULT` is taken and the note says so.
 
     A candidate that fails (the driver or the HBA refuses the block size) is left out and does not
     stop the others: every step is a closing step (`always`) and the steps do not depend on each other,
@@ -46,7 +47,8 @@ class BlockSizeBenchmark:
     TOLERANCE: float = 0.1                  # a block size may be 10 % below the ideal rate
     SECONDS: int = 30
     UNKNOWN_RATE: int = 100 * 10**6         # bytes/s, to size the test if the LTO version has no ideal rate
-    NOTE: str = "No block size reached 90 % of the ideal rate, 256K is used. Replace the tape."
+    NOTHING: str = "Nothing could be measured, 256K is used."
+    WARNING: str = "Warning: only {percent} % of the ideal bandwidth is usable. Is this a half height drive or a worn tape?"
     STATS = re.compile(r"(\d+) bytes .*copied, ([\d.]+) s")
 
     @staticmethod
@@ -58,12 +60,14 @@ class BlockSizeBenchmark:
     def pick(results: Dict[int, float], ideal: float = 0) -> Tuple[int, str]:
         "The rule, see the class doc. `results` is {block size: bytes/s}, `ideal` bytes/s or 0 if unknown."
         if not results:
-            return BlockSizeBenchmark.DEFAULT, BlockSizeBenchmark.NOTE
-        limit: float = (1 - BlockSizeBenchmark.TOLERANCE) * (ideal or max(results.values()))
-        good: List[int] = [bs for bs, rate in results.items() if rate >= limit]
-        if not good:
-            return BlockSizeBenchmark.DEFAULT, BlockSizeBenchmark.NOTE
-        return min(good), ""
+            return BlockSizeBenchmark.DEFAULT, BlockSizeBenchmark.NOTHING
+        best: float = max(results.values())
+        warning: str = ""
+        if ideal and best < (1 - BlockSizeBenchmark.TOLERANCE) * ideal:
+            warning = BlockSizeBenchmark.WARNING.format(percent=round(100 * best / ideal))
+            ideal = 0                           # the best one is the yardstick now
+        limit: float = (1 - BlockSizeBenchmark.TOLERANCE) * (ideal or best)
+        return min(bs for bs, rate in results.items() if rate >= limit), warning
 
     def __init__(self, tapeDrive: TapeDrive, seconds: int = SECONDS, size: int = 0, candidates: List[int] | None = None):
         self.drive: TapeDrive = tapeDrive

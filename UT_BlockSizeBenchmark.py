@@ -21,7 +21,7 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
     Tests A:
         - A: the candidates, 256K first; labels
         - B: the rule: at least 90 % of the ideal rate is good enough, the smallest of those is taken
-        - C: nothing good enough, or nothing measured: 256K and the note to replace the tape
+        - C: below 90 % of the ideal rate: a warning with the usable percentage, the best one is the yardstick; nothing measured: 256K
         - D: an unknown ideal rate: the best measured speed is the yardstick
         - E: the whole run list on a fake drive: rewind, test data, ..., rewind; every candidate measured
         - F: every write fails: the other steps still run, the final rewind too, 256K and the note
@@ -80,13 +80,20 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
         self.assertEqual(BlockSizeBenchmark.pick({512 * KiB: 72e6, MiB: 80e6}, self.IDEAL), (512 * KiB, ""))
         print(".B_RULE")
 
-    def test_C_defaultAndNote(self) -> None:
-        # the HP-like cartridge: 50 of 80 MB/s with every block size
+    def test_C_warningAndDefault(self) -> None:
+        # the slow cartridge: 50 of 80 MB/s with every block size, 62 % usable, the smallest of the equals is taken
         results: dict = {bs: 50e6 for bs in (128 * KiB, 256 * KiB, 384 * KiB)}
-        self.assertEqual(BlockSizeBenchmark.pick(results, self.IDEAL), (256 * KiB, BlockSizeBenchmark.NOTE))
-        self.assertEqual(BlockSizeBenchmark.pick({}, self.IDEAL), (256 * KiB, BlockSizeBenchmark.NOTE))
-        self.assertIn("Replace the tape", BlockSizeBenchmark.NOTE)
-        print(".C_DEFAULT")
+        self.assertEqual(BlockSizeBenchmark.pick(results, self.IDEAL),
+                         (128 * KiB, BlockSizeBenchmark.WARNING.format(percent=62)))
+        # a half height LTO-8 (300 of 360 MB/s): 83 % usable; the bigger blocks are faster, the smallest within 90 % of the best wins
+        results = {256 * KiB: 169e6, 512 * KiB: 170e6, MiB: 247e6, 2 * MiB: 250e6}
+        self.assertEqual(BlockSizeBenchmark.pick(results, 360 * 10**6)[0], MiB)
+        self.assertIn("69 %", BlockSizeBenchmark.pick(results, 360 * 10**6)[1])
+        self.assertIn("half height drive or a worn tape", BlockSizeBenchmark.WARNING)
+
+        # nothing measured: the default
+        self.assertEqual(BlockSizeBenchmark.pick({}, self.IDEAL), (256 * KiB, BlockSizeBenchmark.NOTHING))
+        print(".C_WARNING")
 
     def test_D_unknownIdeal(self) -> None:
         results: dict = {128 * KiB: 100e6, 256 * KiB: 95e6, 512 * KiB: 80e6}      # limit: 90 % of the best = 90 MB/s
@@ -134,7 +141,7 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
             self.assertEqual(bench.results, {})
             self.assertEqual(self._rewinds(tmp), 3)                         # a failed candidate stops nothing
             self.assertEqual(bench.blocksize, "256K")
-            self.assertEqual(bench.note, BlockSizeBenchmark.NOTE)
+            self.assertEqual(bench.note, BlockSizeBenchmark.NOTHING)
             self.assertEqual([r["state"] for r in bench._asdict()["results"]], ["FAILED", "FAILED"])
         print(".F_FAILING")
 
