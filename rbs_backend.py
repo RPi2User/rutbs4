@@ -32,7 +32,7 @@ def get_slash():
 @app.route('/host', methods=['GET']) # documented
 def get_host():
     """
-    Get heartbeat
+    Get heartbeat from the backend: a small request that needs no context and completes instantly
     ---
     tags:
       - Host
@@ -45,7 +45,7 @@ def get_host():
 @app.route('/host/threadlimit/<int:count>', methods=['POST'])
 def post_host_threadlimit(count: int):
     """
-    Get heartbeat
+    Set the thread limit
     ---
     tags:
       - Host
