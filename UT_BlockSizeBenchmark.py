@@ -60,7 +60,7 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
         self.assertEqual(c[0], 256 * KiB)
         self.assertEqual(len(c), len(set(c)))
         self.assertTrue(all(bs % (64 * KiB) == 0 for bs in c))
-        self.assertEqual(sorted(c)[0], 64 * KiB)
+        self.assertEqual(sorted(c)[0], 128 * KiB)         # the lower limit
         self.assertEqual(sorted(c)[-1], 4 * MiB)
         self.assertEqual([BlockSizeBenchmark.label(bs) for bs in (256 * KiB, 384 * KiB, MiB, 4 * MiB)], ["256K", "384K", "1M", "4M"])
         print(".A_CANDIDATES")

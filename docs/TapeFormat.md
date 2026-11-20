@@ -33,7 +33,9 @@ cartridge, and probably to the drive it was measured on.
 
 - **Default: `256K`.** It is the first candidate, the reference of the table, and the value used when no
   benchmark ran or none could decide. It is a multiple of 512 (the tar block) and fills the drive buffer well.
-- Other candidates: multiples of 64K up to 512K, then 768K, 1M, 2M, 4M. Powers of two alone would miss
+- Other candidates: multiples of 64K from 128K up to 512K, then 768K, 1M, 2M, 4M. **128K is the lower limit**
+  (HP asks for at least 128 KiB per transfer; on the LTO-8 test drive 64K to 4M were all within the noise of about 10 %,
+  so without a limit the pick would be arbitrary). Powers of two alone would miss
   values like 384K. A candidate the driver or HBA refuses (`st(4)`: the driver buffer and the HBA limit the
   block size) is left out of the table.
 - Writing is measured, not reading: in variable block mode the block size is fixed by what is on the tape, a read

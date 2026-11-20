@@ -43,7 +43,8 @@ class BlockSizeBenchmark:
     """
 
     DEFAULT: int = 256 * 1024
-    CANDIDATES: List[int] = [DEFAULT] + [n * 64 * 1024 for n in (1, 2, 3, 5, 6, 7, 8, 12, 16, 32, 64)]
+    # No candidate below 128K: the speed differences below it are noise, and HP asks for 128 KiB at least per transfer.
+    CANDIDATES: List[int] = [DEFAULT] + [n * 64 * 1024 for n in (2, 3, 5, 6, 7, 8, 12, 16, 32, 64)]
     TOLERANCE: float = 0.1                  # a block size may be 10 % below the ideal rate
     SECONDS: int = 30
     UNKNOWN_RATE: int = 100 * 10**6         # bytes/s, to size the test if the LTO version has no ideal rate
