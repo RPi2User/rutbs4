@@ -322,7 +322,7 @@ Destructive on purpose.
 bench = BlockSizeBenchmark(td)           # seconds=30 or size=bytes, candidates=None
 bench.queue(); bench.wait()
 bench.results                            # {block size in bytes: bytes/s} of the candidates that worked
-bench.blocksize, bench.note              # "256K", and a hint if none was good enough
+bench.blocksize, bench.note              # "256K", and a warning if only part of the ideal bandwidth is usable
 BlockSizeBenchmark.pick(results, ideal)  # the rule alone
 ```
 
@@ -437,7 +437,7 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 | `UT_Spool.py` | `/mnt/daten` is found as mount, spool create / remove, refusals | `findmnt`, `/mnt/daten` as mount |
 | `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, `waitFor`, scheduler thread, `prepare`, `Failed()` | — |
 | `UT_TapeDrive.py` | the commands of the steps (incl. seeking), derived state, override template, error cleared by the next good step | — |
-| `UT_BlockSizeBenchmark.py` | the pick rule (incl. the default and the note), the run list on a fake drive, a failing candidate stops nothing | `openssl`, `dd` |
+| `UT_BlockSizeBenchmark.py` | the pick rule (incl. the warning and the default), the run list on a fake drive, a failing candidate stops nothing | `openssl`, `dd` |
 | `UT_ReadJob.py` | key and file restored from the TOC, checksum mismatch, comparison of the two TOCs, no escape from the target; **on the real drive** (`RUTBS_TEST_TAPE=1`, overwrites the tape from its begin): write, read back, wrong passphrase | `openssl`, `/mnt/daten` (or `RUTBS_TEST_MOUNT`) |
 | `UT_WriteJob.py` | the whole run list on a fake drive: order, last TOC, eject only on request, a failing file, refused requests, both TOCs equivalent, an unreadable file leaves the tape alone | `openssl`, `/mnt/daten` as mount |
 | `UT_Folder.py` | file collection, recursion and order, odd file names, own key per file, write chain against a fake tape, spool, abort | `openssl`, `/mnt/daten` as mount |

@@ -51,9 +51,10 @@ cartridge, and probably to the drive it was measured on.
   LTO version has no ideal rate, the best measured speed is the yardstick.
   Example (LTO-3, ideal 80 MB/s = 76.3 MiB/s, limit 68.7 MiB/s): 128K 71.2, 192K 70.9, 256K 75, 384K 75,
   512K 72, 1024K 65.9 MiB/s; 128K is the smallest one over the limit and is picked.
-- **No value, no problem:** if no block size reaches 90 % of the ideal rate, or nothing could be measured,
-  `256K` is used and the answer says: replace the tape. (The same cartridge make that is slow with every
-  block size is the case the benchmark is made for.)
+- **Warning instead of an error:** if even the best block size stays below 90 % of the ideal rate, the answer
+  warns: "only xxx % of the ideal bandwidth is usable. Is this a half height drive or a worn tape?" The best one
+  is the yardstick then: the smallest block size within 90 % of the best is picked. Only if nothing could be
+  measured, `256K` is used (and the answer says so).
 - The answer is the table (block size, MiB/s, share of the ideal rate) and the pick, so the operator sees
   what was measured.
 
