@@ -38,6 +38,20 @@ class E_LTO_Cap(Enum):
     
     LTO_7_M8 = 9 * 10**12    # Not supported in Autodetect!
 
+class E_LTO_Rate(Enum):
+    "Ideal (native, uncompressed) transfer rate in bytes per second, from the LTO specification."
+    NONE = 0
+    LTO_1 = 15 * 10**6
+    LTO_2 = 40 * 10**6
+    LTO_3 = 80 * 10**6
+    LTO_4 = 120 * 10**6
+    LTO_5 = 140 * 10**6
+    LTO_6 = 160 * 10**6
+    LTO_7 = 300 * 10**6
+    LTO_8 = 360 * 10**6
+    LTO_9 = 400 * 10**6
+    LTO_10 = 400 * 10**6
+
 class E_Tape(Enum):
     NO_TAPE = 0
     WRITE_PROTECT = 1
@@ -80,6 +94,7 @@ class Tape():
     |------------------|--------|------------------------------------------------|
     | lto_version      | E_LTOv | Enum for the LTO Version, use NONE for Custom  |
     | native_capacity  | int    | Enum for current Capacity, NONE for Custom     |
+    | native_rate      | int    | Ideal transfer rate in bytes/s, 0 if unknown   |
     | write_protect    | bool   | Prevents tape of being over-written            |
     | begin_of_tape    | bool   | runtime parameter to keep track of rewinding   |
     | state            | E_Tape | Enum for basic state machine                   |
@@ -93,6 +108,7 @@ class Tape():
 
         self.lto_version: E_LTOv = E_LTOv.NONE
         self.native_capacity: int = 0
+        self.native_rate: int = 0
         self.write_protect: bool = True
         self.begin_of_tape: bool = False
         self.state: E_Tape = E_Tape.NO_TAPE
@@ -117,6 +133,8 @@ class Tape():
         self.lto_version = E_LTOv(_lto_version)
         if self.lto_version.name in E_LTO_Cap.__members__:   # unknown capacity stays 0
             self.native_capacity = E_LTO_Cap[self.lto_version.name].value
+        if self.lto_version.name in E_LTO_Rate.__members__:
+            self.native_rate = E_LTO_Rate[self.lto_version.name].value
 
         if generic_path and self.state in (E_Tape.ONLINE, E_Tape.WRITE_PROTECT):
             self.cartridgeMemory = CartridgeMemory(generic_path)
@@ -128,6 +146,7 @@ class Tape():
             "writeProtect": self.write_protect,
             "beginOfTape": self.begin_of_tape,
             "blocksize": self.blocksize,
+            "native_rate": self.native_rate,
         }
         if type(self.native_capacity) is int:
             data.update({"native_capacity": self.native_capacity})

@@ -35,6 +35,7 @@ class UT_Tape(unittest.TestCase):
         try:
             self.assertEqual(t.lto_version, E_LTOv.LTO_3)
             self.assertEqual(t.native_capacity, 300000000000)
+            self.assertEqual(t.native_rate, 80000000)
             self.assertEqual(t.write_protect, False)
             self.assertEqual(t.begin_of_tape, False)
             self.assertEqual(t.state, E_Tape.ONLINE)
@@ -57,6 +58,7 @@ class UT_Tape(unittest.TestCase):
         try:
             self.assertEqual(t.lto_version, E_LTOv.LTO_8)
             self.assertEqual(t.native_capacity, 12000000000000)
+            self.assertEqual(t.native_rate, 360000000)
             self.assertEqual(t.write_protect, True)
             self.assertEqual(t.state, E_Tape.WRITE_PROTECT)
             self.assertEqual(t.blocksize, "1G")
@@ -99,6 +101,7 @@ class UT_Tape(unittest.TestCase):
 
         self.assertEqual(t.lto_version, E_LTOv.LTO_11)
         self.assertEqual(t.native_capacity, 0)
+        self.assertEqual(t.native_rate, 0)
         self.assertEqual(t.state, E_Tape.ONLINE)
         print("D_UNKNOWN_CAPACITY")
 
