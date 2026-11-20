@@ -1,7 +1,8 @@
 # Tape format
 
-**Status: planned for the release candidate, not implemented.** The pieces that exist today are
-`CartridgeMemory.format()` (writes a new fingerprint) and the fixed block size `256K` in `TapeDrive`.
+**Status: the benchmark exists (`BlockSizeBenchmark`, `benchmark_tape.py`, see SOURCES.md), the format around it does not.**
+The pieces that exist today are `CartridgeMemory.format()` (writes a new fingerprint), the block size benchmark
+and the default block size `256K` in `TapeDrive`. The result is not stored in the cartridge memory yet.
 
 A tape is **formatted** once, before its first use, and again whenever the operator wants. Formatting
 prepares the cartridge for rutbs: it gives the tape its identity and finds out how to write to it fast.
@@ -30,13 +31,50 @@ Why per tape: the same LTO-3 drive and host reached the full speed with 384K on 
 and only 50 MB/s on another make, where 256K is right (operator's measurement). The value belongs to the
 cartridge, and probably to the drive it was measured on.
 
-- Candidates: multiples of 64K up to 512K, then 768K, 1M, 2M, 4M. Powers of two alone would miss values
-  like 384K.
-- Per candidate: rewind, `dd` a fixed amount of data, take the speed `dd` reports.
+- **Default: `256K`.** It is the first candidate, the reference of the table, and the value used when no
+  benchmark ran or none could decide. It is a multiple of 512 (the tar block) and fills the drive buffer well.
+- Other candidates: multiples of 64K up to 512K, then 768K, 1M, 2M, 4M. Powers of two alone would miss
+  values like 384K. A candidate the driver or HBA refuses (`st(4)`: the driver buffer and the HBA limit the
+  block size) is left out of the table.
+- Writing is measured, not reading: in variable block mode the block size is fixed by what is on the tape, a read
+  with a smaller `bs` fails (`st(4)`), so a read cannot compare block sizes.
+- Per candidate: rewind, `dd` for about 30 to 60 s, take the speed `dd` reports. This is long enough for the
+  mechanics to reach full speed at least once. The amount is `native_rate` (table below) times the time,
+  e.g. about 2.4 GB on LTO-3 and 10.8 GB on LTO-8 for 30 s. It is much less than the tape; nothing is
+  written to the end.
+- `dd` reads a pipe, so it needs `iflag=fullblock`; otherwise short reads become short tape blocks and the
+  numbers mean nothing.
 - The data is incompressible (a cipher stream, not zeros): the drive compresses, and zeros would show
   a speed that real, encrypted data never reaches.
-- The pick is the smallest block size within about 5 % of the best speed.
-- The answer is the table (block size, MB/s) and the pick, so the operator sees what was measured.
+- The pick: every block size with at least **90 % of the ideal rate** (table below) is good enough, of
+  those the **smallest** is taken, because a smaller block is kinder to the HBA and the driver buffer. If the
+  LTO version has no ideal rate, the best measured speed is the yardstick.
+  Example (LTO-3, ideal 80 MB/s = 76.3 MiB/s, limit 68.7 MiB/s): 128K 71.2, 192K 70.9, 256K 75, 384K 75,
+  512K 72, 1024K 65.9 MiB/s; 128K is the smallest one over the limit and is picked.
+- **No value, no problem:** if no block size reaches 90 % of the ideal rate, or nothing could be measured,
+  `256K` is used and the answer says: replace the tape. (The same cartridge make that is slow with every
+  block size is the case the benchmark is made for.)
+- The answer is the table (block size, MiB/s, share of the ideal rate) and the pick, so the operator sees
+  what was measured.
+
+### Ideal transfer rate
+
+Native (uncompressed) rate from the LTO specification, in `E_LTO_Rate` and `Tape.native_rate` (bytes/s).
+It is the yardstick: a result near it means the block size is not the limit, a result far below it
+points to the host, the HBA or the cable.
+
+| LTO | MB/s | MiB/s |
+|-----|------|-------|
+| 1   | 15   | 14.3  |
+| 2   | 40   | 38.1  |
+| 3   | 80   | 76.3  |
+| 4   | 120  | 114.4 |
+| 5   | 140  | 133.5 |
+| 6   | 160  | 152.6 |
+| 7   | 300  | 286.1 |
+| 8   | 360  | 343.3 |
+| 9   | 400  | 381.5 |
+| 10  | 400  | 381.5 |
 
 ## Cartridge memory
 

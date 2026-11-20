@@ -197,19 +197,19 @@ Describes the inserted tape, built from the 4-hex-digit id that the drive report
 (MODE SENSE): `Tape("3810")` = LTO-3, tape present, not write protected.
 
 - Digit 1: LTO version, digit 2: `8` = tape present, digit 3: bit 3 set = write protected.
-- Fields: `lto_version`, `native_capacity` (bytes), `write_protect`, `begin_of_tape`,
+- Fields: `lto_version`, `native_capacity` (bytes), `native_rate` (ideal bytes/s), `write_protect`, `begin_of_tape`,
   `state` (`NO_TAPE`, `WRITE_PROTECT`, `ONLINE`), `blocksize`.
 - Version `0` with tape present (`"0810"`) is a "custom" tape with capacity 0.
 
 Notes:
-- Capacities are defined up to LTO-10; newer versions get capacity 0.
+- Capacities and rates are defined up to LTO-10; newer versions get 0.
 
 ### TapeDrive.py
 
 One tape drive. It does four things, each one a step in the Job queue that returns the entry
 id (pass it as `dependsOn`): `Rewind()` (SCSI REWIND), `Eject()` (SCSI LOAD/UNLOAD), `Write(source)`
 (`dd` to the `nst` device, one tape file) and `Read(target)` (`dd` from the `nst` device, the
-next tape file). For reading it also seeks: `Space(files)` (SCSI SPACE over file marks, backward
+next tape file); `WriteRandom(size, blocksize)` writes test data for the block size benchmark. For reading it also seeks: `Space(files)` (SCSI SPACE over file marks, backward
 if negative) and `SpaceEnd()` (to the end of the data). Everything is SCSI through `sg_raw` and
 `dd`, there is no `mt`.
 The long comment at the top of the file explains the SCSI commands and is worth reading.
@@ -311,6 +311,24 @@ importable.
 
 ## Top level
 
+### BlockSizeBenchmark.py
+
+The block size benchmark of the tape format (rule and reasons in [TapeFormat.md](TapeFormat.md)). Same
+shape as `WriteJob`: `queue()` (refuses no tape / write protected), `wait()`, `state`, `print(bench)`.
+For each candidate it queues rewind + `TapeDrive.WriteRandom()`, at the end one more rewind, never an eject.
+Destructive on purpose.
+
+```python
+bench = BlockSizeBenchmark(td)           # seconds=30 or size=bytes, candidates=None
+bench.queue(); bench.wait()
+bench.results                            # {block size in bytes: bytes/s} of the candidates that worked
+bench.blocksize, bench.note              # "256K", and a hint if none was good enough
+BlockSizeBenchmark.pick(results, ideal)  # the rule alone
+```
+
+- A candidate that fails is left out and stops nothing (every step is `always`, no `dependsOn`).
+- Nothing is written to the cartridge memory yet.
+
 ### WriteJob.py
 
 The complete run list of one write request, queued in one go:
@@ -378,6 +396,12 @@ RUTBS_PASSPHRASE=... python3 write_folder_to_tape.py --dir /data/in --spool /mnt
 Options: `--checksum`, `--encryption`, `--threads` (default 4), `--toc-dir`, `--eject` (off by
 default), and for a regular file as tape `--tape`, `--rewind-cmd`, `--eject-cmd`, `--lto-version`.
 
+### benchmark_tape.py
+
+Command line wrapper around one `BlockSizeBenchmark`; prints the table and the pick. **Overwrites the
+tape from its begin**, never ejects. `--seconds`, `--size`, `--blocksizes 256,384`, and for a regular
+file as tape `--tape`, `--rewind-cmd`, `--lto-version`.
+
 ### read_tape_to_folder.py
 
 Command line wrapper around one `ReadJob`, goes away together with `write_folder_to_tape.py`. Shows
@@ -413,6 +437,7 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 | `UT_Spool.py` | `/mnt/daten` is found as mount, spool create / remove, refusals | `findmnt`, `/mnt/daten` as mount |
 | `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, `waitFor`, scheduler thread, `prepare`, `Failed()` | — |
 | `UT_TapeDrive.py` | the commands of the steps (incl. seeking), derived state, override template, error cleared by the next good step | — |
+| `UT_BlockSizeBenchmark.py` | the pick rule (incl. the default and the note), the run list on a fake drive, a failing candidate stops nothing | `openssl`, `dd` |
 | `UT_ReadJob.py` | key and file restored from the TOC, checksum mismatch, comparison of the two TOCs, no escape from the target; **on the real drive** (`RUTBS_TEST_TAPE=1`, overwrites the tape from its begin): write, read back, wrong passphrase | `openssl`, `/mnt/daten` (or `RUTBS_TEST_MOUNT`) |
 | `UT_WriteJob.py` | the whole run list on a fake drive: order, last TOC, eject only on request, a failing file, refused requests, both TOCs equivalent, an unreadable file leaves the tape alone | `openssl`, `/mnt/daten` as mount |
 | `UT_Folder.py` | file collection, recursion and order, odd file names, own key per file, write chain against a fake tape, spool, abort | `openssl`, `/mnt/daten` as mount |
