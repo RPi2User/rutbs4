@@ -414,6 +414,44 @@ class UT_Job(unittest.TestCase):
         print("Q_REGISTRY_LIMIT")
 
 
+    def test_AS_manyEntries(self) -> None:
+        """A folder of 3000 files is queued in seconds (it was cubic: 400 files took 6 s), a tick is short"""
+        begin: float = time()
+        checksums: list = [Job.Add(Command("true"), runlist="many") for _ in range(3000)]
+        barrier: str = Job.Add(Command("true"), runlist="many", waitFor=checksums)
+        for c in checksums:
+            e: str = Job.Add(Command("true"), runlist="many", dependsOn=c)
+            Job.Add(Command("true"), tape="many", runlist="many", dependsOn=e)
+        self.assertLess(time() - begin, 5)
+
+        begin = time()
+        limit, Job.limit = Job.limit, 0         # nothing is started
+        try:
+            Job.Refresh()
+        finally:
+            Job.limit = limit
+        self.assertLess(time() - begin, 1)
+        self.assertEqual(Job.Get(barrier).state, EntryState.WAITING_FOR_PARENT)
+        Job.Flush()
+        with self.assertRaises(LookupError):
+            Job.Get(barrier)
+        print("AS_MANY")
+
+    def test_AT_abortedRunlist(self) -> None:
+        """What is added to a runlist that failed already never runs, closing steps excluded; Flush forgets it"""
+        f: str = Job.Add(Command("false"), runlist="late")
+        self.assertTrue(Job.Wait([f], 10))
+        late: str = Job.Add(Command("true"), runlist="late")
+        closing: str = Job.Add(Command("true"), runlist="late", always=True)
+        self.assertEqual(Job.Get(late).state, EntryState.FAILED)
+        self.assertTrue(Job.Wait([closing], 10))
+        self.assertEqual(Job.Get(closing).state, EntryState.COMPLETED)
+        Job.Flush()
+        again: str = Job.Add(Command("true"), runlist="late")
+        self.assertTrue(Job.Wait([again], 10))
+        self.assertEqual(Job.Get(again).state, EntryState.COMPLETED)
+        print("AT_ABORTED")
+
     def test_AU_killAtExit(self) -> None:
         """Ctrl+C, SIGTERM and a closed terminal end what a command line program started"""
         code: str = ("from backend.Command import Command; from backend.Job import Job; Job.KillAtExit(); "

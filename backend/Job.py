@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import uuid
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from backend.Command import Command
 
@@ -185,6 +185,9 @@ class Job():
     state: JobState = JobState.EMPTY
     queue: List[Entry] = []
     urgent: List[Entry] = []                    # started by Add(urgent=True), never part of the queue
+    index: Dict[str, Entry] = {}                # both lists by id: a folder has thousands of Entries, nothing may search them
+    commands: set = set()                       # id() of every Command in both lists
+    aborted: set = set()                        # runlists with a FAILED Entry, as of the last _updateStates()
     limit: int = DEFAULT_THREADLIMIT            # max. parallel CPU/Disk Entries
     lock: threading.RLock = threading.RLock()   # Add() and the scheduler thread share the queue
     scheduler: Optional["JobScheduler"] = None
@@ -196,7 +199,7 @@ class Job():
             prepare: Callable[[], None] | None = None, waitFor: List[str] | None = None,
             urgent: bool = False, deadlineMs: int = DEFAULT_DEADLINE_MS, drive: str = "") -> str:
         with Job.lock:
-            if any(e.command is cmd for e in Job.queue + Job.urgent):
+            if id(cmd) in Job.commands:
                 raise ValueError("ERROR: Command already queued, create a new Command object")
 
             if urgent:
@@ -204,6 +207,7 @@ class Job():
                     raise ValueError("ERROR: An urgent Entry stands alone: no tape, parent, runlist or prepare")
                 _u: Entry = Entry(cmd, startAfterCreate=True, deadlineMs=deadlineMs, drive=drive)    # starts the Command
                 Job.urgent.append(_u)
+                Job._register(_u)
                 Job._trimUrgent()
                 return _u.id
 
@@ -212,8 +216,12 @@ class Job():
 
             _e: Entry = Entry(cmd, tape, dependsOn, runlist, always, prepare, waitFor, drive=drive)
             Job.queue.append(_e)
-            Job._updateStates()         # parent might already be COMPLETED
-            Job._updateJobState()
+            Job._register(_e)
+            Job._updateState(_e)        # parent might already be COMPLETED
+            if _e.runlist in Job.aborted and not _e.always:
+                _e.state = EntryState.FAILED
+            if Job.state is JobState.EMPTY:
+                Job.state = JobState.IDLE
             return _e.id
 
     @staticmethod
@@ -237,11 +245,11 @@ class Job():
     @staticmethod
     def Get(entryId: str) -> Entry:
         with Job.lock:
-            for entry in Job.queue + Job.urgent:
-                if entry.id == entryId:
-                    if entry.urgent:
-                        Job._checkUrgent(entry)     # whoever looks drives the deadline
-                    return entry
+            entry: Entry | None = Job.index.get(entryId)
+            if entry is not None:
+                if entry.urgent:
+                    Job._checkUrgent(entry)     # whoever looks drives the deadline
+                return entry
         raise LookupError("Entry not found: " + entryId)
 
     @staticmethod
@@ -269,6 +277,9 @@ class Job():
                 Job._updateStates()     # a WAITING child never loses its unfinished parent
                 Job.queue[:] = [e for e in Job.queue if not (mine(e) and e.state in Job.FINISHED)]
                 Job.urgent[:] = [e for e in Job.urgent if not (mine(e) and e.state in Job.FINISHED)]
+            Job.index = {e.id: e for e in Job.queue + Job.urgent}
+            Job.commands = {id(e.command) for e in Job.queue + Job.urgent}
+            Job._updateAborted()
             Job._updateJobState()
 
     @staticmethod
@@ -322,28 +333,43 @@ class Job():
 # --- PRIVATE FUNCTIONS ---------------------------------------------------------------------------
 
     @staticmethod
+    def _register(e: Entry) -> None:
+        Job.index[e.id] = e
+        Job.commands.add(id(e.command))
+
+    @staticmethod
+    def _updateState(e: Entry) -> None:
+        if e.state is EntryState.RUNNING:
+            e.command.status()
+            if not e.command.running:
+                e.state = EntryState.COMPLETED if e.command.exitCode == 0 else EntryState.FAILED
+
+        elif e.state is EntryState.WAITING_FOR_PARENT:
+            parents: List[EntryState] = [Job.Get(p).state for p in e.parents]
+            if e.always and e.waitFor:      # a closing step waits for its waitFor to end, however they ended
+                ended: bool = all(Job.Get(p).state in Job.FINISHED for p in e.waitFor)
+                parents = ([Job.Get(e.dependsOn).state] if e.dependsOn else []) + ([] if ended else [EntryState.RUNNING])
+            if EntryState.FAILED in parents or EntryState.KILLED in parents:
+                e.state = EntryState.FAILED
+            elif all(p is EntryState.COMPLETED for p in parents):
+                e.state = EntryState.READY4EXEC
+
+    @staticmethod
+    def _updateAborted() -> None:
+        Job.aborted = {e.runlist for e in Job.queue if e.runlist and e.state is EntryState.FAILED}
+
+    @staticmethod
     def _updateStates() -> None:
         # Parents come before their children, so one pass also propagates FAILED down the chain
         for e in Job.queue:
-            if e.state is EntryState.RUNNING:
-                e.command.status()
-                if not e.command.running:
-                    e.state = EntryState.COMPLETED if e.command.exitCode == 0 else EntryState.FAILED
-
-            elif e.state is EntryState.WAITING_FOR_PARENT:
-                parents: List[EntryState] = [Job.Get(p).state for p in e.parents]
-                if e.always and e.waitFor:      # a closing step waits for its waitFor to end, however they ended
-                    ended: bool = all(Job.Get(p).state in Job.FINISHED for p in e.waitFor)
-                    parents = ([Job.Get(e.dependsOn).state] if e.dependsOn else []) + ([] if ended else [EntryState.RUNNING])
-                if EntryState.FAILED in parents or EntryState.KILLED in parents:
-                    e.state = EntryState.FAILED
-                elif all(p is EntryState.COMPLETED for p in parents):
-                    e.state = EntryState.READY4EXEC
+            Job._updateState(e)
 
         # One failure aborts the whole runlist: nothing new is started, except the closing steps
-        aborted: set = {e.runlist for e in Job.queue if e.runlist and e.state is EntryState.FAILED}
+        Job._updateAborted()
+        if not Job.aborted:
+            return
         for e in Job.queue:
-            if e.runlist in aborted and not e.always and e.state in {EntryState.WAITING_FOR_PARENT, EntryState.READY4EXEC}:
+            if e.runlist in Job.aborted and not e.always and e.state in {EntryState.WAITING_FOR_PARENT, EntryState.READY4EXEC}:
                 e.state = EntryState.FAILED
 
     @staticmethod
@@ -371,6 +397,8 @@ class Job():
         finished: List[Entry] = [e for e in Job.urgent if e.state in Job.FINISHED]
         for old in finished[:max(0, len(Job.urgent) - Job.URGENT_KEEP)]:
             Job.urgent.remove(old)
+            del Job.index[old.id]
+            Job.commands.discard(id(old.command))
 
     @staticmethod
     def _startEntries() -> None:
@@ -384,7 +412,8 @@ class Job():
                 nextOnDrive.setdefault(e.tape, e)
 
         ready: List[Entry] = [e for e in Job.queue if e.state is EntryState.READY4EXEC]
-        for e in sorted(ready, key=Job._priority):  # sorted() is stable -> FIFO per priority
+        feeding: set = Job._feedingTape() if any(not e.tape for e in ready) else set()
+        for e in sorted(ready, key=lambda r: Job._priority(r, feeding)):    # sorted() is stable -> FIFO per priority
             if e.tape:
                 if nextOnDrive[e.tape] is not e:
                     continue
@@ -405,19 +434,21 @@ class Job():
             e.state = EntryState.RUNNING
 
     @staticmethod
-    def _priority(e: Entry) -> int:
+    def _priority(e: Entry, feeding: set) -> int:
         if e.tape:
             return 0    # tape work
-        if Job._leadsToTape(e):
+        if e.id in feeding:
             return 1    # prepares tape work
         return 2        # everything else
 
     @staticmethod
-    def _leadsToTape(e: Entry) -> bool:
-        for child in Job.queue:
-            if e.id in child.parents and (child.tape or Job._leadsToTape(child)):
-                return True
-        return False
+    def _feedingTape() -> set:
+        """The ids of all Entries a tape Entry waits for, directly or not. Parents come before their children: one pass from the end."""
+        feeding: set = set()
+        for e in reversed(Job.queue):
+            if e.tape or e.id in feeding:
+                feeding.update(e.parents)
+        return feeding
 
     @staticmethod
     def _updateJobState() -> None:
