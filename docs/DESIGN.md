@@ -346,7 +346,7 @@ There is one place for start, deadline, kill and log.
   uninterruptible sleep (hung mount, busy drive) survives SIGKILL: `Job` never waits for it.
   A `KILLED` parent fails its children like a `FAILED` one.
 - Deadlines are wall-clock and conservative: **2 s** by default (measured: `openssl rand`, `stat`,
-  `findmnt` 2 to 4 ms), 60 s for the `find` of a `Folder`. The mechanism is not for the regular case: what is needed often belongs in a small
+  `findmnt` 2 to 4 ms), 60 s for the `find` of a `Folder` and the `stat` of a `File`. The mechanism is not for the regular case: what is needed often belongs in a small
   list that is built at start and refreshed periodically. A flood of urgent commands is felt by the
   host; the design accepts that.
 - Only small things are system commands, and only on disks and file systems (decided 2026-11-22). Nothing about a tape drive is

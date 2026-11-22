@@ -124,6 +124,8 @@ class File:
     `Read()` -> `Decrypt()` -> `Validate()`, the last one compares to the checksum of the TOC.
     """
 
+    SIZE_DEADLINE_MS: int = 60000   # the first look at the inode: a slow disk is not a reason to refuse the file
+
     def __init__(self, id: int, path: str, path_context: str, createFile: bool = False) -> None:
         self._state: FileState = FileState.INIT
         self.state_msg: List[str] = []
@@ -314,17 +316,14 @@ class File:
             self.readSize()
 
     def readSize(self) -> None:
-        self.cmd = Job.Run(Command("stat -c %s " + Command.quote(self.path.path)))
-
-        try:
-            self.size = int(self.cmd.stdout[0])
-        except TypeError:
-            self.size = 0
-        except IndexError:
-            self.size = 0
-        except Exception as e:
-            self.state_msg.append("[ERROR] cannot determine file size of file" + str(self) + "   Exception: " + str(e))
-            raise
+        # Never guess: a file of unknown size is not an empty one, that would not be written to the tape at all (see onTape)
+        self.cmd = Job.Run(Command("stat -c %s " + Command.quote(self.path.path)), self.SIZE_DEADLINE_MS)
+        if self.cmd.exitCode != 0 or not self.cmd.stdout:
+            self.state = FileState.ERROR
+            why: str = "[ERROR] cannot determine the size of '" + self.path.path + "': " + " ".join(self.cmd.status_msg + self.cmd.stderr)
+            self.state_msg.append(why)
+            raise OSError(why)
+        self.size = int(self.cmd.stdout[0])
 
         self.cksum.cmd.filesize = self.size
 

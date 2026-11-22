@@ -136,6 +136,8 @@ Notes:
   the TapeDrive.
 - A `File` can only be built for a file that exists. Restoring from a TOC on another machine
   needs a way to build one from the TOC entry (not done).
+- `readSize()` raises `OSError` if the size cannot be read (60 s deadline): a file of unknown size must not
+  become an empty one, which has no tape file.
 - Every `File` generates its own `Key`, which costs two `openssl` calls; `Folder` keeps it.
 
 ### Folder.py

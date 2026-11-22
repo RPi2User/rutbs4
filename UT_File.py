@@ -219,6 +219,16 @@ class UT_File(unittest.TestCase):
                 self.assertEqual(file.state, FileState.MISMATCH, mode.name)
         print("BD_DAMAGED_TAPE")
 
+    def test_BF_unknownSize(self) -> None:
+        """A file whose size is unknown must not become an empty one, which has no tape file at all"""
+        with tempfile.TemporaryDirectory() as tmp:
+            file: File = self._source(tmp, b"data", E_Mode.NONE)
+            os.remove(file.path.path)
+            with self.assertRaises(OSError):
+                file.readSize()
+            self.assertEqual((file.size, file.state), (4, FileState.ERROR))
+        print("BF_UNKNOWN_SIZE")
+
     def test_BE_refusals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             file: File = self._source(tmp, b"data", E_Mode.AES256CBC)
