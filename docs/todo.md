@@ -20,11 +20,12 @@ path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sei
   - `ReadJob` checks the free space of spool and target one by one, not together if both are on one mount.
   - LTO-7 M8 counts as 6 TB instead of 9 TB.
   - `Job.Flush(killRunning=False)` removes a finished parent of an entry that still waits for others (`waitFor`): `LookupError` at the next tick?
-  - `ReadJob.queue()` makes the empty target files before the spool: if it is refused then, they stay and the next try says "exists already".
-  - Ctrl+C leaves the spool directory behind (seen on both hosts).
+  - `ReadJob.queue()` makes the empty target files before the spool: if it is refused then, they stay and the next try says "exists already"
+    (since `0d18afe`, before that the spool was left behind instead).
   - `Job.KillAtExit()` is called by the command line programs; the REST backend needs it as well when it is ported.
+- Ctrl+C leaves the spool directory behind (seen on both hosts).
 - **Tests:**
-  - The fixtures `cksum/test100.raw` and `encryption/test100.raw` are missing on all three machines: run `UT_Checksum` and `UT_Encryption` with
+  - The fixtures `cksum/test100.raw` and `encryption/test100.raw` were not found on the local file systems of the three machines (network shares not searched): run `UT_Checksum` and `UT_Encryption` with
     them, or make the tests independent of fixtures.
   - `UT_TableOfContent.G` fails in about one of four runs (`/proc/<pid>/io`, see SOURCES.md).
   - `UnitTest.sh` should end with an error if a test failed.
