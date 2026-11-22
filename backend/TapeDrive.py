@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import sys
 from time import sleep
 from typing import List, Tuple
 from enum import Enum
@@ -7,6 +9,7 @@ from enum import Enum
 from backend.Command import Command
 from backend.Job import EntryState, Job
 
+from backend import TapeIoctl
 from backend.Tape import Tape, E_Tape
 
 """_summary_
@@ -147,6 +150,8 @@ class TD_State(Enum):
     READ = 5
     SPACE = 6
     ERROR = -1      # the last finished order failed
+    NO_TAPE = -2    # the last rewind / eject found no tape
+    BUSY = -3       # the last rewind / eject found the device opened by somebody else
 
 class TapeDrive:
 
@@ -158,13 +163,17 @@ class TapeDrive:
 
     | `TapeDrive.`                  | SCSI / tool                                                     |
     |-------------------------------|-----------------------------------------------------------------|
-    | `Rewind()`                    | `sg_raw -t 900 <sg> 0x01 0 0 0 0 0` (REWIND)                    |
-    | `Eject()`                     | `sg_raw <sg> 0x1B 0 0 0 0 0` (LOAD/UNLOAD). Never part of a test. |
+    | `Rewind()`                    | `TapeIoctl.py rewind <nst>`, also the question whether the drive can take an order |
+    | `Eject()`                     | `TapeIoctl.py eject <nst>`. Never part of a test.               |
     | `Write(source)`               | `dd if=<source> of=<nst>`: one tape file                        |
     | `Read(target)`                | `dd if=<nst> of=<target>`: the next tape file                   |
     | `WriteRandom(size, blocksize)` | incompressible test data to the tape, for the block size benchmark |
 
-    Seeking, needed to reach the last TOC and to restore (all in file marks, `sg_raw <sg> 0x11 ...`, SPACE):
+    **The OS only has to give:** the list of the nst devices, rewind, eject, `dd if=` and `dd of=`. Everything else (INQUIRY,
+    MODE SENSE, wwid, cartridge memory, SPACE) is optional and must never stop a job. If the drive does not tell what
+    tape is in it, the tape is `UNKNOWN` and the operator may describe it with `tapeOverride()`.
+
+    Seeking is optional and no job uses it (all in file marks, `sg_raw <sg> 0x11 ...`, SPACE):
 
     | `TapeDrive.`                  | Meaning                                                         |
     |-------------------------------|-----------------------------------------------------------------|
@@ -177,14 +186,15 @@ class TapeDrive:
     here (cartridge memory, formatting). No `mt`, SCSI only.
 
     **Never read at the end of the data.** The kernel driver (`st`) latches that and answers every
-    later read with an I/O error, even after a rewind with `sg_raw`, until it is repositioned
-    through the driver itself (`mt rewind`, for the operator). `dd` must also not use
+    later read with an I/O error until it is repositioned through the driver itself, as `Rewind()` does (a rewind with
+    `sg_raw` does not help). `dd` opens the device blocking: without a tape it waits 2 minutes, so a
+    job rewinds first. `dd` must also not use
     `iflag=fullblock` on the tape: after a short last block it swallows the file mark and goes on
     reading the next tape file. `Read()` therefore stops at the file mark by itself.
 
     The drive is asked for vendor / model / serial (INQUIRY) and the tape (MODE SENSE) when it is
-    created. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running step
-    (`REWIND`, `EJECT`, `WRITE`, `READ`, `SPACE`), or `ERROR` if the last finished step failed.
+    created, if it has an `sg` device. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running
+    step (`REWIND`, `EJECT`, `WRITE`, `READ`, `SPACE`), or if the last finished step failed `ERROR`, `NO_TAPE` or `BUSY`.
 
     The two paths of a drive with two cables are in `paths`, the first one is used (see TD_Pool).
     `id` is the key the Job uses, one step at a time runs per id.
@@ -227,7 +237,9 @@ class TapeDrive:
     SYSFS: str = "/sys/class/scsi_generic"
     LONG_TIMEOUT: int = 900         # seconds for sg_raw on REWIND, SPACE, LOAD/UNLOAD; its default is 20 s, and the
                                     # kernel aborts a rewind from the end of a full tape after that (seen 2026-11-20)
-    READ_BLOCK: str = "8M"          # the drive hands out each block as it was written, up to its limit of 8 MiB
+    TOC_BLOCK: str = "256K"         # a TOC is always written and read like this, so it can be read before its own header is known
+    READ_BLOCK: str = TOC_BLOCK     # at least; the drive hands out each block as it was written. Bigger than the limit of the
+                                    # HBA fails (aic79xx: 4M works, 8M is EBUSY), smaller than the written block fails as well
 
     @staticmethod
     def sysfsRead(generic_path: str, attribute: str, root: str = SYSFS) -> str:
@@ -272,41 +284,65 @@ class TapeDrive:
     # === THE FOUR STEPS ======================================================
 
     def Rewind(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        cmd: Command = self._like(self.rewindCommand) or Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x01 0 0 0 0 0")
+        cmd: Command = self._like(self.rewindCommand) or self._ioctl("rewind")
         return self._queue(TD_State.REWIND, cmd, runlist, dependsOn, always, prepare)
 
     def Eject(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        cmd: Command = self._like(self.ejectCommand) or Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x1B 0 0 0 0 0")
+        cmd: Command = self._like(self.ejectCommand) or self._ioctl("eject")
         return self._queue(TD_State.EJECT, cmd, runlist, dependsOn, always, prepare)
 
-    def Write(self, source: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        """One tape file: the content of `source`. `size` only serves the progress display."""
+    def _ioctl(self, operation: str) -> Command:
+        return Command(Command.quote(sys.executable) + " " + Command.quote(TapeIoctl.__file__) + " " + operation + " " + Command.quote(self.path))
+
+    def Write(self, source: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None,
+              blocksize: str = "") -> str:
+        """
+        One tape file: the content of `source`, in blocks of `blocksize` (default: that of the drive).
+        `size` only serves the progress display.
+        """
         cmd: Command = Command("dd if=" + Command.quote(source) + " of=" + Command.quote(self.path) + " " +
-                               "iflag=fullblock status=none bs=" + self.blocksize, filesize=size)
+                               "iflag=fullblock status=none bs=" + (blocksize or self.blocksize), filesize=size, env={"LC_ALL": "C"})
         return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
 
     def WriteRandom(self, size: int, blocksize: int, runlist: str = "", dependsOn: str = "", always: bool = False,
                     prepare=None) -> str:
         """
         About `size` bytes of incompressible test data (AES-CTR over zeros, a throw-away key from the
-        environment) in blocks of `blocksize` bytes, for the block size benchmark. `dd` reports the speed on stderr.
+        environment) in blocks of `blocksize` bytes, for the block size benchmark. `dd` reports the speed and once
+        per second the progress on stderr.
         """
         count: int = -(-size // blocksize)      # rounded up, the block size is what is tested
         cmd: Command = Command("openssl enc -aes-128-ctr -pbkdf2 -pass env:RUTBS_BENCH_KEY < /dev/zero 2>/dev/null | " +
-                               "dd of=" + Command.quote(self.path) + " iflag=fullblock bs=" + str(blocksize) + " count=" + str(count),
+                               "dd of=" + Command.quote(self.path) + " iflag=fullblock status=progress bs=" + str(blocksize) + " count=" + str(count),
                                filesize=count * blocksize, env={"RUTBS_BENCH_KEY": os.urandom(16).hex(), "LC_ALL": "C"})
         return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
 
     def Read(self, target: str, size: int = -1, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None,
-             count: int = 0) -> str:
+             count: int = 0, blocksize: str = "") -> str:
         """
         The next tape file, from the current position, into `target`. Ends at its file mark.
         `count` > 0 stops after that many blocks, for a tape file that may be something else than expected.
+        `blocksize` is the one it was written with, `READ_BLOCK` is the minimum.
         """
         # No iflag=fullblock: it reads on behind the file mark. A buffer bigger than the written block is harmless.
         cmd: Command = Command("dd if=" + Command.quote(self.path) + " of=" + Command.quote(target) + " " +
-                               "status=none bs=" + self.READ_BLOCK + (" count=" + str(count) if count else ""), filesize=size)
+                               "status=none bs=" + self.readBlock(blocksize) + (" count=" + str(count) if count else ""), filesize=size,
+                               env={"LC_ALL": "C"})
         return self._queue(TD_State.READ, cmd, runlist, dependsOn, always, prepare)
+
+    @staticmethod
+    def blockBytes(blocksize: str) -> int:
+        "`256K` -> 262144. It may come from the header of a tape and ends up in a command: nothing else is accepted."
+        found = re.fullmatch(r"(\d{1,9})([KM]?)", blocksize)
+        if not found or int(found.group(1)) == 0:
+            raise ValueError("Not a block size: " + repr(blocksize))
+        return int(found.group(1)) * {"": 1, "K": 1 << 10, "M": 1 << 20}[found.group(2)]
+
+    @staticmethod
+    def readBlock(blocksize: str = "") -> str:
+        if blocksize and TapeDrive.blockBytes(blocksize) > TapeDrive.blockBytes(TapeDrive.READ_BLOCK):
+            return blocksize
+        return TapeDrive.READ_BLOCK
 
     def Space(self, files: int, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
         """SPACE over file marks, forward (>0) or backward (<0). The count is a signed 24 bit number."""
@@ -342,7 +378,7 @@ class TapeDrive:
 
         active: TD_State | None = None
         queued: bool = False
-        lastFailed: bool = False
+        failure: TD_State | None = None
 
         for step, entryId in self.entries:
             try:
@@ -351,12 +387,16 @@ class TapeDrive:
                 continue    # Job was flushed
 
             if entry.state is EntryState.COMPLETED:
-                lastFailed = False
+                failure = None
                 if entryId not in self._taken:
                     self._taken.add(entryId)
                     self._takeOver(step)
             elif entry.state is EntryState.FAILED:
-                lastFailed = True
+                failure = self._failure(step, entry.command.exitCode)
+                if entryId not in self._taken:
+                    self._taken.add(entryId)
+                    if failure is TD_State.NO_TAPE:
+                        self._noTape()
             elif entry.state is EntryState.RUNNING:
                 active = step
                 if step in {TD_State.WRITE, TD_State.READ, TD_State.SPACE}:
@@ -369,18 +409,29 @@ class TapeDrive:
         elif queued:
             self._state = TD_State.QUEUED
         else:
-            self._state = TD_State.ERROR if lastFailed else TD_State.IDLE
+            self._state = failure or TD_State.IDLE
+
+    @staticmethod
+    def _failure(step: TD_State, exitCode: int) -> TD_State:
+        if step in {TD_State.REWIND, TD_State.EJECT}:
+            return {TapeIoctl.NO_MEDIUM: TD_State.NO_TAPE, TapeIoctl.BUSY: TD_State.BUSY}.get(exitCode, TD_State.ERROR)
+        return TD_State.ERROR
+
+    def _noTape(self) -> None:
+        self.tape.state = E_Tape.NO_TAPE
+        self.tape.begin_of_tape = False
+        self.tape_override = False
 
     def _takeOver(self, step: TD_State) -> None:
         match step:
             case TD_State.REWIND:
                 self.tape.begin_of_tape = True
+                if self.tape.state in {E_Tape.UNKNOWN, E_Tape.NO_TAPE}:    # it can be rewound, so there is a tape
+                    self.tape.state = E_Tape.ONLINE
             case TD_State.WRITE | TD_State.READ | TD_State.SPACE:
                 self.tape.begin_of_tape = False
             case TD_State.EJECT:
-                self.tape.state = E_Tape.NO_TAPE
-                self.tape.begin_of_tape = False
-                self.tape_override = False
+                self._noTape()
 
     # === ASKING THE DRIVE ====================================================
 
@@ -391,8 +442,8 @@ class TapeDrive:
         554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
         3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
         """
-        # Do nothing if TapeDrive is unkown.
-        if self.drive_override:
+        # Do nothing if TapeDrive is unkown. It is optional: without an sg device nobody can be asked.
+        if self.drive_override or self.generic_path == "":
             return
 
         # Sensible to override
@@ -402,14 +453,13 @@ class TapeDrive:
         self.command = Job.Run(inquiry())
 
         for n in range(5):      # a drive that was just reset may need a moment
-            if self.command.exitCode == 0 and self.command.stdout:
+            if self.command.exitCode == 127 or (self.command.exitCode == 0 and self.command.stdout):     # 127: no sg_raw
                 break
             sleep(.5)
             self.command = Job.Run(inquiry())
 
         if self.command.exitCode != 0 or not self.command.stdout:
-            self.error = "INQUIRY failed: " + " ".join(self.command.stderr)
-            self._state = TD_State.ERROR
+            self.error = "INQUIRY failed: " + " ".join(self.command.stderr)     # the drive works without it
             return
 
         ascii_id: str = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")
@@ -418,7 +468,10 @@ class TapeDrive:
         self.serial = ascii_id[32:42].strip()
 
     def _readModeSense(self) -> None:
-        if self.tape_override or self.generic_path == "" or self.error:
+        if self.tape_override or self.drive_override:
+            return
+        self.tape.state = E_Tape.UNKNOWN        # until somebody tells
+        if self.generic_path == "" or self.error:
             return
 
         # Sensible to override
@@ -432,11 +485,14 @@ class TapeDrive:
             self._inquiry()
             self.command = Job.Run(modeSense())
 
-        if self.tape.state == E_Tape.NO_TAPE:
-            try:
-                self.tape = Tape(self.command.stdout[0][4:], self.generic_path)
-            except IndexError:
-                self.tape = Tape("0000", self.generic_path)
+        try:
+            tape: Tape = Tape(self.command.stdout[0][4:], self.generic_path)
+        except (IndexError, ValueError):        # no answer, or one we do not understand
+            return
+        # The medium type 0 says "no tape" on an IBM drive, but not every drive reports it. Only a rewind knows.
+        if tape.state is E_Tape.NO_TAPE:
+            tape.state = E_Tape.UNKNOWN
+        self.tape = tape
 
     def tapeOverride(self, _tape: Tape) -> None:
         self.tape_override = True
