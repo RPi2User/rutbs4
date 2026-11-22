@@ -57,7 +57,8 @@ Wrapper around one shell command (`subprocess.Popen`, `shell=True`). Base of eve
   it, so a second run needs a new `Command`; only its size (`stdinSize`) is shown. Without `stdin`
   the input is `/dev/null`.
 - `start()` runs it in the background, but only `Job` calls it. There is no `wait()`: use
-  `Job.Add()` or `Job.Run()`. `kill()` sends SIGTERM, 100 ms later SIGKILL, then gives up
+  `Job.Add()` or `Job.Run()`. Every command has a process group of its own; `kill()` sends SIGTERM to
+  the whole group (every program of a pipe), 100 ms later SIGKILL, then gives up
   (`killed` is set by `Job` when a deadline was missed). `reset()` clears the results,
   `status()` refreshes all fields.
 - Results: `stdout` / `stderr` (list of lines), `exitCode` (`-1` = not finished), `running`,
@@ -183,6 +184,8 @@ thread limit.
   `Job.Failed(runlist)` tells whether an entry of a runlist failed (closing steps do not count).
 - `Job.Wait(ids, timeoutSec=0)` blocks until the entries are finished (drives `Refresh()`
   itself), `Job.Get(id)`, `Job.Registry()`, `Job.Flush(killRunning=True)`.
+  `Job.KillAtExit()` for command line programs: Ctrl+C, SIGTERM or a closed terminal end the running commands
+  too (they have process groups of their own, so the signal does not reach them by itself).
 - Entry states: `WAITING_FOR_PARENT → READY4EXEC → RUNNING → COMPLETED | FAILED`.
   A failed parent fails all of its children.
 - `Job.Add(cmd, urgent=True, deadlineMs=2000)` / `Job.Run(cmd, deadlineMs)` start a system command at once,

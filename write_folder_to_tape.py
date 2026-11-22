@@ -60,6 +60,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    Job.KillAtExit()
     unencrypted = args.encryption == "none"
     passphrase = "" if unencrypted else os.environ.get("RUTBS_PASSPHRASE") or getpass.getpass("Passphrase for this tape: ")
     Job.limit = args.threads

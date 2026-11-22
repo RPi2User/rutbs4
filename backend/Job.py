@@ -1,6 +1,9 @@
+import atexit
 from enum import Enum
 import json
 import os
+import signal
+import sys
 import threading
 import time
 import uuid
@@ -171,6 +174,7 @@ class Job():
     | `Job.Wait()`       | Blocks until the given Entries are COMPLETED or FAILED   |
     | `Job.Work()`       | Starts the JobScheduler thread (calls Refresh)           |
     | `Job.Stop()`       | Stops the JobScheduler thread                            |
+    | `Job.KillAtExit()` | For command line programs: nothing keeps running when they end |
     """
 
     DEFAULT_THREADLIMIT: int = os.cpu_count() or 1
@@ -303,6 +307,17 @@ class Job():
             Job.scheduler.running = False
             Job.scheduler.join()
             Job.scheduler = None
+
+    @staticmethod
+    def KillAtExit() -> None:
+        """
+        For command line programs, main thread only. Every Command has its own process group, so Ctrl+C or a closed
+        terminal reaches only the program itself: it takes what is running with it. An ignored SIGHUP (nohup) stays ignored.
+        """
+        atexit.register(Job.Flush)
+        for number in (signal.SIGHUP, signal.SIGTERM):
+            if signal.getsignal(number) is signal.SIG_DFL:
+                signal.signal(number, lambda n, _frame: sys.exit(128 + n))
 
 # --- PRIVATE FUNCTIONS ---------------------------------------------------------------------------
 

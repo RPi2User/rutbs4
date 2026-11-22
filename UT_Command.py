@@ -361,6 +361,42 @@ class UT_Command(unittest.TestCase):
 
         print("K_KILL")
 
+    def test_AK_KillPipe(self) -> None:
+        """Every program of a pipe dies, not only the shell. A program that left the group and keeps STDOUT open must not block"""
+        c: Command = Command("sleep 61.5 | cat")
+        c.start()
+        sleep(.3)
+        begin = time()
+        c.kill()
+        self.assertLess(time() - begin, 1)
+        self.assertEqual((c.running, c.closed), (False, True))
+        self.assertEqual(Job.Run(Command("pgrep -x -f 'sleep 61.5'")).stdout, [])
+
+        # a program that does not die in time (dd writes its file mark): given up, running until it is gone
+        c = Command("sleep 60 | sh -c 'trap \"\" TERM; sleep 1.2; sleep 1.2'")
+        c.KILL_GRACE = 0.2      # enough for the shell, which is first
+        c.start()
+        sleep(.3)
+        c.permError = False     # /proc/<pid>/io is read, its process may be gone already
+        real, os.killpg = os.killpg, lambda pid, sig: real(pid, 15 if sig == 9 else sig)     # as if SIGKILL had to wait
+        try:
+            c.kill()
+            self.assertTrue(c.running)
+        finally:
+            os.killpg = real
+        sleep(3)
+        c.status()
+        self.assertEqual((c.running, c.closed), (False, True))
+
+        c = Command("sh -c 'setsid sleep 4 & exec sleep 60'")
+        c.start()
+        sleep(.3)
+        begin = time()
+        c.kill()
+        self.assertLess(time() - begin, 3)      # 1 s per reader
+        self.assertEqual((c.running, c.closed), (False, True))
+        print("K_KILL_PIPE")
+
     def test_AL_HEXOUT(self) -> None:
         """
         Tests if command supports hex output properly

@@ -1,7 +1,9 @@
 import os
+import signal
 import subprocess
 import json
 import threading
+import time
 from typing import List
 
 class Command:
@@ -32,7 +34,7 @@ class Command:
     | `Command.`             | Description                                                            |
     |------------------------|------------------------------------------------------------------------|
     | `Command.start()`      | Starts the command in the background, ONLY `Job` calls this            |
-    | `Command.kill()`       | SIGTERM, after `KILL_GRACE` SIGKILL, then gives up. Never blocks longer |
+    | `Command.kill()`       | SIGTERM to the process group, after `KILL_GRACE` SIGKILL, then gives up |
     | `Command.cleanup()`    | Get called before running ← false, does close STDOUT/STDERR            |
     | `Command.reset()`      | Calls self.cleanup() and clears all vars EXCEPT cmd, filesize, raw, env (stdin is gone after a run) |
     | `Command.status()`     | Refreshes all vars, always call this!                                  |
@@ -70,6 +72,7 @@ class Command:
     | `self.permError`  | `bool`      | Set if the backend lacks permission to read a file  |
     | `self.didRun`     | `bool`      | Tracks whether the command has already been started |
     | `self.killed`     | `bool`      | `Job` killed it because its deadline was over       |
+    | `self.signalled`  | `bool`      | `kill()` was called while it ran                    |
     | `self.closed`     | `bool`      | Monitors whether STDIN or STDOUT streams are closed |
 
     Are self.didRun and self.closed equal?
@@ -122,6 +125,7 @@ class Command:
             stdin=subprocess.DEVNULL if data is None else subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            start_new_session=True,     # its own process group, kill() reaches every program of a pipe
             text=False,
             env={**os.environ, **self.env}
         )
@@ -144,29 +148,49 @@ class Command:
 
     def kill(self) -> None:
         """
-        Never blocks longer than 2 * KILL_GRACE. A process in uninterruptible sleep (hung mount,
-        busy drive) survives even SIGKILL: it is given up and `running` stays True.
+        Never blocks longer than 2 * KILL_GRACE, plus what `cleanup()` waits for the readers. The whole process group
+        is killed, so also every program of a pipe. A process in uninterruptible sleep (hung mount,
+        busy drive) survives even SIGKILL: it is given up and `running` stays True until it is gone.
         """
         self.status()
         if self.running:    # never signal a finished PID, the kernel may have reused it
-            for sig in (self.process.terminate, self.process.kill):     # SIGTERM, then SIGKILL
+            self.signalled = True
+            for sig in (signal.SIGTERM, signal.SIGKILL):
                 try:
-                    sig()
-                    self.process.wait(timeout=self.KILL_GRACE)
+                    os.killpg(self.pid, sig)
+                except ProcessLookupError:
                     break
-                except subprocess.TimeoutExpired:
-                    continue
-                except Exception as e:
+                except OSError as e:
                     self.status_msg.append(f"[ERROR] killing process: {str(e)}")
                     break
+                end: float = time.monotonic() + self.KILL_GRACE
+                while self._alive() and time.monotonic() < end:
+                    time.sleep(0.005)
+                if not self._alive():
+                    break
         self.status()
+
+    def _alive(self) -> bool:
+        """The process runs. After a kill also: any other program of its group, the shell of a pipe may end first."""
+        if self.process.poll() is None:
+            return True
+        if not self.signalled:
+            return False
+        try:
+            os.killpg(self.pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except OSError:
+            return True
 
     def cleanup(self) -> None:
         if self.process and not self.closed:
             for reader in self.readers:     # read STDOUT/STDERR completely before closing
                 reader.join(timeout=1)
-            self.process.stdout.close() # type: ignore
-            self.process.stderr.close() # type: ignore
+            if not any(reader.is_alive() for reader in self.readers):   # closing what a thread still reads would block for good
+                self.process.stdout.close() # type: ignore
+                self.process.stderr.close() # type: ignore
             self.process.wait()
             self.closed = True
 
@@ -175,10 +199,10 @@ class Command:
         self._clear()
 
     def status(self) -> None:
-        if self.process is None:
-            return
+        if self.process is None or (self.closed and not self.running):
+            return      # not started, or its result is taken already
 
-        if self.process.poll() is None:
+        if self._alive():
             self.running = True
 
             if not self.permError: 
@@ -233,6 +257,7 @@ class Command:
         self.closed: bool = True
         self.didRun: bool = False
         self.killed: bool = False
+        self.signalled: bool = False
         self.status_msg: List[str] = []
 
         self.permError: bool = False
@@ -251,6 +276,8 @@ class Command:
             except PermissionError:
                 self.status_msg.append("[INFO] Insufficient Permissions: Can't read file " + self.io_path)
                 self.permError = True
+            except (FileNotFoundError, ProcessLookupError):
+                pass    # ended meanwhile, or killed while another program of its pipe is still there
 
     def _write_stdin(self, data: bytes) -> None:
         try:

@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    Job.KillAtExit()
     Job.limit = args.threads
 
     pool = TD_Pool()

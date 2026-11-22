@@ -1,4 +1,7 @@
 import os
+import signal
+import subprocess
+import sys
 import tempfile
 import unittest
 from time import sleep, time
@@ -410,6 +413,21 @@ class UT_Job(unittest.TestCase):
         self.assertEqual(Job.urgent, [])
         print("Q_REGISTRY_LIMIT")
 
+
+    def test_AU_killAtExit(self) -> None:
+        """Ctrl+C, SIGTERM and a closed terminal end what a command line program started"""
+        code: str = ("from backend.Command import Command; from backend.Job import Job; Job.KillAtExit(); "
+                     "e = Job.Add(Command('sleep 62.5 | cat'), runlist='x'); Job.Refresh(); print('up', flush=True); Job.Wait([e])")
+        for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 cwd=os.path.dirname(os.path.abspath(__file__)))
+            self.assertEqual(p.stdout.readline(), b"up\n")     # type: ignore
+            sleep(.2)
+            p.send_signal(number)
+            self.assertNotEqual(p.wait(10), 0)
+            p.stdout.close()                                    # type: ignore
+            self.assertEqual(Job.Run(Command("pgrep -x -f 'sleep 62.5'")).stdout, [], number.name)
+        print("AU_KILL_AT_EXIT")
 
     def test_AR_drive(self) -> None:
         """Entry.drive: a tape Entry belongs to its drive, others get it from the request; Registry and Flush can filter"""

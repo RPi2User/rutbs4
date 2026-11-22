@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    Job.KillAtExit()
 
     if args.tape:
         open(args.tape, "ab").close()      # Write() never creates its target
