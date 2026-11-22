@@ -249,11 +249,11 @@ Notes:
 ### TapeIoctl.py
 
 All ioctls on the tape device. As a command (a step of the queue, run by `Job`): `python3 TapeIoctl.py rewind|eject|readattr|writeattr /dev/nst0 ...`,
-exit code 0, 10 (no tape), 11 (busy) or 1 (everything else, the reason on stderr). As functions, in the process: `status()`
+exit code 0, 10 (no tape), 11 (busy), 12 (it loads or unloads) or 1 (everything else, the reason on stderr). As functions, in the process: `status()`
 (`MTIOCGET`), `serial()` and `scsi()` (`SG_IO`).
 
 Notes:
-- `readattr` / `writeattr` are the cartridge memory. They are only tested with fake ioctls; on an `aic79xx` HBA the kernel refuses commands of 16
+- `readattr` / `writeattr` are the cartridge memory. Both work on the LTO-8 (2026-11-22); on an `aic79xx` HBA the kernel refuses commands of 16
   bytes (`command too long`), READ ATTRIBUTE there ends with host status 0x05.
 
 ### TableOfContent.py
@@ -465,6 +465,10 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 - `UT_File` creates and deletes files in its fixture folder while running; `UT_Encryption` leaves the fixture as it was (it writes `.crypt` / `.restored` next to it and removes them).
 - `UnitTest.sh` runs everything but always exits 0; read the output.
 - Verified on 2026-11-18: all fourteen test files pass; `UT_ReadJob` also on the real LTO-8.
+- Verified on 2026-11-22: 165 tests. 16 of `UT_Checksum` and `UT_Encryption` could not be checked, the fixtures `test100.raw` were not at hand
+  (they fail with any other content); 6 skipped (3 need a real drive, `RUTBS_TEST_TAPE=1`, and 3 need flask). The rest passes.
+- `UT_TableOfContent.G` fails in about one of four runs, since before 2026-11-22: right after the start `/proc/<pid>/io` may not be readable yet,
+  and the message about it is part of the text that is compared.
 
 ---
 

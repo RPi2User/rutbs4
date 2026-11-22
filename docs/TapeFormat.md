@@ -80,6 +80,9 @@ points to the host, the HBA or the cable.
 | 9   | 400  | 381.5 |
 | 10  | 400  | 381.5 |
 
+A half height LTO-8 drive is slower than the table (300 instead of 360 MB/s, its nominal rate). Measured (2026-11-22, 45 s per candidate, incompressible): 276.9 MiB/s
+(290 MB/s, 81 % of the table) with 128K, 256K and 1M alike. So the warning is right for such a drive, and 128K is the pick.
+
 ## Cartridge memory
 
 | Attribute | Format | Content                                                                 |

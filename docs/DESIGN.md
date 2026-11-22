@@ -61,9 +61,10 @@ tape file N+1    TOC, state COMPLETE    the same content, plus the result of the
   - `read()` builds the command and fills the fields; `register()` writes a new fingerprint.
   - If the chip already holds a fingerprint, the TOC uses that one, so the chip is not
     rewritten on every registration of the tape.
-- **(proposal)** Attributes used on the chip (READ / WRITE ATTRIBUTE, ioctl `SG_IO` on `nstX`):
+- Attributes used on the chip (READ / WRITE ATTRIBUTE, ioctl `SG_IO` on `nstX`):
   `0x0801` application name = `rutbs`, `0x0802` application version = version as hex,
-  `0x0803` user medium text label = fingerprint. Needs to be checked on real drives.
+  `0x0803` user medium text label = fingerprint. Checked on the LTO-8 (2026-11-22): `format()` wrote and
+  both paths read it back, the other 34 attributes of the chip stayed as they were. Open: is it still there after an eject and a new load?
 
 ## Table of content
 
@@ -247,7 +248,10 @@ There is no second, blocking way to run a phase. The phases are implemented in
   | `EBUSY` → `BUSY` | somebody else has the device open, e.g. a running `dd` |
   | `EIO`, and `MTIOCGET` says neither "online" nor "no tape" → `NOT_READY` | it loads or unloads a tape (measured: 10 s and 6 s) |
 
-  Not covered: the second path of a drive with two cables has its own `nstX` device. A `dd` opens the device
+  Not covered: the second path of a drive with two cables has its own `nstX` device, and the driver keeps the position per path: after a
+  rewind with `sg_raw` one path of the LTO-8 said "begin of tape", the other did not, and the drive itself (READ POSITION) was there. After a
+  rewind through the driver both agreed. `EBUSY` also comes after an aborted write: the drive empties its buffer first (about 15 s on the LTO-8),
+  a rewind succeeds afterwards. A `dd` opens the device
   blocking and waits 2 minutes for a tape if there is none (123 s measured), so every job rewinds first.
 - **Reading rules, learned on the real drive:** `Read()` must not use `dd iflag=fullblock` (it reads on
   behind the file mark after a short last block and returns several tape files as one). Writing uses `dd conv=nocreat`: if the drive
@@ -260,7 +264,7 @@ There is no second, blocking way to run a phase. The phases are implemented in
 - **Everything else about a drive is an ioctl on `nstX`, too** (decided 2026-11-22, there is no sg3_utils, no `mt` and no `/dev/sgX` any more;
   the number of an `sg` device changes with every new disk): tape inserted, write protect and the density code
   with `MTIOCGET`, serial and cartridge memory with `SG_IO`; vendor and model come from sysfs. The LTO version is the
-  standardized density code (0x44 = LTO-3; tested with an LTO-3 drive, the codes of the other generations are from the specification), not the medium type of MODE SENSE, which differs between vendors. A drive that does not
+  standardized density code (0x44 = LTO-3; 0x5E = LTO-8; both tested with a drive, the codes of the other generations are from the specification), not the medium type of MODE SENSE, which differs between vendors. A drive that does not
   answer within 2 s is given up (the question runs in a thread), and what it does not tell is `UNKNOWN`.
 - **A rewind also sets the variable block mode** (`MTSETBLK 0`, decided 2026-11-22). A fixed mode (set by `stinit`, `mt setblk` or
   another program) survives a rewind (measured on the LTO-3 with 512 bytes): the block size of `dd` has no effect then, and a file or
@@ -311,6 +315,15 @@ passphrase, `Read` → `Decrypt` → `Validate` per file, rewind. Tested on the 
 1.4 GB in 15 files, byte-identical (`diff -r`) after the round trip, tape rewound and not ejected.
 Found on the way: the `dd iflag=fullblock` read, the end-of-data latch of the `st` driver (see "Drives") and
 a test tape without last TOC (restored with the copy from the TOC directory).
+
+**Review of 2026-11-22: ioctls only, confirmed on both drives.** Rewind, status, density code, serial (LTO-3 and LTO-8), reading and
+writing the cartridge memory (LTO-8; the `aic79xx` HBA of the LTO-3 refuses it) and `EBUSY`. Round trips, encrypted and plain, are
+byte-identical on both. The eject was only done on the LTO-3. No rewind was aborted; with `sg_raw` the kernel aborted them after 20 s on
+the LTO-8 until 2026-11-20. Not tried: a rewind from the end of a full LTO-8 tape.
+
+Six defects were found and fixed, each with a test: an incomplete scan (`Folder`), a file of unknown size (`File`), commands in the iv of a TOC
+(`Key`), `dd` making a regular file `/dev/nstX` (`TapeDrive`), a kill that missed the programs of a pipe and could hang (`Command`), cubic time
+to queue a folder (`Job`). Open points of the review are in [todo.md](todo.md).
 
 Everything below comes after the milestones and is postponed:
 

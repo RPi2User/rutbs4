@@ -8,6 +8,15 @@
 path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sein!)
 
 - Drive state machine: ask the drive for its state before every action except trivial ones (CM read, status). Find the SCSI query that shows "busy" while a write runs. See DESIGN.md, "Drives".
+- **At the drive, as soon as somebody can load a tape** (as of 2026-11-22):
+  - LTO-8: is the fingerprint still in the chip after an eject and a new load?
+  - LTO-3: a job is refused with `NOT_READY` while the tape loads (only unit tested).
+- **From the review of 2026-11-22**, read in the code, not reproduced:
+  - An exception in `Job.Refresh()` ends the `JobScheduler` thread without a word.
+  - A status query between two `dd` of a job opens the device for a moment; the next `dd` could get `EBUSY` and the job fails.
+  - `ReadJob` checks the free space of spool and target one by one, not together if both are on one mount.
+  - LTO-7 M8 counts as 6 TB instead of 9 TB.
+  - `Job.KillAtExit()` is called by the command line programs; the REST backend needs it as well when it is ported.
 - **RC:** Tape format with the bandwidth measurement / block size benchmark (destructive on purpose), result into the cartridge memory. See [TapeFormat.md](TapeFormat.md).
 - **Invalidate the tape if there is no space left.** If the write fails with "No space left on device", the tape gets a
   new TOC at its begin: state `FAILED` and an **empty body**, the files are removed from it. Nobody must get the idea that
