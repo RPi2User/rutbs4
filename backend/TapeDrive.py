@@ -237,8 +237,9 @@ class TapeDrive:
     SYSFS: str = "/sys/class/scsi_generic"
     LONG_TIMEOUT: int = 900         # seconds for sg_raw on REWIND, SPACE, LOAD/UNLOAD; its default is 20 s, and the
                                     # kernel aborts a rewind from the end of a full tape after that (seen 2026-11-20)
-    TOC_BLOCK: str = "256K"         # a TOC is always written and read like this, so it can be read before its own header is known
-    READ_BLOCK: str = TOC_BLOCK     # at least; the drive hands out each block as it was written. Bigger than the limit of the
+    TOC_BLOCK: str = "128K"         # a TOC is written like this, or smaller if the drive writes smaller blocks (tocBlock())
+    READ_BLOCK: str = "256K"        # at least: a TOC is read before its header is known, and tapes up to 2026-11 have 256K blocks.
+                                    # The drive hands out each block as it was written. Bigger than the limit of the
                                     # HBA fails (aic79xx: 4M works, 8M is EBUSY), smaller than the written block fails as well
 
     @staticmethod
@@ -252,7 +253,7 @@ class TapeDrive:
         except OSError:
             return ""
 
-    def __init__(self, path: str, generic_path: str, drive_override: bool = False, blocksize: str = "256K",
+    def __init__(self, path: str, generic_path: str, drive_override: bool = False, blocksize: str = "128K",
                  paths: List[Tuple[str, str]] | None = None, wwid: str = ""):
         self.path = path
         self.generic_path = generic_path
@@ -337,6 +338,10 @@ class TapeDrive:
         if not found or int(found.group(1)) == 0:
             raise ValueError("Not a block size: " + repr(blocksize))
         return int(found.group(1)) * {"": 1, "K": 1 << 10, "M": 1 << 20}[found.group(2)]
+
+    def tocBlock(self) -> str:
+        "The TOC has to be readable by everybody, but a drive may take nothing bigger than its own block size."
+        return min(self.TOC_BLOCK, self.blocksize, key=self.blockBytes)
 
     @staticmethod
     def readBlock(blocksize: str = "") -> str:

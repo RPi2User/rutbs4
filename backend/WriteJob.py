@@ -123,10 +123,10 @@ class WriteJob:
 
         self.drive.Rewind(runlist=r, dependsOn=known)
         self.firstToc = self.drive.Write(os.path.join(self.spool.path, "toc_start.json"), runlist=r, prepare=self._firstToc,
-                                          blocksize=self.drive.TOC_BLOCK)
+                                          blocksize=self.drive.tocBlock())
         self.folder.queueWrite(self.drive, r, self.spool, checksums)
         self.drive.Write(os.path.join(self.spool.path, "toc_end.json"), runlist=r, always=True, prepare=self._lastToc,
-                         blocksize=self.drive.TOC_BLOCK)
+                         blocksize=self.drive.tocBlock())
         rewound: str = self.drive.Rewind(runlist=r, always=True)
         if self.eject:
             self.drive.Eject(runlist=r)                 # only after success: a failed job aborts it

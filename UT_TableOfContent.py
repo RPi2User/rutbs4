@@ -55,7 +55,7 @@ class UT_TableOfContent(unittest.TestCase):
             self.assertEqual(header["version"], Version.word())
             self.assertEqual(header["state"], "IDLE")
             self.assertEqual(header["threadCount"], 2)
-            self.assertEqual(header["blocksize"], "256K")
+            self.assertEqual(header["blocksize"], "128K")
             self.assertEqual(header["body_cipher"], "AES256CTR")
             self.assertEqual(header["tape"]["lto-version"], "LTO_3")
             self.assertRegex(header["fingerprint"], r"^[0-9a-f-]{36}$")

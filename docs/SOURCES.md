@@ -213,7 +213,7 @@ next tape file); `WriteRandom(size, blocksize)` writes test data for the block s
 `SpaceEnd()` (SCSI SPACE with `sg_raw`) are optional, no job uses them. There is no `mt`.
 The long comment at the top of the file explains the SCSI commands and is worth reading.
 
-- `TapeDrive(path, generic_path, drive_override=False, blocksize="256K", paths=None, wwid="")` —
+- `TapeDrive(path, generic_path, drive_override=False, blocksize="128K", paths=None, wwid="")` —
   `path` is the non-rewinding device (`/dev/nst0`), `generic_path` the SCSI generic device
   (`/dev/sg0`). The constructor queries vendor/model/serial (INQUIRY) and the tape (MODE SENSE).
   `wwid` is the id the kernel gives the logical unit (read from sysfs if not given), `paths` all
@@ -331,7 +331,7 @@ Destructive on purpose.
 bench = BlockSizeBenchmark(td)           # seconds=120 or size=bytes, candidates=None
 bench.queue(); bench.wait()
 bench.results                            # {block size in bytes: bytes/s} of the candidates that worked
-bench.blocksize, bench.note              # "256K", and a warning if only part of the ideal bandwidth is usable
+bench.blocksize, bench.note              # "128K", and a warning if only part of the ideal bandwidth is usable
 BlockSizeBenchmark.pick(results, ideal)  # the rule alone
 ```
 

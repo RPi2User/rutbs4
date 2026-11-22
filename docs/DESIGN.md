@@ -253,10 +253,14 @@ There is no second, blocking way to run a phase. The phases are implemented in
   behind the file mark after a short last block and returns several tape files as one). No `dd` may read at the end of the
   data (see above). The buffer of `dd` must be at least as big as the block that was written and not bigger than the HBA allows: on an
   `aic79xx` 4M works, 8M does not (`EBUSY`); a smaller buffer than the block fails with `ENOMEM`. Therefore 256K, or the block size of the TOC header if that is
-  bigger; the TOC itself is always written and read in blocks of 256K.
+  bigger (256K as tapes up to 2026-11 have such blocks); the TOC itself is written in blocks of 128K, or of the block size of the drive if that is smaller.
 - Position: the backend only knows "at begin of tape" or "not". It rewinds itself before
   it starts a job.
-- Block size belongs to the tape and is stored in the TOC header. Default `256K`, TOCs are always written with it.
+- **A rewind also sets the variable block mode** (`MTSETBLK 0`, decided 2026-11-22). A fixed mode (set by `stinit`, `mt setblk` or
+  another program) survives a rewind (measured on the LTO-3 with 512 bytes): the block size of `dd` has no effect then, and a file or
+  TOC that is no multiple of it fails with `Invalid argument` in the middle. Only LTO is promised; a drive that refuses the switch
+  fails the rewind, before anything is written. It is part of the rewind ioctl, not a new interface of the OS.
+- Block size belongs to the tape and is stored in the TOC header. Default `128K` (decided 2026-11-22: it is measured that it costs nothing, see TapeFormat.md), `64K` only if the drive takes nothing bigger.
 - **Block size benchmark (wanted for the release candidate):** a tape is formatted once and the format measures
   the bandwidth for several block sizes and keeps the best in the cartridge memory. The block size depends on
   the cartridge, not only on the drive. See [TapeFormat.md](TapeFormat.md).

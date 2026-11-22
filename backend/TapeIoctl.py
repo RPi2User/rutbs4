@@ -8,7 +8,13 @@ Through the driver, because a rewind with `sg_raw` goes behind its back: once a 
 driver answers every later read with an I/O error, and only its own rewind clears that (measured on an LTO-3, 2026-11-22).
 
 The device is opened with O_NONBLOCK: a normal open waits 2 minutes for a tape if there is none (`dd` does, too).
-So a rewind answers at once and is the way to ask the drive whether it can take an order:
+So a rewind answers at once and is the way to ask the drive whether it can take an order.
+
+A rewind also switches the drive to variable block mode (MTSETBLK 0): then every write of `dd` is one block on the tape
+and the last block of a file may be shorter. In a fixed mode (`mt setblk 512`, `/etc/stinit.def`, another program) the
+block size of `dd` has no effect on the tape, and a file that is no multiple of the block fails. A rewind alone does not
+change the mode. If the drive refuses the switch the rewind fails, before anything is written.
+
 
 | Exit code       | Meaning                                                       |
 |-----------------|---------------------------------------------------------------|
@@ -25,7 +31,10 @@ import struct
 import sys
 
 MTIOCTOP: int = 0x40086D01      # _IOW('m', 1, struct mtop {short mt_op; int mt_count;})
-OPERATIONS: dict = {"rewind": 6, "eject": 7}    # MTREW, MTOFFL (rewind and unload)
+MTREW: int = 6
+MTOFFL: int = 7                 # rewind and unload
+MTSETBLK: int = 20
+OPERATIONS: dict = {"rewind": [(MTREW, 1), (MTSETBLK, 0)], "eject": [(MTOFFL, 1)]}      # (operation, count)
 NO_MEDIUM: int = 10
 BUSY: int = 11
 
@@ -38,7 +47,8 @@ def operate(operation: str, device: str) -> None:
     """Raises OSError if the driver refuses."""
     fd: int = os.open(device, os.O_RDONLY | os.O_NONBLOCK)
     try:
-        fcntl.ioctl(fd, MTIOCTOP, struct.pack("hi", OPERATIONS[operation], 1))
+        for op, count in OPERATIONS[operation]:
+            fcntl.ioctl(fd, MTIOCTOP, struct.pack("hi", op, count))
     finally:
         os.close(fd)
 

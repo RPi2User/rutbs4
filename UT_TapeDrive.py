@@ -1,4 +1,5 @@
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -118,6 +119,9 @@ class UT_TapeDrive(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             td: TapeDrive = self._drive(tmp)
+            self.assertEqual((td.blocksize, td.tocBlock()), ("128K", "128K"))
+            td.blocksize = "1M"; self.assertEqual(td.tocBlock(), "128K")
+            td.blocksize = "64K"; self.assertEqual(td.tocBlock(), "64K")        # the drive takes nothing bigger
             td.Write("/x", blocksize="256K"); td.Read("/y", blocksize="4M")
             commands: list = [Job.Get(e).command.cmd for _, e in td.entries]
             self.assertIn("bs=256K", commands[0])
@@ -151,6 +155,24 @@ class UT_TapeDrive(unittest.TestCase):
                 done = subprocess.run([sys.executable, TapeIoctl.__file__] + args, capture_output=True, text=True)
                 self.assertEqual(done.returncode, code, done.stderr)
                 self.assertTrue(done.stderr)
+
+            # a rewind also switches to variable block mode, after the rewind; an eject does not
+            real = TapeIoctl.fcntl.ioctl
+            calls: list = []
+            try:
+                TapeIoctl.fcntl.ioctl = lambda fd, request, data: calls.append((request, data))      # type: ignore
+                TapeIoctl.operate("rewind", plain)
+                TapeIoctl.operate("eject", plain)
+                self.assertEqual(calls, [(TapeIoctl.MTIOCTOP, struct.pack("hi", op, count)) for op, count in ((6, 1), (20, 0), (7, 1))])
+
+                def refusing(fd, request, data):        # the drive takes the rewind but not the mode
+                    if struct.unpack("hi", data)[0] == TapeIoctl.MTSETBLK:
+                        raise OSError(errno.EIO, "refused")
+                TapeIoctl.fcntl.ioctl = refusing        # type: ignore
+                with self.assertRaises(OSError):
+                    TapeIoctl.operate("rewind", plain)
+            finally:
+                TapeIoctl.fcntl.ioctl = real
         print("H_IOCTL_HELPER")
 
     def test_I_unknownTape(self) -> None:

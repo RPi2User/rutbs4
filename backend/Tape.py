@@ -105,7 +105,7 @@ class Tape():
 
     """
 
-    def __init__(self, hardware_id: str, generic_path: str, blocksize: str = "256K")-> None:
+    def __init__(self, hardware_id: str, generic_path: str, blocksize: str = "128K")-> None:
 
         self.lto_version: E_LTOv = E_LTOv.NONE
         self.native_capacity: int = 0

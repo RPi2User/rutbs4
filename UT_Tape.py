@@ -39,7 +39,7 @@ class UT_Tape(unittest.TestCase):
             self.assertEqual(t.write_protect, False)
             self.assertEqual(t.begin_of_tape, False)
             self.assertEqual(t.state, E_Tape.ONLINE)
-            self.assertEqual(t.blocksize, "256K")
+            self.assertEqual(t.blocksize, "128K")
 
             self.assertIsInstance(t, Tape)
             self.assertIsInstance(t.lto_version, E_LTOv)
@@ -83,7 +83,7 @@ class UT_Tape(unittest.TestCase):
             self.assertEqual(t.native_capacity, 512)
             self.assertEqual(t.write_protect, False)
             self.assertEqual(t.state, E_Tape.ONLINE)
-            self.assertEqual(t.blocksize, "256K")
+            self.assertEqual(t.blocksize, "128K")
 
             self.assertIsInstance(t, Tape)
             self.assertIsInstance(t.lto_version, E_LTOv)

@@ -29,7 +29,7 @@ class BlockSizeBenchmark:
     | `blocksize`, `note`   | the pick as text (`"256K"`) and the hint that goes with it, `""` if none |
     | `pick(results, ideal)` | the rule, a pure function: block size in bytes and note           |
 
-    The rule: every block size with at least 90 % of the ideal rate of the cartridge (`Tape.native_rate`)
+    The rule: 64K (`FALLBACK`) only counts if nothing bigger could be written. Of the others, every block size with at least 90 % of the ideal rate of the cartridge (`Tape.native_rate`)
     is good enough, of those the smallest is taken: a smaller block is kinder to the HBA and the driver
     buffer. If the LTO version has no known ideal rate, the best measured speed is the yardstick.
     If even the best block size stays below 90 %, the note warns how much of the bandwidth is usable (a
@@ -43,17 +43,19 @@ class BlockSizeBenchmark:
     of the middle of the run (see `rate()`): spin up and spin down of the tape distort a short run.
     """
 
-    DEFAULT: int = 256 * 1024
-    # Five sizes for an unknown tape, rather few and measured long. Not below 128K: the differences below it are noise,
-    # and HP asks for 128 KiB at least per transfer. Not above 1M: 4M is the limit of some HBAs (aic79xx).
-    CANDIDATES: List[int] = [n * 1024 for n in (256, 128, 384, 512, 1024)]
+    DEFAULT: int = 128 * 1024
+    # 128K is the reference and the default: HP asks for 128 KiB at least per transfer. 64K is only the fallback for a drive that takes
+    # nothing bigger. 4M is the limit of some HBAs (aic79xx), bigger sizes are for SAS drives from LTO-8 on.
+    CANDIDATES: List[int] = [n * 1024 for n in (128, 64, 256, 384, 512, 1024, 4096)]
+    FALLBACK: int = 64 * 1024               # measured, but only picked if nothing bigger works
     TOLERANCE: float = 0.1                  # a block size may be 10 % below the ideal rate
     SECONDS: int = 120
     HEAD: int = 20                          # seconds left out: the tape has to spin up and the drive buffer fills
     TAIL: int = 5                           # seconds left out at the end: the flush, the file mark and the spin down
     MIN_SAMPLES: int = 10                   # fewer progress reports in the middle: the whole run is taken
     UNKNOWN_RATE: int = 100 * 10**6         # bytes/s, to size the test if the LTO version has no ideal rate
-    NOTHING: str = "Nothing could be measured, 256K is used."
+    NOTHING: str = "Nothing could be measured, 128K is used."
+    ONLY_FALLBACK: str = "Warning: only 64K works, no bigger block size."
     WARNING: str = "Warning: only {percent} % of the ideal bandwidth is usable. Is this a half height drive or a worn tape?"
     STATS = re.compile(r"(\d+) bytes [^\r]*?copied, ([\d.]+) s")
 
@@ -89,6 +91,10 @@ class BlockSizeBenchmark:
         "The rule, see the class doc. `results` is {block size: bytes/s}, `ideal` bytes/s or 0 if unknown."
         if not results:
             return BlockSizeBenchmark.DEFAULT, BlockSizeBenchmark.NOTHING
+        bigger: Dict[int, float] = {bs: rate for bs, rate in results.items() if bs > BlockSizeBenchmark.FALLBACK}
+        if not bigger:
+            return min(results), BlockSizeBenchmark.ONLY_FALLBACK
+        results = bigger
         best: float = max(results.values())
         warning: str = ""
         if ideal and best < (1 - BlockSizeBenchmark.TOLERANCE) * ideal:

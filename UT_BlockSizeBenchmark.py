@@ -19,14 +19,15 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
     The block size benchmark: the rule that picks a block size, and the run list on a fake drive
     (a regular file, rewind is a shell command that leaves a trace).
     Tests A:
-        - A: the candidates, 256K first; labels
+        - A: the candidates, 128K first; labels
         - B: the rule: at least 90 % of the ideal rate is good enough, the smallest of those is taken
-        - C: below 90 % of the ideal rate: a warning with the usable percentage, the best one is the yardstick; nothing measured: 256K
+        - C: below 90 % of the ideal rate: a warning with the usable percentage, the best one is the yardstick; nothing measured: 128K
         - D: an unknown ideal rate: the best measured speed is the yardstick
         - E: the whole run list on a fake drive: rewind, test data, ..., rewind; every candidate measured
-        - F: every write fails: the other steps still run, the final rewind too, 256K and the note
+        - F: every write fails: the other steps still run, the final rewind too, 128K and the note
         - G: requests that are refused up front
         - H: the speed is that of the middle of the run, spin up and spin down do not count
+        - I: 64K is measured, but only picked if nothing bigger works
     Depdencies:
     - openssl, dd
     """
@@ -58,12 +59,9 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
 
     def test_A_candidates(self) -> None:
         c = BlockSizeBenchmark.CANDIDATES
-        self.assertEqual(c[0], 256 * KiB)
-        self.assertEqual(len(c), len(set(c)))
-        self.assertTrue(all(bs % (64 * KiB) == 0 for bs in c))
-        self.assertEqual(sorted(c)[0], 128 * KiB)         # the lower limit
-        self.assertEqual(sorted(c)[-1], MiB)               # below the limit of every HBA seen so far
-        self.assertEqual(len(c), 5)
+        self.assertEqual(c[0], 128 * KiB)                  # the reference and default
+        self.assertEqual(BlockSizeBenchmark.DEFAULT, 128 * KiB)
+        self.assertEqual(sorted(c), [n * KiB for n in (64, 128, 256, 384, 512, 1024, 4096)])
         self.assertEqual([BlockSizeBenchmark.label(bs) for bs in (256 * KiB, 384 * KiB, MiB, 4 * MiB)], ["256K", "384K", "1M", "4M"])
         print(".A_CANDIDATES")
 
@@ -94,7 +92,7 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
         self.assertIn("half height drive or a worn tape", BlockSizeBenchmark.WARNING)
 
         # nothing measured: the default
-        self.assertEqual(BlockSizeBenchmark.pick({}, self.IDEAL), (256 * KiB, BlockSizeBenchmark.NOTHING))
+        self.assertEqual(BlockSizeBenchmark.pick({}, self.IDEAL), (128 * KiB, BlockSizeBenchmark.NOTHING))
         print(".C_WARNING")
 
     def test_D_unknownIdeal(self) -> None:
@@ -108,7 +106,7 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             td: TapeDrive = self._drive(tmp)
             candidates: list = [256 * KiB, 64 * KiB, 4 * MiB]
-            bench: BlockSizeBenchmark = BlockSizeBenchmark(td, size=2 * MiB, candidates=candidates)
+            bench: BlockSizeBenchmark = BlockSizeBenchmark(td, size=64 * MiB, candidates=candidates)     # big enough that the start of openssl does not count
 
             self.assertEqual(bench.state, "NEW")
             bench.queue()
@@ -120,13 +118,13 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
             self.assertEqual(sorted(bench.results), sorted(candidates))     # all measured
             self.assertTrue(all(rate > 0 for rate in bench.results.values()))
 
-            # a file is much faster than 80 MB/s, so every candidate is good enough: the smallest wins
-            self.assertEqual(bench.blocksize, "64K")
+            # a file is much faster than 80 MB/s, so every candidate is good enough: the smallest above the fallback wins
+            self.assertEqual(bench.blocksize, "256K")
             self.assertEqual(bench.note, "")
             self.assertEqual([r["blocksize"] for r in bench._asdict()["results"]], ["256K", "64K", "4M"])
 
-            # the fake tape holds the last test: 4M blocks, 2 MiB rounded up to one block
-            self.assertEqual(os.path.getsize(td.path), 4 * MiB)
+            # the fake tape holds the last test, all of it
+            self.assertEqual(os.path.getsize(td.path), 64 * MiB)
             with open(td.path, "rb") as f:
                 self.assertGreater(len(set(f.read(4096))), 100)             # not zeros
         print(".E_RUNLIST")
@@ -142,7 +140,7 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
             self.assertEqual(bench.state, "COMPLETED")
             self.assertEqual(bench.results, {})
             self.assertEqual(self._rewinds(tmp), 3)                         # a failed candidate stops nothing
-            self.assertEqual(bench.blocksize, "256K")
+            self.assertEqual(bench.blocksize, "128K")
             self.assertEqual(bench.note, BlockSizeBenchmark.NOTHING)
             self.assertEqual([r["state"] for r in bench._asdict()["results"]], ["FAILED", "FAILED"])
         print(".F_FAILING")
@@ -173,6 +171,13 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
         self.assertEqual(BlockSizeBenchmark.rate(["dd: error writing"]), 0)
         self.assertEqual(BlockSizeBenchmark.rate([]), 0)
         print(".H_MIDDLE")
+
+    def test_I_fallback(self) -> None:
+        good: float = 80e6
+        self.assertEqual(BlockSizeBenchmark.pick({64 * KiB: 2 * good, 128 * KiB: good}, self.IDEAL), (128 * KiB, ""))     # never because it is faster
+        self.assertEqual(BlockSizeBenchmark.pick({64 * KiB: good, 512 * KiB: good, 256 * KiB: 1e6}, self.IDEAL)[0], 512 * KiB)
+        self.assertEqual(BlockSizeBenchmark.pick({64 * KiB: good}, self.IDEAL), (64 * KiB, BlockSizeBenchmark.ONLY_FALLBACK))     # nothing bigger worked
+        print(".I_FALLBACK")
 
 
 if __name__ == "__main__":

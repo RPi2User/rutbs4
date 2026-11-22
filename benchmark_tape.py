@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--seconds", type=int, default=BlockSizeBenchmark.SECONDS, help="Duration of one candidate at the ideal rate")
     parser.add_argument("--size", type=int, default=0, help="Bytes per candidate instead of --seconds")
-    parser.add_argument("--blocksizes", default="", help="Comma separated candidates in KiB, e.g. 256,384,512 (default: all)")
+    parser.add_argument("--blocksizes", default="", help="Comma separated candidates in KiB, e.g. 128,384,512 (default: all)")
     parser.add_argument("--tape", default="", help="A regular file instead of the first drive found, for local testing")
     parser.add_argument("--rewind-cmd", default="", help="Rewind command of the fake tape")
     parser.add_argument("--lto-version", default="3", help="LTO version of the fake tape")

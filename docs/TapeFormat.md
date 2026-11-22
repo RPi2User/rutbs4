@@ -2,7 +2,7 @@
 
 **Status: the benchmark exists (`BlockSizeBenchmark`, `benchmark_tape.py`, see SOURCES.md), the format around it does not.**
 The pieces that exist today are `CartridgeMemory.format()` (writes a new fingerprint), the block size benchmark
-and the default block size `256K` in `TapeDrive`. The result is not stored in the cartridge memory yet.
+and the default block size `128K` in `TapeDrive`. The result is not stored in the cartridge memory yet.
 
 A tape is **formatted** once, before its first use, and again whenever the operator wants. Formatting
 prepares the cartridge for rutbs: it gives the tape its identity and finds out how to write to it fast.
@@ -30,11 +30,13 @@ Why per tape: the same LTO-3 drive and host reached the full speed with 384K on 
 and only 50 MB/s on another make, where 256K is right (operator's measurement). The value belongs to the
 cartridge, and probably to the drive it was measured on.
 
-- **Default: `256K`.** It is the first candidate, the reference of the table, and the value used when no
-  benchmark ran or none could decide. It is a multiple of 512 (the tar block) and fills the drive buffer well.
-- **At most five candidates, measured for a long time** (decided 2026-11-22): `256K`, `128K`, `384K`, `512K`, `1M`. 128K is the lower
-  limit (HP asks for at least 128 KiB per transfer), 1M the upper one: bigger blocks brought nothing on the LTO-3, and 4M is the limit of
-  an `aic79xx` HBA. A candidate the driver or HBA refuses is left out of the table.
+- **Default: `128K`.** It is the first candidate, the reference of the table, and the value used when no
+  benchmark ran or none could decide. HP asks for at least 128 KiB per transfer. Decided 2026-11-22: the default is what is measured not to
+  hurt, not what once happened to be nice: on the LTO-3 (IBM TD3) 128K was as fast as 256K, 384K, 512K and 1M (77.5 MiB/s in the middle of a
+  120 s run), and it is a multiple of 512.
+- Candidates: `64K`, `128K`, `256K`, `384K`, `512K`, `1M`, `4M`, 120 s each. `4M` is for SAS drives from LTO-8 on (and the limit of an
+  `aic79xx` HBA). `64K` is measured but **only picked if nothing bigger works**: every bigger `dd` ended with an exit code other than 0.
+  A candidate the driver or HBA refuses is left out of the table.
 - Writing is measured, not reading: in variable block mode the block size is fixed by what is on the tape, a read
   with a smaller `bs` fails (`st(4)`), so a read cannot compare block sizes.
 - Per candidate: rewind, `dd` for about 120 s. The amount is `native_rate` (table below) times the time,
@@ -55,7 +57,7 @@ cartridge, and probably to the drive it was measured on.
 - **Warning instead of an error:** if even the best block size stays below 90 % of the ideal rate, the answer
   warns: "only xxx % of the ideal bandwidth is usable. Is this a half height drive or a worn tape?" The best one
   is the yardstick then: the smallest block size within 90 % of the best is picked. Only if nothing could be
-  measured, `256K` is used (and the answer says so).
+  measured, `128K` is used (and the answer says so).
 - The answer is the table (block size, MiB/s, share of the ideal rate) and the pick, so the operator sees
   what was measured.
 
