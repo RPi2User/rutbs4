@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Block size benchmark of one tape (see docs/TapeFormat.md): for each candidate block size the tape is rewound
-and incompressible test data is written from its begin, 30 s worth of the ideal rate by default. The tape is
+and incompressible test data is written from its begin, 120 s worth of the ideal rate by default; the spin up and
+spin down of the tape are left out of the measurement. The tape is
 OVERWRITTEN on purpose and NOT ejected. Prints the table and the block size to use; nothing is stored on the tape.
 
 Example (real LTO drive, the first drive found):

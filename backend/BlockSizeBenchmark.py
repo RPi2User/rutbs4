@@ -25,6 +25,7 @@ class BlockSizeBenchmark:
     | `wait(timeout)`       | Blocks until everything is finished, False on timeout                |
     | `state`               | `NEW`, `RUNNING` or `COMPLETED`                                      |
     | `results`             | `{block size in bytes: bytes/s}`, only the candidates that were measured |
+    | `rate(stderr)`        | bytes/s of one write, the middle of the run, a pure function |
     | `blocksize`, `note`   | the pick as text (`"256K"`) and the hint that goes with it, `""` if none |
     | `pick(results, ideal)` | the rule, a pure function: block size in bytes and note           |
 
@@ -36,21 +37,47 @@ class BlockSizeBenchmark:
     Only if nothing could be measured, `DEFAULT` is taken and the note says so.
 
     A candidate that fails (the driver or the HBA refuses the block size) is left out and does not
-    stop the others: every step is a closing step (`always`) and the steps do not depend on each other,
+    stop the others: every step is a closing step (`always`) and a write only depends on the rewind before it,
     the drive works its queue in order anyway. Each candidate writes the same amount of data,
-    `native_rate` times `seconds` (or `size` bytes), so it runs long enough for the tape mechanics
-    to reach full speed.
+    `native_rate` times `seconds` (or `size` bytes). Few sizes are measured for a long time, and the speed is that
+    of the middle of the run (see `rate()`): spin up and spin down of the tape distort a short run.
     """
 
     DEFAULT: int = 256 * 1024
-    # No candidate below 128K: the speed differences below it are noise, and HP asks for 128 KiB at least per transfer.
-    CANDIDATES: List[int] = [DEFAULT] + [n * 64 * 1024 for n in (2, 3, 5, 6, 7, 8, 12, 16, 32, 64)]
+    # Five sizes for an unknown tape, rather few and measured long. Not below 128K: the differences below it are noise,
+    # and HP asks for 128 KiB at least per transfer. Not above 1M: 4M is the limit of some HBAs (aic79xx).
+    CANDIDATES: List[int] = [n * 1024 for n in (256, 128, 384, 512, 1024)]
     TOLERANCE: float = 0.1                  # a block size may be 10 % below the ideal rate
-    SECONDS: int = 30
+    SECONDS: int = 120
+    HEAD: int = 20                          # seconds left out: the tape has to spin up and the drive buffer fills
+    TAIL: int = 5                           # seconds left out at the end: the flush, the file mark and the spin down
+    MIN_SAMPLES: int = 10                   # fewer progress reports in the middle: the whole run is taken
     UNKNOWN_RATE: int = 100 * 10**6         # bytes/s, to size the test if the LTO version has no ideal rate
     NOTHING: str = "Nothing could be measured, 256K is used."
     WARNING: str = "Warning: only {percent} % of the ideal bandwidth is usable. Is this a half height drive or a worn tape?"
-    STATS = re.compile(r"(\d+) bytes .*copied, ([\d.]+) s")
+    STATS = re.compile(r"(\d+) bytes [^\r]*?copied, ([\d.]+) s")
+
+    @staticmethod
+    def rate(stderr: List[str]) -> float:
+        """
+        Bytes/s of a write out of what `dd status=progress` said, 0 if it said nothing usable. The spin up and the spin down
+        of the tape distort the whole run, so only the middle counts: the slope of the progress reports (one per
+        second) without the first `HEAD` and the last `TAIL` seconds. A run too short for that counts as a whole.
+        """
+        points: List[Tuple[float, int]] = [(float(m.group(2)), int(m.group(1)))
+                                           for line in stderr for m in BlockSizeBenchmark.STATS.finditer(line)]
+        points = [p for p in points if p[0] > 0]
+        if not points:
+            return 0
+        seconds, size = points[-1]                  # the last line is the result of the whole run
+        middle: List[Tuple[float, int]] = [p for p in points[:-1]
+                                           if BlockSizeBenchmark.HEAD <= p[0] <= seconds - BlockSizeBenchmark.TAIL]
+        if len(middle) < BlockSizeBenchmark.MIN_SAMPLES:
+            return size / seconds
+        t: float = sum(p[0] for p in middle) / len(middle)
+        b: float = sum(p[1] for p in middle) / len(middle)
+        spread: float = sum((p[0] - t) ** 2 for p in middle)
+        return sum((p[0] - t) * (p[1] - b) for p in middle) / spread if spread else size / seconds
 
     @staticmethod
     def label(blocksize: int) -> str:
@@ -89,8 +116,8 @@ class BlockSizeBenchmark:
 
         r: str = self.runlist
         for bs in self.candidates:
-            self.drive.Rewind(runlist=r, always=True)
-            self.steps.append((bs, self.drive.WriteRandom(self.size, bs, runlist=r, always=True)))
+            rewound: str = self.drive.Rewind(runlist=r, always=True)     # without a tape dd would wait for one
+            self.steps.append((bs, self.drive.WriteRandom(self.size, bs, runlist=r, dependsOn=rewound, always=True)))
         self.drive.Rewind(runlist=r, always=True)
 
         with Job.lock:
@@ -113,10 +140,9 @@ class BlockSizeBenchmark:
             entry = Job.Get(entryId)
             if entry.state is not EntryState.COMPLETED:
                 continue
-            for line in entry.command.stderr:       # dd prints its stats after it closed the tape: the flush is in the time
-                found = self.STATS.search(line)
-                if found and float(found.group(2)) > 0:
-                    out[bs] = int(found.group(1)) / float(found.group(2))
+            measured: float = self.rate(entry.command.stderr)
+            if measured:
+                out[bs] = measured
         return out
 
     @property

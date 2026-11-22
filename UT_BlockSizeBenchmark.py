@@ -26,6 +26,7 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
         - E: the whole run list on a fake drive: rewind, test data, ..., rewind; every candidate measured
         - F: every write fails: the other steps still run, the final rewind too, 256K and the note
         - G: requests that are refused up front
+        - H: the speed is that of the middle of the run, spin up and spin down do not count
     Depdencies:
     - openssl, dd
     """
@@ -61,7 +62,8 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
         self.assertEqual(len(c), len(set(c)))
         self.assertTrue(all(bs % (64 * KiB) == 0 for bs in c))
         self.assertEqual(sorted(c)[0], 128 * KiB)         # the lower limit
-        self.assertEqual(sorted(c)[-1], 4 * MiB)
+        self.assertEqual(sorted(c)[-1], MiB)               # below the limit of every HBA seen so far
+        self.assertEqual(len(c), 5)
         self.assertEqual([BlockSizeBenchmark.label(bs) for bs in (256 * KiB, 384 * KiB, MiB, 4 * MiB)], ["256K", "384K", "1M", "4M"])
         print(".A_CANDIDATES")
 
@@ -155,6 +157,22 @@ class UT_BlockSizeBenchmark(unittest.TestCase):
             self.assertRaises(RuntimeError, bench.queue)                    # only once
             bench.wait(60)
         print(".G_REFUSED")
+
+    def test_H_middleOfTheRun(self) -> None:
+        # 3 s without any data, then 80 MB/s, a slow end: the middle says 80 MB/s, the whole run much less
+        def line(seconds: float, size: int) -> str:
+            return f"{size} bytes (x MB, y MiB) copied, {seconds:g} s, z MB/s"
+        progress: str = "\r".join(line(t, int(80e6 * max(0, t - 3))) for t in range(1, 121))
+        end: list = ["9600+0 records in", "9600+0 records out", line(130.5, int(80e6 * 117))]
+        rate: float = BlockSizeBenchmark.rate([progress] + end)
+        self.assertAlmostEqual(rate, 80e6, delta=1e3)
+        self.assertLess(80e6 * 117 / 130.5, 0.9 * rate)                        # what the whole run would have said
+
+        self.assertEqual(BlockSizeBenchmark.rate(end), 80e6 * 117 / 130.5)      # no progress: the whole run
+        self.assertEqual(BlockSizeBenchmark.rate(["\r".join([line(1, 5), line(2, 10)]), line(2.5, 12)]), 12 / 2.5)   # too short
+        self.assertEqual(BlockSizeBenchmark.rate(["dd: error writing"]), 0)
+        self.assertEqual(BlockSizeBenchmark.rate([]), 0)
+        print(".H_MIDDLE")
 
 
 if __name__ == "__main__":
