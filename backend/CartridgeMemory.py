@@ -1,9 +1,11 @@
 import json
+import sys
 import uuid
 from typing import Dict, List
 
+from backend import TapeIoctl
 from backend.Command import Command
-from backend.Job import EntryState, Job
+from backend.Job import Job
 from backend.Version import Version
 
 class CartridgeMemory:
@@ -11,9 +13,9 @@ class CartridgeMemory:
     """
     #### === CartridgeMemory ==================================================
 
-    The chip in the cartridge (MAM), read and written with `sg_read_attr` / `sg_write_attr`.
-    Reading is attempted, a drive or tape without a usable chip leaves the fields empty and
-    `error` filled; the tape works without it.
+    The chip in the cartridge (MAM), read and written with READ / WRITE ATTRIBUTE, see TapeIoctl. It is optional: a drive, tape
+    or HBA without a usable chip leaves the fields empty and `error` filled (an `aic79xx` HBA refuses the command, it
+    is 16 bytes long); the tape works without it.
 
     | Attribute | Format | Bytes | Content                                          |
     |-----------|--------|-------|--------------------------------------------------|
@@ -21,20 +23,23 @@ class CartridgeMemory:
     | `0x0802`  | ASCII  | 8     | `version`, the backend version as 4 hex digits   |
     | `0x0803`  | text   | 160   | `fingerprint`, a UUID                            |
 
+    Reading and writing are steps of the queue of the drive, like `Rewind()`. Nothing is read by itself.
+
     Example:
-        cm = CartridgeMemory("/dev/sg12")
+        cm = CartridgeMemory("/dev/nst0", td.id)
+        Job.Wait([cm.read()])
         if cm.fingerprint == "":
-            cm.format()         # ALWAYS a new fingerprint, starts sg_write_attr
-            Job.Wait([cm.entry])    # the chip is slow, the write has `WRITE_DEADLINE_MS`
+            cm.format()         # ALWAYS a new fingerprint
+            Job.Wait([cm.entry])
         print(cm)
 
-    The fields change when the write is finished and succeeded, not before. A failed write keeps
+    The fields change when a step is finished and succeeded, not before. A failed write keeps
     the old values and sets `error`.
 
     | `CartridgeMemory.`  | Description                                                          |
     |---------------------|----------------------------------------------------------------------|
-    | `read()`            | Reads the chip, an urgent `Job` Entry with `READ_DEADLINE_MS`        |
-    | `format()`          | Starts writing name, version and a NEW fingerprint, see `entry`      |
+    | `read()`            | Queues the reading of the chip, returns the entry id                 |
+    | `format()`          | Queues the writing of name, version and a NEW fingerprint, see `entry` |
     | `cmd`, `entry`      | The last `Command` and its `Job` Entry id, `None` / `""` if none     |
     | `appName`, `version`, `fingerprint`, `error` | `""` if unknown                            |
     """
@@ -43,23 +48,18 @@ class CartridgeMemory:
     ID_VERSION: int = 0x0802
     ID_LABEL: int = 0x0803
     APP_NAME: str = "rutbs"
-    READ_DEADLINE_MS: int = 2000        # a query takes a few ms on a healthy drive
-    WRITE_DEADLINE_MS: int = 60000      # the chip is slow
 
-    def __init__(self, device: str = "", readTool: str = "sg_read_attr", writeTool: str = "sg_write_attr") -> None:
-        self.device: str = device               # generic device of the drive, e.g. /dev/sg12
-        self.readTool: str = readTool
-        self.writeTool: str = writeTool
+    def __init__(self, device: str = "", drive: str = "", tool: str = "") -> None:
+        self.device: str = device               # non-rewinding device of the drive, e.g. /dev/nst0
+        self.drive: str = drive or device       # TapeDrive.id, the queue of the drive
+        self.tool: str = tool or Command.quote(sys.executable) + " " + Command.quote(TapeIoctl.__file__)
         self.cmd: Command | None = None
         self.entry: str = ""
         self._appName: str = ""
         self._version: str = ""
         self._fingerprint: str = ""
         self._error: str = ""
-        self._pending: Dict[str, str] | None = None     # what a running write will make of the fields
-
-        if device:
-            self.read()
+        self._pending: Dict[str, str] | None = None     # what a running write will make of the fields, {} for a read
 
 # --- PUBLIC FUNCTIONS ----------------------------------------------------------------------------
 
@@ -83,53 +83,31 @@ class CartridgeMemory:
         self._refresh()
         return self._error
 
-    def read(self) -> None:
+    def _add(self, command: str, pending: Dict[str, str]) -> str:
         self._refresh()
         if self._pending is not None:
-            raise RuntimeError("ERROR: A write to the cartridge memory is still running")
+            raise RuntimeError("ERROR: A step on the cartridge memory is still running")
         if not self.device:
-            raise ValueError("ERROR: No device to read the cartridge memory from")
-
-        self._appName = self._version = self._fingerprint = ""
-        self.cmd = Job.Run(Command(self.readTool + " -R -H " + Command.quote(self.device)), self.READ_DEADLINE_MS)
-        if self.cmd.exitCode != 0:
-            self._error = "READ ATTRIBUTE failed: " + " ".join(self.cmd.status_msg + self.cmd.stderr)
-            return
-        try:
-            attributes: Dict[int, str] = self.parse(self.cmd.stdout)
-        except ValueError as ex:
-            self._error = "READ ATTRIBUTE answer not readable: " + str(ex)
-            return
-
-        self._error = ""
-        self._appName = attributes.get(self.ID_NAME, "")
-        self._fingerprint = attributes.get(self.ID_LABEL, "")
-        word: str = attributes.get(self.ID_VERSION, "")
-        try:
-            self._version = Version.fromWord(int(word, 16)) if word else ""
-        except ValueError:
-            self._version = word            # not written by us, show it as it is
-
-    def format(self) -> None:
-        """Always makes a new fingerprint. Returns at once, wait for `cmd`; the fields follow when it succeeded."""
-        self._refresh()
-        if self._pending is not None:
-            raise RuntimeError("ERROR: A write to the cartridge memory is still running")
-        if not self.device:
-            raise ValueError("ERROR: No device to write the cartridge memory to")
-
-        pending: Dict[str, str] = {"appName": self.APP_NAME, "version": Version.text(), "fingerprint": str(uuid.uuid4())}
-        self.cmd = Command(self.writeTool + " " + Command.quote(self.device) +
-                           " AppName=" + pending["appName"] +
-                           " AppVersion=" + "%04x" % Version.word() +
-                           " UserLabel=" + pending["fingerprint"])
-        self.entry = Job.Add(self.cmd, urgent=True, deadlineMs=self.WRITE_DEADLINE_MS)
+            raise ValueError("ERROR: No device for the cartridge memory")
+        self.cmd = Command(self.tool + " " + command)
+        self.entry = Job.Add(self.cmd, tape=self.drive)
         self._pending = pending
+        return self.entry
+
+    def read(self) -> str:
+        """Queues the reading, returns the entry id. The fields follow when it succeeded."""
+        return self._add("readattr " + Command.quote(self.device), {})
+
+    def format(self) -> str:
+        """Always makes a new fingerprint. Queues the writing, returns the entry id; the fields follow when it succeeded."""
+        pending: Dict[str, str] = {"appName": self.APP_NAME, "version": Version.text(), "fingerprint": str(uuid.uuid4())}
+        return self._add("writeattr " + Command.quote(self.device) + " " + pending["appName"] + " " + "%04x" % Version.word() +
+                         " " + pending["fingerprint"], pending)
 
     @staticmethod
     def parse(lines: List[str]) -> Dict[int, str]:
         """
-        The hex dump of `sg_read_attr -H`: an offset, then the bytes of the answer. The answer is
+        The hex dump of `TapeIoctl.py readattr`: an offset, then the bytes of the answer. The answer is
         4 bytes with the length of the rest, then per attribute id (2), format (1), length (2), value.
         Format 0 binary, 1 ASCII, 2 text; only the last two are returned, as text without padding.
         """
@@ -159,24 +137,45 @@ class CartridgeMemory:
 # --- PRIVATE FUNCTIONS ---------------------------------------------------------------------------
 
     def _refresh(self) -> None:
-        """Takes over a finished write; a running one changes nothing yet."""
+        """Takes over a finished step; a running one changes nothing yet."""
         if self._pending is None or self.cmd is None:
             return
         try:
-            killed: bool = Job.Get(self.entry).state is EntryState.KILLED     # looking at it drives the deadline
+            if Job.Get(self.entry).state not in Job.FINISHED:
+                return
         except LookupError:
-            killed = False      # dropped from the registry, the Command itself knows the result
+            pass        # dropped from the registry, the Command itself knows the result
         self.cmd.status()
-        if self.cmd.running and not killed:
+        if self.cmd.running:
             return
-        if self.cmd.exitCode == 0 and not killed:
-            self._appName = self._pending["appName"]
-            self._version = self._pending["version"]
-            self._fingerprint = self._pending["fingerprint"]
+        pending: Dict[str, str] = self._pending
+        self._pending = None
+        if not self.cmd.didRun or self.cmd.exitCode != 0:
+            self._error = ("WRITE" if pending else "READ") + " ATTRIBUTE failed: " + " ".join(self.cmd.status_msg + self.cmd.stderr)
+            if not pending:
+                self._appName = self._version = self._fingerprint = ""
+        elif pending:
+            self._appName, self._version, self._fingerprint = pending["appName"], pending["version"], pending["fingerprint"]
             self._error = ""
         else:
-            self._error = "WRITE ATTRIBUTE failed: " + " ".join(self.cmd.status_msg + self.cmd.stderr)
-        self._pending = None
+            self._takeOver()
+
+    def _takeOver(self) -> None:
+        self._appName = self._version = self._fingerprint = ""
+        try:
+            attributes: Dict[int, str] = self.parse(self.cmd.stdout)      # type: ignore
+        except ValueError as ex:
+            self._error = "READ ATTRIBUTE answer not readable: " + str(ex)
+            return
+
+        self._error = ""
+        self._appName = attributes.get(self.ID_NAME, "")
+        self._fingerprint = attributes.get(self.ID_LABEL, "")
+        word: str = attributes.get(self.ID_VERSION, "")
+        try:
+            self._version = Version.fromWord(int(word, 16)) if word else ""
+        except ValueError:
+            self._version = word            # not written by us, show it as it is
 
     def _asdict(self) -> dict:
         return {

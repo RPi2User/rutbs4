@@ -22,6 +22,7 @@ path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sei
   - The reason is in what `dd` says ("No space left on device"), `dd` runs with `LC_ALL=C` for that.
   - Decided 2026-11-22: the same steps run if a file (not only the trailing TOC) hits the end of the tape.
   - Decided 2026-11-22, done: **without the trailing TOC the tape is not valid**, `ReadJob` has no fallback to a copy. The operator does not know a TOC at all, only that the files are kept safely.
+- Nice to have, later: `dd` at the end of a real tape (is it "No space left on device"?). Until then it is only known from a loop device.
 - **Job lists: look closely at the tasks the Job system works on.** The host calls `Read()` or `Write()`; the request is
   turned into a list of steps whose order is strictly defined by the context. The program, not the caller, is smart enough
   to start the right processes.

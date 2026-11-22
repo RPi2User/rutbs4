@@ -14,7 +14,7 @@ class UT_Tape(unittest.TestCase):
 
     """_summary_
     Tests A to D: the Tape itself.
-    Tests E to J: its CartridgeMemory (the chip), with small scripts in place of sg_read_attr / sg_write_attr:
+    Tests E to J: its CartridgeMemory (the chip), with small scripts in place of TapeIoctl.py:
         - E: parsing the hex dump of an answer: ASCII and text attributes, padding, binary ones ignored
         - F: a chip without our attributes, a cut-off answer
         - G: reading through the tool; a failing tool leaves the fields empty and sets the error
@@ -153,41 +153,48 @@ class UT_Tape(unittest.TestCase):
             fixture: str = os.path.join(d, "answer")
             with open(fixture, "w") as f:
                 f.write(self._dump(self._attr(0x0401, 0x81, b"SERIAL".ljust(32))))
-            cm: CartridgeMemory = CartridgeMemory("/dev/null", readTool=self._tool(d, "read", "cat " + fixture))
+            cm: CartridgeMemory = CartridgeMemory("/dev/null", tool=self._tool(d, "read", "cat " + fixture))
+            Job.Wait([cm.read()])
             self.assertEqual((cm.appName, cm.version, cm.fingerprint, cm.error), ("", "", "", ""))
 
             with open(fixture, "w") as f:
                 f.write(self._dump(self._chip(), cut=20))
-            cm.read()
+            Job.Wait([cm.read()])
             self.assertEqual(cm.fingerprint, "")
             self.assertIn("cut off", cm.error)
         print("FA_EMPTY_CUTOFF")
 
     def test_GA_Read(self) -> None:
-        "Read through the tool; a failing tool (LTO-3 may not know the command) leaves the fields empty"
+        "Reading is a step of the queue of the drive, not urgent; a failing one (the HBA refuses it) leaves the fields empty"
         with tempfile.TemporaryDirectory() as d:
             fixture: str = os.path.join(d, "answer")
             with open(fixture, "w") as f:
                 f.write(self._dump(self._chip()))
-            cm: CartridgeMemory = CartridgeMemory("/dev/null", readTool=self._tool(d, "read", "cat " + fixture))
+            cm: CartridgeMemory = CartridgeMemory("/dev/null", "drive-1", tool=self._tool(d, "read", '[ "$1" = readattr ] && [ "$2" = /dev/null ] && cat ' + fixture))
+            self.assertEqual((cm.fingerprint, cm.entry), ("", ""))       # nothing is read by itself
+            entry: str = cm.read()
+            self.assertEqual((Job.Get(entry).tape, Job.Get(entry).urgent), ("drive-1", False))
+            self.assertRaises(RuntimeError, cm.read)                    # one step at a time
+            Job.Wait([entry])
             self.assertEqual(cm.appName, "rutbs")
             self.assertEqual(cm.version, "4.0.0")
             self.assertEqual(cm.fingerprint, "11111111-2222-3333-4444-555555555555")
             self.assertEqual(cm.error, "")
 
-            cm.readTool = self._tool(d, "broken", "echo 'Read attribute command: Illegal request' >&2; exit 1")
-            cm.read()
+            cm.tool = self._tool(d, "broken", "echo 'SCSI command 0x8c refused' >&2; exit 1")
+            Job.Wait([cm.read()])
             self.assertEqual(cm.fingerprint, "")
-            self.assertIn("Illegal request", cm.error)
+            self.assertIn("0x8c refused", cm.error)
+            self.assertRaises(ValueError, CartridgeMemory().read)       # no device
         print("GA_READ")
 
     def test_HA_Format(self) -> None:
         "format() writes name, version and a NEW fingerprint every time; the fields follow the finished write"
         with tempfile.TemporaryDirectory() as d:
             record: str = os.path.join(d, "args")
-            cm: CartridgeMemory = CartridgeMemory(writeTool=self._tool(d, "write", 'sleep 0.3; printf "%s\\n" "$@" > ' + record))
+            cm: CartridgeMemory = CartridgeMemory(tool=self._tool(d, "write", 'sleep 0.3; printf "%s\\n" "$@" > ' + record))
             self.assertRaises(ValueError, cm.format)       # no device
-            cm.device = "/dev/sgX"
+            cm.device = cm.drive = "/dev/nstX"
 
             cm.format()
             self.assertEqual(cm.fingerprint, "")           # still writing
@@ -196,9 +203,9 @@ class UT_Tape(unittest.TestCase):
 
             with open(record) as f:
                 args: list = f.read().split()
-            self.assertEqual(args[:3], ["/dev/sgX", "AppName=rutbs", "AppVersion=%04x" % Version.word()])
+            self.assertEqual(args[:4], ["writeattr", "/dev/nstX", "rutbs", "%04x" % Version.word()])
             first: str = cm.fingerprint
-            self.assertEqual(args[3], "UserLabel=" + first)
+            self.assertEqual(args[4], first)
             self.assertRegex(first, r"^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
             self.assertEqual((cm.appName, cm.version, cm.error), ("rutbs", Version.text(), ""))
 
@@ -215,26 +222,23 @@ class UT_Tape(unittest.TestCase):
     def test_IA_FormatFails(self) -> None:
         "A failed write keeps the old values and says why"
         with tempfile.TemporaryDirectory() as d:
-            cm: CartridgeMemory = CartridgeMemory("/dev/sgX", writeTool=self._tool(d, "write", "exit 0"))
-            cm.format()
-            Job.Wait([cm.entry])
+            cm: CartridgeMemory = CartridgeMemory("/dev/nstX", tool=self._tool(d, "write", "exit 0"))
+            Job.Wait([cm.format()])
             old: str = cm.fingerprint
             self.assertNotEqual(old, "")
 
-            cm.writeTool = self._tool(d, "failing", "echo 'Write attribute: Medium error' >&2; exit 1")
-            cm.format()
-            Job.Wait([cm.entry])
+            cm.tool = self._tool(d, "failing", "echo 'Write attribute: Medium error' >&2; exit 1")
+            Job.Wait([cm.format()])
             self.assertEqual(cm.fingerprint, old)
             self.assertIn("Medium error", cm.error)
         print("IA_FORMAT_FAILS")
 
-    def test_EB_DeviceOfTape(self) -> None:
-        "The tape knows the generic device of its drive; only a loaded tape gets a chip to read"
+    def test_EB_NothingIsAskedByItself(self) -> None:
+        "A tape only describes itself: no chip is read when it is made"
         t: Tape = Tape(self.AA, "/dev/null")
         self.assertEqual(t.generic_path, "/dev/null")
-        self.assertEqual(t.cartridgeMemory.device, "/dev/null")
-        self.assertEqual(Tape("0000", "/dev/null").cartridgeMemory.device, "")
-        print("EB_DEVICE_OF_TAPE")
+        self.assertEqual((t.cartridgeMemory.device, t.cartridgeMemory.entry), ("", ""))
+        print("EB_NOTHING_ASKED")
 
     def test_JA_RealDrive(self) -> None:
         "Reads the chip of the first drive, writes nothing. Both an answer and an error are a result"
@@ -244,13 +248,12 @@ class UT_Tape(unittest.TestCase):
         if not drives:
             self.skipTest("no tape drive")
         tape: Tape = drives[0].tape
-        self.assertEqual(tape.generic_path, drives[0].generic_path)
-        print(tape.cartridgeMemory)
         if tape.state is E_Tape.NO_TAPE:
             self.skipTest("no tape in the drive")
-        self.assertEqual(tape.cartridgeMemory.device, tape.generic_path)
-        self.assertEqual(tape.cartridgeMemory.error, "")
-        self.assertEqual(tape.cartridgeMemory.appName, "rutbs")
+        cm: CartridgeMemory = tape.cartridgeMemory
+        Job.Wait([cm.read()], 60)
+        print(cm)
+        self.assertTrue(cm.error or cm.appName in ("", "rutbs"))
         print("JA_REAL_DRIVE")
 
 if __name__ == '__main__':

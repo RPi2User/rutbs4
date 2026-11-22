@@ -92,6 +92,7 @@ class ReadJob:
     def open(self) -> dict:
         if self._opened:
             raise RuntimeError("This job is opened already")
+        self.drive.refreshTape()        # a tape may have been inserted since
         if self.drive.tape.state is E_Tape.NO_TAPE:
             raise ValueError("No tape in the drive")
 

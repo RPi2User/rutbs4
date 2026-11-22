@@ -2,7 +2,6 @@
 
 ## Dependencies
 
-- sg3_utils (for SCSI Commands)
 - openssl (encryption, checksumming)
 
 THIS PROJEKT IS VERY WIP!

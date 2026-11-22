@@ -77,6 +77,7 @@ class WriteJob:
         self.spool: Spool = Spool(spoolMount, self.toc.header.fingerprint)
 
     def _check(self) -> None:
+        self.drive.refreshTape()        # a tape may have been inserted since
         total: int = sum(f.size for f in self.folder.files)
         tape = self.drive.tape
 

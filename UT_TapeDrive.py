@@ -25,9 +25,11 @@ class UT_TapeDrive(unittest.TestCase):
         - F: block sizes: what may be one, and the minimum for a read
         - G: the answers of a rewind: no tape, busy, anything else; the next good rewind says ONLINE
         - H: the rewind helper: exit codes, a file is not a tape
-        - I: a drive that does not tell what is in it is UNKNOWN and works
+        - I: what is in the drive (MTIOCGET); a drive that does not tell is UNKNOWN and works
+        - J: a drive that hangs or is busy
+        - K: what goes into the ioctls
     Depdencies:
-    - none (no SCSI command is sent: drive_override)
+    - none (no drive is asked: drive_override, fake ioctls)
     """
 
     def setUp(self) -> None:
@@ -46,7 +48,7 @@ class UT_TapeDrive(unittest.TestCase):
     def test_A_commands(self) -> None:
         td: TapeDrive = TapeDrive("/dev/nst0", "/dev/sg12", drive_override=True, blocksize="384K")
         td.Rewind(); td.Eject(); td.Write("/in/some file", 11); td.Read("/out/x", 11)
-        td.Read("/out/toc", count=4096); td.Space(1); td.Space(-2); td.SpaceEnd()
+        td.Read("/out/toc", count=4096)
         commands: list = [Job.Get(e).command.cmd for _, e in td.entries]
 
         ioctl: str = "'" + sys.executable + "' '" + TapeIoctl.__file__ + "' "
@@ -55,14 +57,10 @@ class UT_TapeDrive(unittest.TestCase):
         self.assertEqual(commands[2], "dd if='/in/some file' of='/dev/nst0' iflag=fullblock status=none bs=384K")
         self.assertEqual(commands[3], "dd if='/dev/nst0' of='/out/x' status=none bs=256K")                # no fullblock, see TapeDrive
         self.assertEqual(commands[4], "dd if='/dev/nst0' of='/out/toc' status=none bs=256K count=4096")
-        self.assertEqual(commands[5], "sg_raw -t 900 '/dev/sg12' 0x11 0x01 0x00 0x00 0x01 0")                  # forward 1 file mark
-        self.assertEqual(commands[6], "sg_raw -t 900 '/dev/sg12' 0x11 0x01 0xff 0xff 0xfe 0")                  # back 2 (24 bit, two's complement)
-        self.assertEqual(commands[7], "sg_raw -t 900 '/dev/sg12' 0x11 0x03 0 0 0 0")                           # to the end of the data
         self.assertTrue(all(Job.Get(e).tape == td.id for _, e in td.entries))      # one at a time per drive
         self.assertFalse(any(c.startswith("mt ") for c in commands))
         self.assertTrue(all(Job.Get(e).command.env == {"LC_ALL": "C"} for _, e in td.entries[2:5]))     # dd speaks English
-        with self.assertRaises(ValueError):
-            td.Space(0x800000)
+        self.assertFalse(any("sg_" in c or "/dev/sg" in c for c in commands))
         Job.Flush()      # nothing was started, the drive is a fake
         print(".A_COMMANDS")
 
@@ -175,19 +173,104 @@ class UT_TapeDrive(unittest.TestCase):
                 TapeIoctl.fcntl.ioctl = real
         print("H_IOCTL_HELPER")
 
-    def test_I_unknownTape(self) -> None:
-        td: TapeDrive = TapeDrive("/dev/null", "")          # no sg device: nobody to ask
-        self.assertEqual((td.tape.state, td.error, td.state), (E_Tape.UNKNOWN, "", TD_State.IDLE))
-        self.assertFalse(td.tape.write_protect)
+    def test_I_whatIsInTheDrive(self) -> None:
+        "The answers of MTIOCGET, and that no answer is no reason to refuse anything"
+        def drive(**answer) -> TapeDrive:
+            base: dict = {"noTape": False, "writeProtect": False, "beginOfTape": True, "online": True, "density": 0x44, "blocksize": 0}
+            real = (TapeIoctl.status, TapeIoctl.serial)
+            try:
+                TapeIoctl.status = lambda device: {**base, **answer}       # type: ignore
+                TapeIoctl.serial = lambda device: "1210173183"              # type: ignore
+                return TapeDrive("/dev/null", "")
+            finally:
+                TapeIoctl.status, TapeIoctl.serial = real                   # type: ignore
 
-        TapeDrive.inquiryCommand = Command("false")         # the drive does not answer the INQUIRY
+        td: TapeDrive = drive()
+        self.assertEqual((td.tape.state, td.tape.lto_version.name, td.tape.write_protect, td.tape.begin_of_tape, td.serial),
+                         (E_Tape.ONLINE, "LTO_3", False, True, "1210173183"))
+        self.assertEqual((td.tape.native_capacity, td.tape.cartridgeMemory.device), (300 * 10**9, "/dev/null"))
+        self.assertEqual((drive(writeProtect=True).tape.state, drive(writeProtect=True).tape.write_protect), (E_Tape.WRITE_PROTECT, True))
+        self.assertEqual(drive(noTape=True).tape.state, E_Tape.NO_TAPE)
+        for density, version in ((0x40, "LTO_1"), (0x46, "LTO_4"), (0x58, "LTO_5"), (0x5E, "LTO_8"), (0x60, "LTO_9")):
+            self.assertEqual(drive(density=density).tape.lto_version.name, version)
+        unknown: TapeDrive = drive(density=0x99)                            # a tape, but nobody knows which
+        self.assertEqual((unknown.tape.state, unknown.tape.lto_version.name, unknown.tape.native_capacity), (E_Tape.ONLINE, "NONE", 0))
+
+        td = TapeDrive("/dev/null", "")                                     # not a tape drive at all: no answer
+        self.assertEqual((td.tape.state, td.serial, td.state), (E_Tape.UNKNOWN, "", TD_State.IDLE))
+        self.assertTrue(td.error)
+        self.assertFalse(td.tape.write_protect)
+        print("I_WHAT_IS_IN_THE_DRIVE")
+
+    def test_J_hungDrive(self) -> None:
+        "A drive that does not answer does not hang us, and one that is busy keeps what is known"
+        import threading, time
+        release = threading.Event()
+        real = (TapeIoctl.status, TapeIoctl.serial, TapeDrive.ASK_TIMEOUT)
         try:
-            td = TapeDrive("/dev/null", "/dev/null")
+            TapeDrive.ASK_TIMEOUT = 0.1
+            TapeIoctl.serial = lambda device: ""                            # type: ignore
+            TapeIoctl.status = lambda device: release.wait(5)               # type: ignore
+            start: float = time.monotonic()
+            td: TapeDrive = TapeDrive("/dev/null", "")
+            self.assertLess(time.monotonic() - start, 1)
+            self.assertEqual(td.tape.state, E_Tape.UNKNOWN)
+            self.assertIn("no answer", td.error)
+
+            TapeIoctl.status = lambda device: {"noTape": False, "writeProtect": False, "beginOfTape": True, "online": True, "density": 0x5E, "blocksize": 0}   # type: ignore
+            td.refreshTape()
+            def busy(device):
+                raise OSError(16, "Device or resource busy")
+            TapeIoctl.status = busy                                         # type: ignore
+            td.refreshTape()
+            self.assertEqual((td.tape.state, td.tape.lto_version.name), (E_Tape.ONLINE, "LTO_8"))
         finally:
-            TapeDrive.inquiryCommand = None                 # type: ignore
-        self.assertIn("INQUIRY failed", td.error)
-        self.assertEqual((td.tape.state, td.state), (E_Tape.UNKNOWN, TD_State.IDLE))
-        print("I_UNKNOWN_TAPE")
+            release.set()
+            TapeIoctl.status, TapeIoctl.serial, TapeDrive.ASK_TIMEOUT = real   # type: ignore
+        print("J_HUNG_DRIVE")
+
+    def test_K_ioctlData(self) -> None:
+        "What goes into the ioctls: the layout of struct mtget and sg_io_hdr, the commands of the cartridge memory"
+        import ctypes
+        self.assertEqual(ctypes.sizeof(TapeIoctl.SG_Header), 88 if ctypes.sizeof(ctypes.c_void_p) == 8 else 64)
+        data: bytes = TapeIoctl.attributeData(["rutbs", "4000", "fingerprint"])
+        self.assertEqual(len(data), 4 + 3 * 5 + 32 + 8 + 160)
+        self.assertEqual(data[:4], struct.pack(">I", len(data) - 4))
+        self.assertEqual(data[4:9], bytes([0x08, 0x01, 1, 0, 32]))
+        self.assertEqual(data[9:41], b"rutbs".ljust(32))
+        self.assertTrue(data.endswith(b"fingerprint".ljust(160, b"\0")))
+        with self.assertRaises(ValueError):
+            TapeIoctl.attributeData(["x" * 33, "4000", "f"])
+
+        calls: list = []
+        real = TapeIoctl.fcntl.ioctl
+        def fake(fd, request, argument):
+            self.assertEqual(request, TapeIoctl.SG_IO)
+            cdb: bytes = ctypes.string_at(argument.cmdp, argument.cmd_len)
+            out: bytes = ctypes.string_at(argument.dxferp, argument.dxfer_len) if argument.dxfer_direction == TapeIoctl.DXFER_TO_DEV else b""
+            calls.append((cdb.hex(), argument.dxfer_direction, argument.dxfer_len, out[:4].hex()))
+            if argument.dxfer_direction == TapeIoctl.DXFER_FROM_DEV:
+                answer: bytes = (bytes([1, 0x80, 0, 10]) + b"1210173183") if cdb[0] == 0x12 else struct.pack(">I", 0)
+                ctypes.memmove(argument.dxferp, answer, len(answer)); argument.resid = argument.dxfer_len - len(answer)
+        with tempfile.TemporaryDirectory() as tmp:
+            plain: str = os.path.join(tmp, "x"); open(plain, "wb").close()
+            TapeIoctl.fcntl.ioctl = fake                                    # type: ignore
+            try:
+                self.assertEqual(TapeIoctl.serial(plain), "1210173183")
+                self.assertEqual(TapeIoctl.readAttributes(plain), struct.pack(">I", 0))
+                TapeIoctl.writeAttributes(plain, ["rutbs", "4000", "fp"])
+                def refused(fd, request, argument):
+                    argument.host_status = 5
+                TapeIoctl.fcntl.ioctl = refused                             # type: ignore
+                with self.assertRaisesRegex(OSError, "host 0x05"):
+                    TapeIoctl.readAttributes(plain)
+            finally:
+                TapeIoctl.fcntl.ioctl = real                                # type: ignore
+        self.assertEqual(calls[0], ("12018000fc00", TapeIoctl.DXFER_FROM_DEV, 252, ""))
+        self.assertEqual(calls[1], ("8c000000000000000000000020000000", TapeIoctl.DXFER_FROM_DEV, 8192, ""))
+        self.assertEqual(calls[2][0], "8d000000000000000000%08x0000" % len(data))
+        self.assertEqual(calls[2][1:3], (TapeIoctl.DXFER_TO_DEV, len(data)))
+        print("K_IOCTL_DATA")
 
     def test_E_asdictIsJson(self) -> None:
         import json

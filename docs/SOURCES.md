@@ -6,7 +6,7 @@ State: working tree of 2026-11-18. Where the project is heading: [DESIGN.md](DES
 ## Big picture
 
 rutbs4 writes files to LTO tape. Everything is done by shelling out to standard tools
-(`dd`, `openssl`, `sg_raw`, `find`, `stat`); Python only builds the command strings and
+(`dd`, `openssl`, `find`, `stat`) and ioctls on the tape device (`TapeIoctl.py`); Python only builds the command strings and
 tracks their state.
 
 ```
@@ -193,8 +193,8 @@ Notes:
 
 ### Tape.py
 
-Describes the inserted tape, built from the 4-hex-digit id that the drive reports
-(MODE SENSE): `Tape("3810")` = LTO-3, tape present, not write protected.
+Describes the inserted tape, built from a 4-hex-digit id (what MODE SENSE of an IBM drive reports, `TapeDrive` makes it from
+the density code): `Tape("3810")` = LTO-3, tape present, not write protected.
 
 - Digit 1: LTO version, digit 2: `8` = tape present, digit 3: bit 3 set = write protected.
 - Fields: `lto_version`, `native_capacity` (bytes), `native_rate` (ideal bytes/s), `write_protect`, `begin_of_tape`,
@@ -209,21 +209,20 @@ Notes:
 One tape drive. It does four things, each one a step in the Job queue that returns the entry
 id (pass it as `dependsOn`): `Rewind()` and `Eject()` (through the `st` driver, see `TapeIoctl.py`), `Write(source, blocksize="")`
 (`dd` to the `nst` device, one tape file) and `Read(target, blocksize="")` (`dd` from the `nst` device, the
-next tape file); `WriteRandom(size, blocksize)` writes test data for the block size benchmark. `Space(files)` and
-`SpaceEnd()` (SCSI SPACE with `sg_raw`) are optional, no job uses them. There is no `mt`.
+next tape file); `WriteRandom(size, blocksize)` writes test data for the block size benchmark. There is no `mt` and no sg3_utils.
 The long comment at the top of the file explains the SCSI commands and is worth reading.
 
 - `TapeDrive(path, generic_path, drive_override=False, blocksize="128K", paths=None, wwid="")` —
   `path` is the non-rewinding device (`/dev/nst0`), `generic_path` the SCSI generic device
-  (`/dev/sg0`). The constructor queries vendor/model/serial (INQUIRY) and the tape (MODE SENSE).
+  (`/dev/sg0`), information only, nothing opens it. The constructor asks vendor / model (sysfs), the serial and the tape (ioctls).
   `wwid` is the id the kernel gives the logical unit (read from sysfs if not given), `paths` all
   `(nst, sg)` pairs of a drive with several cables, `id` the key for the Job (`wwid`, else the path).
 - All steps take `runlist`, `dependsOn`, `always` and `prepare` (see Job).
 - `state` (`TD_State`) is derived from the Job entries: `IDLE`, `QUEUED`, the running step, or if the last finished step
   failed `ERROR`, `NO_TAPE` or `BUSY` (the last two from a rewind or an eject); the next good step clears it.
   `tape.begin_of_tape` follows the steps. A good rewind turns an `UNKNOWN` tape into `ONLINE`.
-- INQUIRY and MODE SENSE are optional. Without an `sg` device, without `sg_raw`, or if the answer says "no tape" or nothing
-  usable, the tape is `E_Tape.UNKNOWN`; only a rewind (`ENOMEDIUM`) or an eject makes it `NO_TAPE`.
+- `refreshTape()` asks again what tape is in the drive (`MTIOCGET`), the jobs do it before they start. If nobody answers (the drive is
+  busy, hung, or no tape drive) what is known is kept and a tape is `E_Tape.UNKNOWN`; that is no reason to refuse a job.
 - `TapeDrive.blockBytes("256K")` validates a block size, it may come from the clear text header of a tape.
 - Without SCSI tooling or hardware: `drive_override=True`, set `rewindCommand` / `ejectCommand`
   (their command line is the template for every step) and call `tapeOverride(Tape(...))`. `path`
@@ -236,15 +235,18 @@ Notes:
   of the data makes the kernel driver answer every later read with an I/O error, until its own rewind (`Rewind()`)
   runs. A rewind with `sg_raw` does not help.
 - Whether the drive can take a step is not asked before it yet (see DESIGN.md).
-- Space runs `sg_raw -t 900`: `sg_raw` waits 20 s by default and the kernel aborts a long step after that (seen
-  2026-11-20 with a rewind of a 214 GB write; rewind and eject now go through the driver).
 - A regular file as tape is truncated by every `Write()`.
 - `Eject()` exists and is never part of a test run on the real drive.
 
 ### TapeIoctl.py
 
-Rewind and eject through the kernel driver: `python3 TapeIoctl.py rewind|eject /dev/nst0`. Exit code 0, 10 (no tape), 11 (busy)
-or 1 (everything else, the reason on stderr). Run by `Job` like any other command.
+All ioctls on the tape device. As a command (a step of the queue, run by `Job`): `python3 TapeIoctl.py rewind|eject|readattr|writeattr /dev/nst0 ...`,
+exit code 0, 10 (no tape), 11 (busy) or 1 (everything else, the reason on stderr). As functions, in the process: `status()`
+(`MTIOCGET`), `serial()` and `scsi()` (`SG_IO`).
+
+Notes:
+- `readattr` / `writeattr` are the cartridge memory. They are only tested with fake ioctls; on an `aic79xx` HBA the kernel refuses commands of 16
+  bytes (`command too long`), READ ATTRIBUTE there ends with host status 0x05.
 
 ### TableOfContent.py
 

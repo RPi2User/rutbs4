@@ -105,9 +105,9 @@ class UT_TD_Pool(unittest.TestCase):
     def test_D_driveReadsItsWwid(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root: str = self._host(tmp)
-            self.assertEqual(TapeDrive.sysfsRead("/dev/sg1", "wwid", os.path.join(root, "scsi_generic")), "naa.50050763121a839e")
-            self.assertEqual(TapeDrive.sysfsRead("/dev/sg4", "wwid", os.path.join(root, "scsi_generic")), "")      # kernel says nothing
-            self.assertEqual(TapeDrive.sysfsRead("", "wwid", os.path.join(root, "scsi_generic")), "")
+            self.assertEqual(TapeDrive.sysfsRead("/dev/nst0", "wwid", os.path.join(root, "scsi_tape")), "naa.50050763121a839e")
+            self.assertEqual(TapeDrive.sysfsRead("/dev/nst4", "wwid", os.path.join(root, "scsi_tape")), "")      # kernel says nothing
+            self.assertEqual(TapeDrive.sysfsRead("", "wwid", os.path.join(root, "scsi_tape")), "")
 
             plain: TapeDrive = TapeDrive("/tmp/faketape", "", drive_override=True)   # no sg device: the path identifies it
             self.assertEqual(plain.id, "/tmp/faketape")

@@ -61,7 +61,7 @@ tape file N+1    TOC, state COMPLETE    the same content, plus the result of the
   - `read()` builds the command and fills the fields; `register()` writes a new fingerprint.
   - If the chip already holds a fingerprint, the TOC uses that one, so the chip is not
     rewritten on every registration of the tape.
-- **(proposal)** Attributes used on the chip (`sg_read_attr` / `sg_write_attr`):
+- **(proposal)** Attributes used on the chip (READ / WRITE ATTRIBUTE, ioctl `SG_IO` on `nstX`):
   `0x0801` application name = `rutbs`, `0x0802` application version = version as hex,
   `0x0803` user medium text label = fingerprint. Needs to be checked on real drives.
 
@@ -234,8 +234,7 @@ There is no second, blocking way to run a phase. The phases are implemented in
   in the chip, the LTO version, the position. The LTO version and the size come from the operator if need be
   (`tapeOverride()`). A tape the drive does not describe is `UNKNOWN`, and that is no reason to refuse a job.
 - A `TapeDrive` does four things, as steps in the Job queue: `Rewind()`, `Eject()`, `Write()` (a
-  data stream with `dd`), `Read()` (a data stream with `dd`). Eject happens on request only and is never part of a test run. `Space(files)`
-  and `SpaceEnd()` (SCSI SPACE over file marks) exist but no job uses them.
+  data stream with `dd`), `Read()` (a data stream with `dd`). Eject happens on request only and is never part of a test run.
 - **Rewind and eject go through the `st` driver** (`backend/TapeIoctl.py`, ioctl on `nstX` opened with `O_NONBLOCK`), not through
   `sg_raw` (decided 2026-11-22, it replaces "SCSI only"). `mt` is not used. Reasons, measured on an LTO-3:
   one read at the end of the data makes the driver (`st`) answer every later read with an I/O error; its own rewind clears that, a rewind
@@ -256,6 +255,11 @@ There is no second, blocking way to run a phase. The phases are implemented in
   bigger (256K as tapes up to 2026-11 have such blocks); the TOC itself is written in blocks of 128K, or of the block size of the drive if that is smaller.
 - Position: the backend only knows "at begin of tape" or "not". It rewinds itself before
   it starts a job.
+- **Everything else about a drive is an ioctl on `nstX`, too** (decided 2026-11-22, there is no sg3_utils, no `mt` and no `/dev/sgX` any more;
+  the number of an `sg` device changes with every new disk): tape inserted, write protect and the density code
+  with `MTIOCGET`, serial and cartridge memory with `SG_IO`; vendor and model come from sysfs. The LTO version is the
+  standardized density code (0x44 = LTO-3), not the medium type of MODE SENSE, which differs between vendors. A drive that does not
+  answer within 2 s is given up (the question runs in a thread), and what it does not tell is `UNKNOWN`.
 - **A rewind also sets the variable block mode** (`MTSETBLK 0`, decided 2026-11-22). A fixed mode (set by `stinit`, `mt setblk` or
   another program) survives a rewind (measured on the LTO-3 with 512 bytes): the block size of `dd` has no effect then, and a file or
   TOC that is no multiple of it fails with `Invalid argument` in the middle. Only LTO is promised; a drive that refuses the switch
@@ -341,15 +345,14 @@ There is one place for start, deadline, kill and log.
   uninterruptible sleep (hung mount, busy drive) survives SIGKILL: `Job` never waits for it.
   A `KILLED` parent fails its children like a `FAILED` one.
 - Deadlines are wall-clock and conservative: **2 s** by default (measured: `openssl rand`, `stat`,
-  `findmnt` 2 to 4 ms, SCSI queries about 3.5 ms), 60 s for the `find` of a `Folder` and for writing the
-  cartridge memory. The mechanism is not for the regular case: what is needed often belongs in a small
+  `findmnt` 2 to 4 ms), 60 s for the `find` of a `Folder`. The mechanism is not for the regular case: what is needed often belongs in a small
   list that is built at start and refreshed periodically. A flood of urgent commands is felt by the
   host; the design accepts that.
-- Only small things are system commands. Never rewind, eject, `dd`, checksum or encryption. On a drive
-  only read-only SCSI queries; they may run while the drive works on its queue, which is also the way to
-  ask the drive before a step (see "Drives").
+- Only small things are system commands, and only on disks and file systems (decided 2026-11-22). Nothing about a tape drive is
+  urgent: rewind, eject, `dd` and the cartridge memory are steps of the queue of the drive, and what is asked about a drive without
+  moving the tape (see "Drives") is an ioctl in the process itself.
 - Converted: `Key` (`openssl rand`), `File.readSize()` (`stat`), `Mount` (`findmnt`), `Folder` (`find`),
-  `TapeDrive` (INQUIRY, MODE SENSE), `CartridgeMemory` (read and write).
+  and the TOC cipher.
 - `Command(..., stdin=bytes)`: the TOC goes through `openssl` as stdin, the passphrase as environment.
   A thread writes the input, so a big input and a big output cannot block each other. The input is
   released once the process has it and only its size is shown (it holds the keys); without `stdin`

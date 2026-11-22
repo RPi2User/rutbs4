@@ -105,6 +105,7 @@ class BlockSizeBenchmark:
 
     def __init__(self, tapeDrive: TapeDrive, seconds: int = SECONDS, size: int = 0, candidates: List[int] | None = None):
         self.drive: TapeDrive = tapeDrive
+        tapeDrive.refreshTape()         # a tape may have been inserted since
         self.size: int = size or int((tapeDrive.tape.native_rate or self.UNKNOWN_RATE) * seconds)
         self.candidates: List[int] = list(candidates or self.CANDIDATES)
         self.runlist: str = str(uuid.uuid4())

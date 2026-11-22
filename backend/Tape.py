@@ -100,8 +100,8 @@ class Tape():
     | begin_of_tape    | bool   | runtime parameter to keep track of rewinding   |
     | state            | E_Tape | Enum for basic state machine                   |
     | blocksize        | str    | Allows different blocksizes                    |
-    | generic_path     | str    | Generic SCSI device of the drive               |
-    | cartridgeMemory  | CartridgeMemory | The chip, read when a tape is in the drive |
+    | generic_path     | str    | Generic SCSI device of the drive, information only |
+    | cartridgeMemory  | CartridgeMemory | The chip, read on request (a step of the queue) |
 
     """
 
@@ -115,7 +115,7 @@ class Tape():
         self.state: E_Tape = E_Tape.NO_TAPE
         self.blocksize: str = blocksize
         self.generic_path: str = generic_path
-        self.cartridgeMemory: CartridgeMemory = CartridgeMemory()      # reads the chip once a tape is in
+        self.cartridgeMemory: CartridgeMemory = CartridgeMemory()      # TapeDrive gives it the device; read on request
 
         _lto_version: int = int(hardware_id[0], 16)
         self.write_protect = (int(hardware_id[2], 16) & 0x8 > 0) # Isolated bit 4
@@ -136,9 +136,6 @@ class Tape():
             self.native_capacity = E_LTO_Cap[self.lto_version.name].value
         if self.lto_version.name in E_LTO_Rate.__members__:
             self.native_rate = E_LTO_Rate[self.lto_version.name].value
-
-        if generic_path and self.state in (E_Tape.ONLINE, E_Tape.WRITE_PROTECT):
-            self.cartridgeMemory = CartridgeMemory(generic_path)
 
     def _asdict(self) -> dict:
         data = {

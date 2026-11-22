@@ -2,7 +2,7 @@ import json
 import os
 import re
 import sys
-from time import sleep
+import threading
 from typing import List, Tuple
 from enum import Enum
 
@@ -10,135 +10,36 @@ from backend.Command import Command
 from backend.Job import EntryState, Job
 
 from backend import TapeIoctl
+from backend.CartridgeMemory import CartridgeMemory
 from backend.Tape import Tape, E_Tape
 
 """_summary_
-    
-    -SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI-SCSI
-    
-    No we need to get our Hands VERY dirty.
-    I'm trying my best to make this as easy as possible, you've been warned!
-    
-    The command 'sg_modes --raw /dev/sgX' returns the "Mode Parameter Header for Mode Sense (10)"
-    This is a special data block used to show supported features.
-    
-    user@tape-server:~$ sg_modes --all /dev/sgX
-            IBM       ULT3580-HH8       MA71   peripheral_type: tape [0x1]
-        Mode parameter header from MODE SENSE(10):
-        Mode data length=231, medium type=0x88, specific param=0x90, longlba=0
-        Block descriptor length=8
-        > General mode parameter block descriptors:
-        Density code=0x5e
-        00     5e 00 00 00 00 00 00 00
 
-    This software uses just two fields (in regard of getting Tape information):
-        medium type=0x88, specific param=0x90
-    
-    When medium type = 0 no tape is inserted. Specific param = 0x10 means no write protection
-    medium type = 0xX8 the X shows the LTO-Version
-    specific param = 0x90 means write protect.
-    
-    I know those assumptions are quite risky. But yet again: Nothing is standardized :c
-    
+    How we talk to a tape drive:
+
+    The OS only has to give: the list of the nst devices, rewind, eject, `dd if=` and `dd of=`. Rewind and eject are ioctls on the
+    nst device (see TapeIoctl). There is no `mt`, no sg3_utils and no /dev/sgX.
+
+    Everything else is optional, and also an ioctl on the nst device or a file of sysfs:
+
+    - vendor, model:   /sys/class/scsi_tape/nstX/device/{vendor,model}, read by the kernel when it found the drive
+    - serial:          INQUIRY, VPD page 0x80 (unit serial number), through SG_IO
+    - tape inserted, write protect, LTO version: MTIOCGET. The LTO version is the SCSI density code of the medium (DENSITY), which is
+      standardized; the medium type of MODE SENSE is not.
+
     *********************************************************************************************
     *   MANUAL OVERRIDE:                                                                        *
     *   Good News: You can always provide a manual override explicitly stating the LTO-Version. *
     *   When you override the LTO-Version the software assumes write-protect is off.            *
     *********************************************************************************************
-    
-    For Drive Identification it's a mess as well.
-    
-    Problem:
-    SOME tape drives are using multiple scsi devices for the same drive.
-    Like: my LTO8 is recognized either as /dev/st0 AND /dev/st1. 
-    This project supports multiple drives per System.
-    
-    Worst case:
-    Someone bought 2 Drives of the same model. Sadly there is no standardized Field for the Serial Number.
-    We need to be creative... A LOT...
-    
-    Lets start with an easy example:
-    
-        sg_raw -r 1k /dev/sgX 0x12 0 0 0 60 0
-    
-    This is a "INQUIRY". This command says the following:
-        Please send Op-Code 0x12 to /dev/sgX, tell /dev/sgX that we want the first 96 (0x60) Bytes of Data.
-        @sg_raw we just want to see the first 1000 Bytes of Data. Skip the rest.
-        
-    This command returns following:
-    
-    usr@tape-server:~$ sg_raw -r 1k /dev/sgX 0x12 0 0 0 60 0 
-        SCSI Status: Good 
 
-        Received 58 bytes of data:
-        00     01 80 03 02 35 00 01 30  49 42 4d 20 20 20 20 20    ....5..0IBM     
-        10     55 4c 54 52 49 55 4d 2d  54 44 33 20 20 20 20 20    ULTRIUM-TD3     
-        20     35 43 4d 30 00 00 00 00  00 00 00 00 00 00 00 00    5CM0............
-        30     00 00 00 00 00 00 00 00  0c 00                      ..........
-        
-    As you can see, the tape brive is happy with just 58 bytes of response data.
-    So we can reduce the INQUIRY-Request to 58 bytes like this:
-    
-    usr@tape-server:~$ sg_raw -r 1k /dev/sgX 0x12 0 0 0 3A 0
-    
-    note that, our `-r 1k` stays untouched hence we only need it to specify our STDOUT buffer.
-    But don't let yourself fool you from that conclusion.
-    
-    Only the INQUIRY part is specified, not the response length...
-    
-    usr@tape-server:~$ sg_raw -r 1k /dev/sgY 0x12 0 0 0 60 0
-        SCSI Status: Good 
+    SOME tape drives show up as several scsi devices: my LTO8 is recognized either as /dev/st0 AND /dev/st1. The kernel
+    reads the id of the logical unit (INQUIRY VPD page 0x83) and publishes it as wwid, see TD_Pool. An old drive (SCSI level SPC)
+    may have none, e.g. the IBM ULTRIUM-TD3.
 
-        Received 70 bytes of data:
-        00     01 80 06 12 41 01 10 02  49 42 4d 20 20 20 20 20    ....A...IBM     
-        10     55 4c 54 33 35 38 30 2d  48 48 38 20 20 20 20 20    ULT3580-HH8     
-        20     4d 41 37 31 00 00 6a 00  00 00 00 00 00 00 00 00    MA71..j.........
-        30     30 31 50 4c 33 31 37 20  00 00 00 a2 0c 28 04 60    01PL317 .....(.`
-        40     05 20 0a 28 05 02                                   . .(..
-
-    Here you can see the LTO8 Drive returned even more information than the LTO3 Drive.
-    So keeping your constraints wide is always a good thing in research.
-    
-    I choose this command to fetch the inquiry data:
-    
-    usr@tape-server:~$ sg_raw -r 1k /dev/sgX 12 1 83 0 2a 0
-    SCSI Status: Good 
-
-        Received 42 bytes of data:
-        00     01 83 00 26 02 01 00 22  49 42 4d 20 20 20 20 20    ...&..."IBM     
-        10     55 4c 54 52 49 55 4d 2d  54 44 33 20 20 20 20 20    ULTRIUM-TD3     
-        20     31 32 31 30 31 37 33 31  38 33                      1210173183
-        
-    This command get used to determine the Vendor, Model and Serial.
-    Works on my two drives maybe work on others as well. Yet again: Noting is really standartized >.<
-    
-    Byte Explanation:
-    
-        0x12 -> INQUIRY
-        0x01 -> EVPD (enable vital product data), this enables reading the following Page 
-        0x83 -> Device Identification Page, this returns any Data used for the Drive ID
-        0x00 -> Length High-Byte
-        0x2a -> Length Low-Byte
-        0x00 -> Control, no Control byte
-    
-    drive.vendor, drive.model and drive.serial got their value like that:
-    
-    Raw-Binary: `018300260201002249424d2020202020554c545249554d2d544433202020202031323130313733313833`
-    Seperated into 16byte-Blocks:
-        0183002602010022 49424d2020202020 -> First 8 Byte got discarded, lower 8 Bytes will be treated as "VENDOR" until first Space (0x20)
-        554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
-        3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
-        
-    Note: After the 10 serial bytes (byte) IBM continues with very vendor specific stuff so we cut here.
-    When those 10 Bytes cant be displayed as ASCII-String it'll be shown in hex. e.g.:
-    
-    - 31 FF 57 54 30 38 33 36 02 31 -> this will be "0x31ff5754303833360231"
-    
-    HOPEFULLY this is unique enough to differenciate between two idenitcal Models.
-    
     Noteable Sources:
        primary source: (ISO/IEC 14776-453) https://www.t10.org/ftp/t10/document.08/08-309r1.pdf
-       IBM: https://www.ibm.com/docs/en/ts4500-tape-library?topic=x5a-mode-parameter-header-mode-sense-10
+       st(4), linux/mtio.h, linux/sg.h
     """
 
 class TD_State(Enum):
@@ -148,7 +49,6 @@ class TD_State(Enum):
     EJECT = 3
     WRITE = 4
     READ = 5
-    SPACE = 6
     ERROR = -1      # the last finished order failed
     NO_TAPE = -2    # the last rewind / eject found no tape
     BUSY = -3       # the last rewind / eject found the device opened by somebody else
@@ -169,21 +69,9 @@ class TapeDrive:
     | `Read(target)`                | `dd if=<nst> of=<target>`: the next tape file                   |
     | `WriteRandom(size, blocksize)` | incompressible test data to the tape, for the block size benchmark |
 
-    **The OS only has to give:** the list of the nst devices, rewind, eject, `dd if=` and `dd of=`. Everything else (INQUIRY,
-    MODE SENSE, wwid, cartridge memory, SPACE) is optional and must never stop a job. If the drive does not tell what
+    **The OS only has to give:** the list of the nst devices, rewind, eject, `dd if=` and `dd of=`. Everything else (vendor,
+    serial, LTO version, wwid, cartridge memory) is optional and must never stop a job. If the drive does not tell what
     tape is in it, the tape is `UNKNOWN` and the operator may describe it with `tapeOverride()`.
-
-    Seeking is optional and no job uses it (all in file marks, `sg_raw <sg> 0x11 ...`, SPACE):
-
-    | `TapeDrive.`                  | Meaning                                                         |
-    |-------------------------------|-----------------------------------------------------------------|
-    | `Space(files)`                | forward (>0) or backward (<0) over that many file marks         |
-    | `SpaceEnd()`                  | to the end of the recorded data (EOD), behind the last file mark |
-
-    Backward over n file marks ends on the begin-of-tape side of the n-th mark. All take `runlist=""`,
-    `dependsOn=""`, `always=False` (closing step, runs even if its runlist was aborted) and
-    `prepare=None` (called right before the step starts, see Job). Everything else is optional and not
-    here (cartridge memory, formatting). No `mt`, SCSI only.
 
     **Never read at the end of the data.** The kernel driver (`st`) latches that and answers every
     later read with an I/O error until it is repositioned through the driver itself, as `Rewind()` does (a rewind with
@@ -192,9 +80,9 @@ class TapeDrive:
     `iflag=fullblock` on the tape: after a short last block it swallows the file mark and goes on
     reading the next tape file. `Read()` therefore stops at the file mark by itself.
 
-    The drive is asked for vendor / model / serial (INQUIRY) and the tape (MODE SENSE) when it is
-    created, if it has an `sg` device. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running
-    step (`REWIND`, `EJECT`, `WRITE`, `READ`, `SPACE`), or if the last finished step failed `ERROR`, `NO_TAPE` or `BUSY`.
+    Vendor, model (sysfs), serial and the tape (ioctls, see `refreshTape()`) are asked when it is created, not
+    through `Job`. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running
+    step (`REWIND`, `EJECT`, `WRITE`, `READ`), or if the last finished step failed `ERROR`, `NO_TAPE` or `BUSY`.
 
     The two paths of a drive with two cables are in `paths`, the first one is used (see TD_Pool).
     `id` is the key the Job uses, one step at a time runs per id.
@@ -222,9 +110,6 @@ class TapeDrive:
     rewindCommand: Command = None
     ejectCommand: Command = None
 
-    inquiryCommand: Command = None
-    readModeSenseCommand: Command = None
-
     # Internal variables, do not edit!
     drive_override: bool = False
     tape: Tape                      # per instance, see __init__
@@ -234,21 +119,21 @@ class TapeDrive:
     command: Command = None         # the last Command of the drive
     error: str = ""                 # why INQUIRY failed, "" if it did not
 
-    SYSFS: str = "/sys/class/scsi_generic"
-    LONG_TIMEOUT: int = 900         # seconds for sg_raw on REWIND, SPACE, LOAD/UNLOAD; its default is 20 s, and the
-                                    # kernel aborts a rewind from the end of a full tape after that (seen 2026-11-20)
+    SYSFS: str = "/sys/class/scsi_tape"
+    ASK_TIMEOUT: float = 2          # seconds to wait for the drive when it is asked something, a hung one must not hang us
+    DENSITY: dict = {0x40: 1, 0x42: 2, 0x44: 3, 0x46: 4, 0x58: 5, 0x5A: 6, 0x5C: 7, 0x5D: 7, 0x5E: 8, 0x60: 9}     # 0x5D: LTO-7 M8
     TOC_BLOCK: str = "128K"         # a TOC is written like this, or smaller if the drive writes smaller blocks (tocBlock())
     READ_BLOCK: str = "256K"        # at least: a TOC is read before its header is known, and tapes up to 2026-11 have 256K blocks.
                                     # The drive hands out each block as it was written. Bigger than the limit of the
                                     # HBA fails (aic79xx: 4M works, 8M is EBUSY), smaller than the written block fails as well
 
     @staticmethod
-    def sysfsRead(generic_path: str, attribute: str, root: str = SYSFS) -> str:
-        """What the kernel says about a /dev/sgX device (e.g. 'wwid'), '' if it says nothing."""
-        if not generic_path:
+    def sysfsRead(path: str, attribute: str, root: str = SYSFS) -> str:
+        """What the kernel says about a /dev/nstX device (e.g. 'wwid', 'vendor'), '' if it says nothing."""
+        if not path:
             return ""
         try:
-            with open(os.path.join(root, os.path.basename(generic_path), "device", attribute)) as f:
+            with open(os.path.join(root, os.path.basename(path), "device", attribute)) as f:
                 return f.read().strip()
         except OSError:
             return ""
@@ -258,15 +143,16 @@ class TapeDrive:
         self.path = path
         self.generic_path = generic_path
         self.paths = paths or [(path, generic_path)]
-        self.wwid = wwid or self.sysfsRead(generic_path, "wwid")
+        self.wwid = wwid or self.sysfsRead(path, "wwid")
         self.tape = Tape("0000", generic_path)
         self.drive_override = drive_override
         self.blocksize = blocksize
         self.entries: List[Tuple[TD_State, str]] = []   # (step, Job entry id), in the order added
         self._taken: set = set()                        # entries whose result is already taken over
         self._state: TD_State = TD_State.IDLE
-        self._inquiry()
-        self._readModeSense()
+        if not drive_override:
+            self.refreshDrive()
+            self.refreshTape()
 
     @property
     def id(self) -> str:
@@ -349,20 +235,6 @@ class TapeDrive:
             return blocksize
         return TapeDrive.READ_BLOCK
 
-    def Space(self, files: int, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        """SPACE over file marks, forward (>0) or backward (<0). The count is a signed 24 bit number."""
-        if not -0x800000 <= files < 0x800000:
-            raise ValueError("Cannot space over " + str(files) + " file marks")
-        count: int = files & 0xFFFFFF
-        cmd: Command = Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x11 0x01 " +
-                               " ".join("0x%02x" % b for b in (count >> 16, count >> 8 & 0xFF, count & 0xFF)) + " 0")
-        return self._queue(TD_State.SPACE, cmd, runlist, dependsOn, always, prepare)
-
-    def SpaceEnd(self, runlist: str = "", dependsOn: str = "", always: bool = False, prepare=None) -> str:
-        """SPACE to the end of the recorded data. Positioned there, do not read: go back with Space(-n) first."""
-        cmd: Command = Command("sg_raw -t " + str(self.LONG_TIMEOUT) + " " + Command.quote(self.generic_path) + " 0x11 0x03 0 0 0 0")
-        return self._queue(TD_State.SPACE, cmd, runlist, dependsOn, always, prepare)
-
     # === STATE ===============================================================
 
     @staticmethod
@@ -404,7 +276,7 @@ class TapeDrive:
                         self._noTape()
             elif entry.state is EntryState.RUNNING:
                 active = step
-                if step in {TD_State.WRITE, TD_State.READ, TD_State.SPACE}:
+                if step in {TD_State.WRITE, TD_State.READ}:
                     self.tape.begin_of_tape = False
             else:
                 queued = True
@@ -433,71 +305,61 @@ class TapeDrive:
                 self.tape.begin_of_tape = True
                 if self.tape.state in {E_Tape.UNKNOWN, E_Tape.NO_TAPE}:    # it can be rewound, so there is a tape
                     self.tape.state = E_Tape.ONLINE
-            case TD_State.WRITE | TD_State.READ | TD_State.SPACE:
+            case TD_State.WRITE | TD_State.READ:
                 self.tape.begin_of_tape = False
             case TD_State.EJECT:
                 self._noTape()
 
     # === ASKING THE DRIVE ====================================================
+    # In the process itself and not through Job: nothing here moves the tape, and Job's urgent commands stay with
+    # the disks. A hung drive can not hang the caller: the ioctl runs in a thread that is given up after ASK_TIMEOUT.
 
-    def _inquiry(self) -> None:
+    def _ask(self, question):
+        """The answer of `question()`, None and a reason in `error` if it failed or took too long."""
+        answer: list = []
+        failure: list = []
+
+        def run() -> None:
+            try:
+                answer.append(question())
+            except Exception as ex:     # OSError: EBUSY while somebody else has the device, EIO if the drive refuses
+                failure.append(str(ex))
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(self.ASK_TIMEOUT)
+        if answer:
+            return answer[0]
+        self.error = failure[0] if failure else "no answer within " + str(self.ASK_TIMEOUT) + " s"
+        return None
+
+    def refreshDrive(self) -> None:
+        """Vendor, model and serial. The drive works without them."""
+        self.vendor = self.sysfsRead(self.path, "vendor") or self.vendor
+        self.model = self.sysfsRead(self.path, "model") or self.model
+        self.serial = self._ask(lambda: TapeIoctl.serial(self.path)) or ""
+
+    def refreshTape(self) -> None:
         """
-        > sg_raw -r 1k /dev/sgX 12 1 83 0 2a 0
-        0183002602010022 49424d2020202020 -> First 8 Byte got discarded, lower 8 Bytes will be treated as "VENDOR" until first Space (0x20)
-        554c545249554d2d 5444332020202020 -> All 16 Byte will be treated as "MODEL" until first SPACE
-        3132313031373331 3833             -> All 10 Byte will be treated as "SERIAL".
+        What tape is in the drive (MTIOCGET). `UNKNOWN` if the drive does not tell (it is busy, or it is no real
+        drive), `NO_TAPE` if the driver says so. An unknown density is a tape of an unknown LTO version.
         """
-        # Do nothing if TapeDrive is unkown. It is optional: without an sg device nobody can be asked.
-        if self.drive_override or self.generic_path == "":
-            return
-
-        # Sensible to override
-        def inquiry() -> Command:   # a new Command each time, Job refuses the same object twice
-            return self._like(self.inquiryCommand) or Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 12 1 83 0 2a 0", 0, True)
-
-        self.command = Job.Run(inquiry())
-
-        for n in range(5):      # a drive that was just reset may need a moment
-            if self.command.exitCode == 127 or (self.command.exitCode == 0 and self.command.stdout):     # 127: no sg_raw
-                break
-            sleep(.5)
-            self.command = Job.Run(inquiry())
-
-        if self.command.exitCode != 0 or not self.command.stdout:
-            self.error = "INQUIRY failed: " + " ".join(self.command.stderr)     # the drive works without it
-            return
-
-        ascii_id: str = bytes.fromhex(self.command.stdout[0]).decode("ascii", errors="replace")
-        self.vendor = ascii_id[8:16].strip()
-        self.model = ascii_id[16:31].strip()
-        self.serial = ascii_id[32:42].strip()
-
-    def _readModeSense(self) -> None:
         if self.tape_override or self.drive_override:
             return
-        self.tape.state = E_Tape.UNKNOWN        # until somebody tells
-        if self.generic_path == "" or self.error:
+        status: dict | None = self._ask(lambda: TapeIoctl.status(self.path))
+        if status is None:              # keep what is known
+            if self.tape.state is E_Tape.NO_TAPE:
+                self.tape.state = E_Tape.UNKNOWN
             return
-
-        # Sensible to override
-        def modeSense() -> Command:
-            return self._like(self.readModeSenseCommand) or Command("sg_raw --binary -r 1k " + Command.quote(self.generic_path) + " 5a 0 0 0 0 0 0 0 4 0", 0, True)
-
-        self.command = Job.Run(modeSense())
-
-        # When ModeSense needs an Inquiry than make one :3
-        if self.command.exitCode == 6:
-            self._inquiry()
-            self.command = Job.Run(modeSense())
-
-        try:
-            tape: Tape = Tape(self.command.stdout[0][4:], self.generic_path)
-        except (IndexError, ValueError):        # no answer, or one we do not understand
+        if status["noTape"]:
+            self.tape = Tape("0000", self.generic_path)
             return
-        # The medium type 0 says "no tape" on an IBM drive, but not every drive reports it. Only a rewind knows.
-        if tape.state is E_Tape.NO_TAPE:
-            tape.state = E_Tape.UNKNOWN
-        self.tape = tape
+        version: int = self.DENSITY.get(status["density"], 0)
+        # Tape() takes the digits MODE SENSE used to give: LTO version, 8 = tape, 9 = write protected
+        self.tape = Tape("%x8%s0" % (version, "9" if status["writeProtect"] else "1"), self.generic_path)
+        self.tape.state = E_Tape.WRITE_PROTECT if status["writeProtect"] else E_Tape.ONLINE
+        self.tape.begin_of_tape = status["beginOfTape"]
+        self.tape.cartridgeMemory = CartridgeMemory(self.path, self.id)
 
     def tapeOverride(self, _tape: Tape) -> None:
         self.tape_override = True

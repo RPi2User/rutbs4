@@ -81,7 +81,7 @@ They are not meant for the regular case.
 - The deadline is wall-clock time. Whoever looks at the entry (`Job.Get()`, `Job.Refresh()`) enforces it:
   SIGTERM, 100 ms later SIGKILL, 100 ms later the entry is given up. State `KILLED`, `Command.killed`
   is set, `status_msg` says why. A process in uninterruptible sleep survives SIGKILL; `Job` does not wait for it.
-- Deadlines: 2 s by default; 60 s for the `find` of a `Folder`, for writing the cartridge memory and for the TOC cipher.
+- Deadlines: 2 s by default; 60 s for the `find` of a `Folder` and for the TOC cipher. Nothing about a tape drive is urgent.
 - `Job.urgent` keeps the last 200 finished entries (`Job.URGENT_KEEP`).
 
 ## What Job does not do
