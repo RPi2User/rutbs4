@@ -43,6 +43,7 @@ class FakeTape(TapeDrive):
 
     def Write(self, source: str, *a, **k) -> str:
         self.path = self._next()
+        open(self.path, "ab").close()       # a device is there, dd never creates it
         return super().Write(source, *a, **k)
 
     def Read(self, target: str, *a, **k) -> str:

@@ -38,6 +38,7 @@ def main() -> int:
     args = parse_args()
 
     if args.tape:
+        open(args.tape, "ab").close()      # Write() never creates its target
         td = TapeDrive(args.tape, "", drive_override=True)
         td.tapeOverride(Tape(args.lto_version + "800", td.generic_path))
         td.rewindCommand = Command(args.rewind_cmd or "true")

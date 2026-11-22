@@ -79,7 +79,8 @@ class TapeDrive:
     `sg_raw` does not help). `dd` opens the device blocking: without a tape it waits 2 minutes, so a
     job rewinds first. `dd` must also not use
     `iflag=fullblock` on the tape: after a short last block it swallows the file mark and goes on
-    reading the next tape file. `Read()` therefore stops at the file mark by itself.
+    reading the next tape file. `Read()` therefore stops at the file mark by itself. Writing needs
+    `conv=nocreat`: if the drive is gone `dd` would make a regular file `/dev/nstX` and fill the memory with it.
 
     Vendor, model (sysfs), serial and the tape (ioctls, see `refreshTape()`) are asked when it is created, not
     through `Job`. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running
@@ -90,9 +91,10 @@ class TapeDrive:
 
     Without SCSI tooling or hardware: `drive_override=True`, then set `rewindCommand` /
     `ejectCommand` (their command line is used for every step) and call `tapeOverride(Tape("8800", td.generic_path))`.
-    `path` may then be a regular file. A regular file is truncated by every `Write()`, so only one
+    `path` may then be a regular file, it has to exist. A regular file is truncated by every `Write()`, so only one
     tape file fits.
 
+        >>> open("/tmp/fake", "ab").close()
         >>> td = TapeDrive("/tmp/fake", "", drive_override=True)
         >>> td.tapeOverride(Tape("8800", td.generic_path)); td.rewindCommand = Command("true")
         >>> step = td.Rewind()
@@ -189,7 +191,7 @@ class TapeDrive:
         `size` only serves the progress display.
         """
         cmd: Command = Command("dd if=" + Command.quote(source) + " of=" + Command.quote(self.path) + " " +
-                               "iflag=fullblock status=none bs=" + (blocksize or self.blocksize), filesize=size, env={"LC_ALL": "C"})
+                               "iflag=fullblock conv=nocreat status=none bs=" + (blocksize or self.blocksize), filesize=size, env={"LC_ALL": "C"})
         return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
 
     def WriteRandom(self, size: int, blocksize: int, runlist: str = "", dependsOn: str = "", always: bool = False,
@@ -201,7 +203,7 @@ class TapeDrive:
         """
         count: int = -(-size // blocksize)      # rounded up, the block size is what is tested
         cmd: Command = Command("openssl enc -aes-128-ctr -pbkdf2 -pass env:RUTBS_BENCH_KEY < /dev/zero 2>/dev/null | " +
-                               "dd of=" + Command.quote(self.path) + " iflag=fullblock status=progress bs=" + str(blocksize) + " count=" + str(count),
+                               "dd of=" + Command.quote(self.path) + " iflag=fullblock conv=nocreat status=progress bs=" + str(blocksize) + " count=" + str(count),
                                filesize=count * blocksize, env={"RUTBS_BENCH_KEY": os.urandom(16).hex(), "LC_ALL": "C"})
         return self._queue(TD_State.WRITE, cmd, runlist, dependsOn, always, prepare)
 

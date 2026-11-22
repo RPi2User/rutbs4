@@ -10,7 +10,7 @@ import unittest
 # Module imports
 from backend import TapeIoctl
 from backend.Command import Command
-from backend.Job import Job
+from backend.Job import EntryState, Job
 from backend.Tape import Tape, E_Tape
 from backend.TapeDrive import TapeDrive, TD_State
 
@@ -56,7 +56,7 @@ class UT_TapeDrive(unittest.TestCase):
         ioctl: str = "'" + sys.executable + "' '" + TapeIoctl.__file__ + "' "
         self.assertEqual(commands[0], ioctl + "rewind '/dev/nst0'")
         self.assertEqual(commands[1], ioctl + "eject '/dev/nst0'")
-        self.assertEqual(commands[2], "dd if='/in/some file' of='/dev/nst0' iflag=fullblock status=none bs=384K")
+        self.assertEqual(commands[2], "dd if='/in/some file' of='/dev/nst0' iflag=fullblock conv=nocreat status=none bs=384K")
         self.assertEqual(commands[3], "dd if='/dev/nst0' of='/out/x' status=none bs=256K")                # no fullblock, see TapeDrive
         self.assertEqual(commands[4], "dd if='/dev/nst0' of='/out/toc' status=none bs=256K count=4096")
         self.assertTrue(all(Job.Get(e).tape == td.id for _, e in td.entries))      # one at a time per drive
@@ -65,6 +65,17 @@ class UT_TapeDrive(unittest.TestCase):
         self.assertFalse(any("sg_" in c or "/dev/sg" in c for c in commands))
         Job.Flush()      # nothing was started, the drive is a fake
         print(".A_COMMANDS")
+
+    def test_AB_neverCreatesTheDevice(self) -> None:
+        """The drive is gone: dd must fail and not make a regular file of its name"""
+        with tempfile.TemporaryDirectory() as tmp:
+            td: TapeDrive = TapeDrive(os.path.join(tmp, "nst_gone"), "", drive_override=True)
+            td.tapeOverride(Tape("8800", td.generic_path))
+            entries: list = [td.Write("/etc/hostname"), td.WriteRandom(1 << 20, 1 << 17)]
+            self.assertTrue(Job.Wait(entries, 20))
+            self.assertEqual([Job.Get(e).state for e in entries], [EntryState.FAILED] * 2)
+            self.assertFalse(os.path.exists(td.path))
+        print("AB_NEVER_CREATES")
 
     def test_B_stateIsDerived(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

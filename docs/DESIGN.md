@@ -250,7 +250,8 @@ There is no second, blocking way to run a phase. The phases are implemented in
   Not covered: the second path of a drive with two cables has its own `nstX` device. A `dd` opens the device
   blocking and waits 2 minutes for a tape if there is none (123 s measured), so every job rewinds first.
 - **Reading rules, learned on the real drive:** `Read()` must not use `dd iflag=fullblock` (it reads on
-  behind the file mark after a short last block and returns several tape files as one). No `dd` may read at the end of the
+  behind the file mark after a short last block and returns several tape files as one). Writing uses `dd conv=nocreat`: if the drive
+  is gone `dd` must fail and not make a regular file `/dev/nstX` in memory. No `dd` may read at the end of the
   data (see above). The buffer of `dd` must be at least as big as the block that was written and not bigger than the HBA allows: on an
   `aic79xx` 4M works, 8M does not (`EBUSY`); a smaller buffer than the block fails with `ENOMEM`. Therefore 256K, or the block size of the TOC header if that is
   bigger (256K as tapes up to 2026-11 have such blocks); the TOC itself is written in blocks of 128K, or of the block size of the drive if that is smaller.

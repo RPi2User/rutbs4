@@ -65,6 +65,7 @@ def main() -> int:
     Job.limit = args.threads
 
     if args.tape:
+        open(args.tape, "ab").close()      # Write() never creates its target
         td = TapeDrive(args.tape, "", drive_override=True)
         td.tapeOverride(Tape(args.lto_version + "800", td.generic_path))     # <ltoVersion>800 -> valid Tape, no write protect
         td.rewindCommand = Command(args.rewind_cmd or "true")
