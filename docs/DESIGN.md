@@ -245,6 +245,7 @@ There is no second, blocking way to run a phase. The phases are implemented in
   | ok | a tape is there and it is at its begin |
   | `ENOMEDIUM` → `NO_TAPE` | no tape |
   | `EBUSY` → `BUSY` | somebody else has the device open, e.g. a running `dd` |
+  | `EIO`, and `MTIOCGET` says neither "online" nor "no tape" → `NOT_READY` | it loads or unloads a tape (measured: 10 s and 6 s) |
 
   Not covered: the second path of a drive with two cables has its own `nstX` device. A `dd` opens the device
   blocking and waits 2 minutes for a tape if there is none (123 s measured), so every job rewinds first.
@@ -258,7 +259,7 @@ There is no second, blocking way to run a phase. The phases are implemented in
 - **Everything else about a drive is an ioctl on `nstX`, too** (decided 2026-11-22, there is no sg3_utils, no `mt` and no `/dev/sgX` any more;
   the number of an `sg` device changes with every new disk): tape inserted, write protect and the density code
   with `MTIOCGET`, serial and cartridge memory with `SG_IO`; vendor and model come from sysfs. The LTO version is the
-  standardized density code (0x44 = LTO-3), not the medium type of MODE SENSE, which differs between vendors. A drive that does not
+  standardized density code (0x44 = LTO-3; tested with an LTO-3 drive, the codes of the other generations are from the specification), not the medium type of MODE SENSE, which differs between vendors. A drive that does not
   answer within 2 s is given up (the question runs in a thread), and what it does not tell is `UNKNOWN`.
 - **A rewind also sets the variable block mode** (`MTSETBLK 0`, decided 2026-11-22). A fixed mode (set by `stinit`, `mt setblk` or
   another program) survives a rewind (measured on the LTO-3 with 512 bytes): the block size of `dd` has no effect then, and a file or

@@ -57,6 +57,7 @@ class E_Tape(Enum):
     WRITE_PROTECT = 1
     ONLINE = 2
     UNKNOWN = 3         # the drive does not tell, a rewind will (see TapeDrive)
+    NOT_READY = 4       # the drive loads or unloads a tape right now
 
 class Tape():
 

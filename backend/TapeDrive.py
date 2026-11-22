@@ -52,6 +52,7 @@ class TD_State(Enum):
     ERROR = -1      # the last finished order failed
     NO_TAPE = -2    # the last rewind / eject found no tape
     BUSY = -3       # the last rewind / eject found the device opened by somebody else
+    NOT_READY = -4  # the last rewind found the drive loading or unloading a tape
 
 class TapeDrive:
 
@@ -82,7 +83,7 @@ class TapeDrive:
 
     Vendor, model (sysfs), serial and the tape (ioctls, see `refreshTape()`) are asked when it is created, not
     through `Job`. `state` is derived from the Job entries of the drive: `IDLE`, `QUEUED`, the running
-    step (`REWIND`, `EJECT`, `WRITE`, `READ`), or if the last finished step failed `ERROR`, `NO_TAPE` or `BUSY`.
+    step (`REWIND`, `EJECT`, `WRITE`, `READ`), or if the last finished step failed `ERROR`, `NO_TAPE`, `BUSY` or `NOT_READY` (it loads or unloads).
 
     The two paths of a drive with two cables are in `paths`, the first one is used (see TD_Pool).
     `id` is the key the Job uses, one step at a time runs per id.
@@ -291,7 +292,7 @@ class TapeDrive:
     @staticmethod
     def _failure(step: TD_State, exitCode: int) -> TD_State:
         if step in {TD_State.REWIND, TD_State.EJECT}:
-            return {TapeIoctl.NO_MEDIUM: TD_State.NO_TAPE, TapeIoctl.BUSY: TD_State.BUSY}.get(exitCode, TD_State.ERROR)
+            return {TapeIoctl.NO_MEDIUM: TD_State.NO_TAPE, TapeIoctl.BUSY: TD_State.BUSY, TapeIoctl.NOT_READY: TD_State.NOT_READY}.get(exitCode, TD_State.ERROR)
         return TD_State.ERROR
 
     def _noTape(self) -> None:
@@ -303,7 +304,7 @@ class TapeDrive:
         match step:
             case TD_State.REWIND:
                 self.tape.begin_of_tape = True
-                if self.tape.state in {E_Tape.UNKNOWN, E_Tape.NO_TAPE}:    # it can be rewound, so there is a tape
+                if self.tape.state in {E_Tape.UNKNOWN, E_Tape.NO_TAPE, E_Tape.NOT_READY}:    # it can be rewound, so there is a tape
                     self.tape.state = E_Tape.ONLINE
             case TD_State.WRITE | TD_State.READ:
                 self.tape.begin_of_tape = False
@@ -354,12 +355,24 @@ class TapeDrive:
         if status["noTape"]:
             self.tape = Tape("0000", self.generic_path)
             return
+        if not status["online"]:        # neither ready nor empty: it loads or unloads, what it says about the tape means nothing
+            self.tape = Tape("0000", self.generic_path)
+            self.tape.state = E_Tape.NOT_READY
+            return
         version: int = self.DENSITY.get(status["density"], 0)
         # Tape() takes the digits MODE SENSE used to give: LTO version, 8 = tape, 9 = write protected
         self.tape = Tape("%x8%s0" % (version, "9" if status["writeProtect"] else "1"), self.generic_path)
         self.tape.state = E_Tape.WRITE_PROTECT if status["writeProtect"] else E_Tape.ONLINE
         self.tape.begin_of_tape = status["beginOfTape"]
         self.tape.cartridgeMemory = CartridgeMemory(self.path, self.id)
+
+    def requireTape(self) -> None:
+        """Before a job: is there a tape? ValueError if not, or if the drive is not ready. `UNKNOWN` is no reason to refuse."""
+        self.refreshTape()              # a tape may have been inserted since
+        if self.tape.state is E_Tape.NO_TAPE:
+            raise ValueError("No tape in the drive")
+        if self.tape.state is E_Tape.NOT_READY:
+            raise ValueError("The drive is loading or unloading a tape")
 
     def tapeOverride(self, _tape: Tape) -> None:
         self.tape_override = True

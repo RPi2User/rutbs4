@@ -26,6 +26,7 @@ change the mode. If the drive refuses the switch the rewind fails, before anythi
 | 0               | done                                                          |
 | `NO_MEDIUM` 10  | no tape in the drive (ENOMEDIUM)                              |
 | `BUSY` 11       | somebody else has the device open, e.g. a running dd (EBUSY)  |
+| `NOT_READY` 12  | the drive loads or unloads a tape right now (EIO, and neither ready nor empty) |
 | 1               | everything else, the reason is on stderr                      |
 """
 
@@ -50,6 +51,7 @@ GMT_ONLINE: int = 0x01000000
 GMT_DR_OPEN: int = 0x00040000   # no tape
 NO_MEDIUM: int = 10
 BUSY: int = 11
+NOT_READY: int = 12
 
 # SG_IO, linux/sg.h
 SG_IO: int = 0x2285
@@ -113,6 +115,15 @@ def status(device: str) -> dict:
         "density": dsreg >> 24 & 0xFF,
         "blocksize": dsreg & 0xFFFFFF,
     }
+
+
+def notReady(device: str) -> bool:
+    """The driver answers neither "ready" nor "no tape": the drive loads or unloads (measured: 10 s and 6 s on an LTO-3)."""
+    try:
+        answer: dict = status(device)
+    except OSError:
+        return False
+    return not answer["online"] and not answer["noTape"]
 
 
 def scsi(device: str, cdb: bytes, size: int = 0, data: bytes = b"", timeoutMs: int = TIMEOUT_MS) -> bytes:
@@ -181,6 +192,8 @@ def main(args: list) -> int:
             operate(operation, device)
     except OSError as e:
         print(operation + " " + device + ": " + errno.errorcode.get(e.errno or 0, "") + " " + str(e.strerror), file=sys.stderr)
+        if operation == "rewind" and e.errno == errno.EIO and notReady(device):
+            return NOT_READY
         return exitCode(e.errno or 0)
     except ValueError as e:
         print(operation + " " + device + ": " + str(e), file=sys.stderr)

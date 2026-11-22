@@ -4,7 +4,6 @@ import uuid
 from typing import Dict, List, Tuple
 
 from backend.Job import EntryState, Job
-from backend.Tape import E_Tape
 from backend.TapeDrive import TapeDrive
 
 class BlockSizeBenchmark:
@@ -115,9 +114,8 @@ class BlockSizeBenchmark:
     def queue(self) -> List[str]:
         if self.entries:
             raise RuntimeError("This benchmark is queued already")
+        self.drive.requireTape()
         tape = self.drive.tape
-        if tape.state is E_Tape.NO_TAPE:
-            raise ValueError("No tape in the drive")
         if tape.write_protect:
             raise ValueError("The tape is write protected")
 

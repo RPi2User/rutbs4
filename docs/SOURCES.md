@@ -219,7 +219,7 @@ The long comment at the top of the file explains the SCSI commands and is worth 
   `(nst, sg)` pairs of a drive with several cables, `id` the key for the Job (`wwid`, else the path).
 - All steps take `runlist`, `dependsOn`, `always` and `prepare` (see Job).
 - `state` (`TD_State`) is derived from the Job entries: `IDLE`, `QUEUED`, the running step, or if the last finished step
-  failed `ERROR`, `NO_TAPE` or `BUSY` (the last two from a rewind or an eject); the next good step clears it.
+  failed `ERROR`, `NO_TAPE`, `BUSY` or `NOT_READY` (the last three from a rewind or an eject); the next good step clears it.
   `tape.begin_of_tape` follows the steps. A good rewind turns an `UNKNOWN` tape into `ONLINE`.
 - `refreshTape()` asks again what tape is in the drive (`MTIOCGET`), the jobs do it before they start. If nobody answers (the drive is
   busy, hung, or no tape drive) what is known is kept and a tape is `E_Tape.UNKNOWN`; that is no reason to refuse a job.

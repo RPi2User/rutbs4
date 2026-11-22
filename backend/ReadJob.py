@@ -10,7 +10,6 @@ from backend.File import File, FileState
 from backend.Job import EntryState, Job
 from backend.Mount import Mount
 from backend.Spool import Spool
-from backend.Tape import E_Tape
 from backend.TableOfContent import TableOfContent, TOC_State
 from backend.TapeDrive import TapeDrive
 
@@ -92,9 +91,7 @@ class ReadJob:
     def open(self) -> dict:
         if self._opened:
             raise RuntimeError("This job is opened already")
-        self.drive.refreshTape()        # a tape may have been inserted since
-        if self.drive.tape.state is E_Tape.NO_TAPE:
-            raise ValueError("No tape in the drive")
+        self.drive.requireTape()
 
         d: TapeDrive = self.drive
         r: str = self.runlist

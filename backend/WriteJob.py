@@ -9,7 +9,6 @@ from backend.Encryption import E_Mode
 from backend.Folder import Folder
 from backend.Job import EntryState, Job
 from backend.Spool import Spool
-from backend.Tape import E_Tape
 from backend.TableOfContent import TableOfContent, TOC_Header, TOC_State
 from backend.TapeDrive import TapeDrive
 
@@ -77,14 +76,11 @@ class WriteJob:
         self.spool: Spool = Spool(spoolMount, self.toc.header.fingerprint)
 
     def _check(self) -> None:
-        self.drive.refreshTape()        # a tape may have been inserted since
         total: int = sum(f.size for f in self.folder.files)
-        tape = self.drive.tape
-
         if not self.folder.files:
             raise ValueError("No files in " + self.folder.path)
-        if tape.state is E_Tape.NO_TAPE:
-            raise ValueError("No tape in the drive")
+        self.drive.requireTape()
+        tape = self.drive.tape
         if tape.write_protect:
             raise ValueError("The tape is write protected")
         if tape.native_capacity and total > tape.native_capacity:

@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import struct
 import subprocess
@@ -127,7 +129,7 @@ class UT_TapeDrive(unittest.TestCase):
         print("F_BLOCKSIZES")
 
     def test_G_rewindAnswers(self) -> None:
-        for code, state in ((TapeIoctl.NO_MEDIUM, TD_State.NO_TAPE), (TapeIoctl.BUSY, TD_State.BUSY), (1, TD_State.ERROR)):
+        for code, state in ((TapeIoctl.NO_MEDIUM, TD_State.NO_TAPE), (TapeIoctl.BUSY, TD_State.BUSY), (TapeIoctl.NOT_READY, TD_State.NOT_READY), (1, TD_State.ERROR)):
             with tempfile.TemporaryDirectory() as tmp:
                 td: TapeDrive = self._drive(tmp)
                 td.rewindCommand = Command("sh -c 'exit " + str(code) + "'")
@@ -169,6 +171,14 @@ class UT_TapeDrive(unittest.TestCase):
                 TapeIoctl.fcntl.ioctl = refusing        # type: ignore
                 with self.assertRaises(OSError):
                     TapeIoctl.operate("rewind", plain)
+
+                # EIO of a rewind: loading or unloading (neither ready nor empty), or an ordinary error
+                realStatus = TapeIoctl.status
+                for online, noTape, code in ((False, False, TapeIoctl.NOT_READY), (True, False, 1), (False, True, 1)):
+                    TapeIoctl.status = lambda device: {"online": online, "noTape": noTape}      # type: ignore
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        self.assertEqual(TapeIoctl.main(["rewind", plain]), code)
+                TapeIoctl.status = realStatus
             finally:
                 TapeIoctl.fcntl.ioctl = real
         print("H_IOCTL_HELPER")
@@ -190,7 +200,13 @@ class UT_TapeDrive(unittest.TestCase):
                          (E_Tape.ONLINE, "LTO_3", False, True, "1210173183"))
         self.assertEqual((td.tape.native_capacity, td.tape.cartridgeMemory.device), (300 * 10**9, "/dev/null"))
         self.assertEqual((drive(writeProtect=True).tape.state, drive(writeProtect=True).tape.write_protect), (E_Tape.WRITE_PROTECT, True))
-        self.assertEqual(drive(noTape=True).tape.state, E_Tape.NO_TAPE)
+        self.assertEqual(drive(noTape=True, online=False).tape.state, E_Tape.NO_TAPE)
+        # neither ready nor empty, as measured for 6 s after an eject and for 10 s while a tape is loaded
+        loading: TapeDrive = drive(online=False, density=0, beginOfTape=False)
+        self.assertEqual(loading.tape.state, E_Tape.NOT_READY)
+        loading.refreshTape = lambda: None                                  # type: ignore
+        with self.assertRaisesRegex(ValueError, "loading or unloading"):
+            loading.requireTape()
         for density, version in ((0x40, "LTO_1"), (0x46, "LTO_4"), (0x58, "LTO_5"), (0x5E, "LTO_8"), (0x60, "LTO_9")):
             self.assertEqual(drive(density=density).tape.lto_version.name, version)
         unknown: TapeDrive = drive(density=0x99)                            # a tape, but nobody knows which
