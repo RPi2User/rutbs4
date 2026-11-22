@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Restore a tape to a folder: one ReadJob (read both TOCs, ask for the passphrase, then every file is read,
-decrypted and checked against its checksum). The passphrase comes from RUTBS_PASSPHRASE or is asked for.
+Restore a tape to a folder: one ReadJob (read the first TOC, ask for the passphrase, then every file is read,
+decrypted and checked against its checksum; the last TOC decides whether the tape is valid). The passphrase comes from RUTBS_PASSPHRASE or is asked for.
 The tape is rewound and NOT ejected.
 
 Example (real LTO drive, the first drive found):
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--target", required=True, help="Folder to restore into (must not hold the files yet)")
     parser.add_argument("--spool", required=True, help="Mount point for the spool (needs as much free space as the files)")
-    parser.add_argument("--toc-dir", default="", help="Directory with the copies of the last TOCs; the TOCs are also kept there in clear text")
+    parser.add_argument("--toc-dir", default="", help="Directory that keeps both TOCs in clear text after a good restore")
     parser.add_argument("--threads", type=int, default=4, help="Thread limit of the Job queue")
     return parser.parse_args()
 
@@ -43,18 +43,16 @@ def main() -> int:
 
     try:
         job = ReadJob(td, args.target, args.spool, tocDir=args.toc_dir)
-        print(f"Reading the TOCs of the tape in {td.id} ...")
+        print(f"Looking at the tape in {td.id} ...")
         header = job.open()
     except (ValueError, RuntimeError) as e:
         print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
-    first, last = header["first"], header["last"]
-    print(f"Tape {first['fingerprint']} written {first['created']} on {first['hostname']}, "
-          f"first TOC {first['state']}, last TOC {last['state'] if last else 'MISSING'}")
+    print(f"Tape {header['fingerprint']} written {header['created']} on {header['hostname']}")
 
     given = os.environ.get("RUTBS_PASSPHRASE")
-    plain = first["body_cipher"] == "NONE"      # nothing to ask for
+    plain = header["body_cipher"] == "NONE"      # nothing to ask for
     for attempt in range(1 if given or plain else 3):
         passphrase = "" if plain else given or getpass.getpass("Passphrase for this tape: ")
         try:

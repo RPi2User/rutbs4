@@ -122,9 +122,11 @@ class WriteJob:
         known: str = Job.Add(Command("true"), runlist=r, waitFor=[c for c in checksums if c], drive=self.drive.id)      # all checksums are known
 
         self.drive.Rewind(runlist=r, dependsOn=known)
-        self.firstToc = self.drive.Write(os.path.join(self.spool.path, "toc_start.json"), runlist=r, prepare=self._firstToc)
+        self.firstToc = self.drive.Write(os.path.join(self.spool.path, "toc_start.json"), runlist=r, prepare=self._firstToc,
+                                          blocksize=self.drive.TOC_BLOCK)
         self.folder.queueWrite(self.drive, r, self.spool, checksums)
-        self.drive.Write(os.path.join(self.spool.path, "toc_end.json"), runlist=r, always=True, prepare=self._lastToc)
+        self.drive.Write(os.path.join(self.spool.path, "toc_end.json"), runlist=r, always=True, prepare=self._lastToc,
+                         blocksize=self.drive.TOC_BLOCK)
         rewound: str = self.drive.Rewind(runlist=r, always=True)
         if self.eject:
             self.drive.Eject(runlist=r)                 # only after success: a failed job aborts it

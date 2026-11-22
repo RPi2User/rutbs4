@@ -116,6 +116,15 @@ class UT_Job(unittest.TestCase):
         self._refreshUntilDone()
         self.assertEqual(Job.Get(good).state, EntryState.COMPLETED)
         self.assertEqual(Job.Get(child).state, EntryState.FAILED)
+
+        # A closing step waits for its waitFor to END, good or bad, and then runs
+        slow: str = Job.Add(Command("sleep 0.3"))
+        closing: str = Job.Add(Command(self.AB_DEP), waitFor=[bad, slow], always=True)
+        self.assertEqual(Job.Get(closing).state, EntryState.WAITING_FOR_PARENT)     # slow is not finished
+        self._refreshUntilDone()
+        self.assertEqual(Job.Get(closing).state, EntryState.COMPLETED)
+        # its dependsOn still has to be good
+        self.assertEqual(Job.Get(Job.Add(Command(self.AB_DEP), dependsOn=bad, waitFor=[good], always=True)).state, EntryState.FAILED)
         print("B_WAITFOR")
 
     def test_AC_Chain(self) -> None:

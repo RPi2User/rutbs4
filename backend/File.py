@@ -86,7 +86,8 @@ class File:
     One file on disk, which goes through all phases itself. A phase does not run anything:
     it builds a `Command`, hands it to `Job` and returns the Job entry id. The next phase
     passes that id as `dependsOn`, so a chain is queued in one go. A phase that has nothing
-    to do (checksum type NONE, encryption NONE) returns `dependsOn` unchanged.
+    to do (checksum type NONE, encryption NONE, an empty plain file for Write and Read) returns `dependsOn`
+    unchanged.
 
     | `File.`                                  | Phase                                          |
     |------------------------------------------|------------------------------------------------|
@@ -227,8 +228,15 @@ class File:
         self.encryption_scheme.cmd.filesize = self.size
         return self._queue(FileState.ENCRYPT, self.encryption_scheme.cmd, runlist, dependsOn, drive)
 
+    @property
+    def onTape(self) -> bool:
+        """An empty plain file has no tape file: dd writes nothing, so the driver writes no file mark either."""
+        return self.size != 0 or self.encryption_scheme.mode is not E_Mode.NONE
+
     def Write(self, tapeDrive: "TapeDrive", runlist: str = "", dependsOn: str = "") -> str:
         self._accept()
+        if not self.onTape:
+            return dependsOn
         source: str = self.path.path
         if self.encryption_scheme.mode is not E_Mode.NONE:
             if not self.cryptPath:
@@ -237,14 +245,17 @@ class File:
 
         return self._record(FileState.WRITE, tapeDrive.Write(source, self.size, runlist, dependsOn))
 
-    def Read(self, tapeDrive: "TapeDrive", target: str, runlist: str = "", dependsOn: str = "") -> str:
+    def Read(self, tapeDrive: "TapeDrive", target: str, runlist: str = "", dependsOn: str = "", blocksize: str = "") -> str:
         self._accept()
+        if not self.onTape:
+            self.where = target         # it exists already, and it is empty
+            return dependsOn
         if self.encryption_scheme.mode is E_Mode.NONE:
             self.where = target         # this is already the plain file
         else:
             self.cryptPath = target     # Decrypt() takes it from here
 
-        return self._record(FileState.READ, tapeDrive.Read(target, self.size, runlist, dependsOn))
+        return self._record(FileState.READ, tapeDrive.Read(target, self.size, runlist, dependsOn, blocksize=blocksize))
 
     def Decrypt(self, target: str, runlist: str = "", dependsOn: str = "", drive: str = "") -> str:
         self._accept()

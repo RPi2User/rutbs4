@@ -12,8 +12,43 @@ from backend.Job import Job
 from backend.ReadJob import ReadJob
 from backend.TD_Pool import TD_Pool
 from backend.TableOfContent import TableOfContent, TOC_Header, TOC_WrongPassphrase
-from backend.TapeDrive import TD_State
+from backend.Command import Command
+from backend.Tape import Tape
+from backend.TapeDrive import TapeDrive, TD_State
 from backend.WriteJob import WriteJob
+
+
+class FakeTape(TapeDrive):
+
+    """
+    A tape as a directory: every tape file is a file `<n>`, in the order it was queued since the last rewind. The
+    real drive does the same, because it works strictly in the order of the queue. A read of what is not there fails.
+    """
+
+    def __init__(self, directory: str) -> None:
+        super().__init__(os.path.join(directory, "x"), "", drive_override=True, wwid="fake")     # one id for all paths
+        self.tapeOverride(Tape("8800", ""))
+        self.rewindCommand = Command("true")
+        self.directory: str = directory
+        self.position: int = 0
+        self.reads: list = []       # every tape file that was read, in order
+
+    def _next(self) -> str:
+        self.position += 1
+        return os.path.join(self.directory, str(self.position - 1))
+
+    def Rewind(self, *a, **k) -> str:
+        self.position = 0
+        return super().Rewind(*a, **k)
+
+    def Write(self, source: str, *a, **k) -> str:
+        self.path = self._next()
+        return super().Write(source, *a, **k)
+
+    def Read(self, target: str, *a, **k) -> str:
+        self.path = self._next()
+        self.reads.append(os.path.basename(self.path))
+        return super().Read(target, *a, **k)
 
 
 class UT_ReadJob(unittest.TestCase):
@@ -26,6 +61,9 @@ class UT_ReadJob(unittest.TestCase):
         - B: a File restored from its TOC entry decrypts and validates; a wrong checksum is a MISMATCH
         - C: the comparison of the first and the last TOC
         - D: a TOC cannot make a file leave the target directory
+        - DA..DF: the whole way on a fake tape (one file per tape file, strictly in order): a good tape; a missing,
+          damaged, disagreeing or FAILED last TOC; a FAILED first TOC; a wrong passphrase; an empty plain file;
+          nothing is read behind the last TOC, the spool is gone in every case
         - E: (real drive) write a folder, read it back: files identical, TOCs compared, tape rewound, NOT ejected
         - F: (real drive) a wrong passphrase queues nothing
     Depdencies:
@@ -156,6 +194,122 @@ class UT_ReadJob(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(tmp, "escaped.bin")))
         print("D_STAYS_IN_TARGET")
 
+    # === FAKE TAPE ===========================================================
+
+    def test_DG_emptyPlainFile(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.MOUNT if os.path.ismount(self.MOUNT) else None) as tmp:
+            td, write = self._written(tmp, unencrypted=True)                # sub/c.bin is empty
+            self.assertEqual(sorted(os.listdir(td.directory)), [str(n) for n in range(5)])      # TOC, 3 files, TOC
+            job: ReadJob = self._restore(td, tmp, "")
+            self.assertEqual(job.state, "COMPLETED", str(job))
+            self.assertEqual(td.reads, ["0", "0", "1", "2", "3", "4"])
+            for f in write.folder.files:
+                with open(f.path.path, "rb") as a, open(os.path.join(tmp, "out", f.path.relPath), "rb") as b:
+                    self.assertEqual(a.read(), b.read(), f.path.relPath)
+        print("DG_EMPTY_PLAIN_FILE")
+
+    def _written(self, tmp: str, unencrypted: bool = False) -> tuple:
+        if not os.path.ismount(self.MOUNT):
+            self.skipTest(self.MOUNT + " is not a mount")
+        os.makedirs(os.path.join(tmp, "tape"))
+        td: FakeTape = FakeTape(os.path.join(tmp, "tape"))
+        write: WriteJob = WriteJob(self._input(tmp), td, "" if unencrypted else self.PASSPHRASE, self.MOUNT, unencrypted=unencrypted)
+        write.queue()
+        self.assertTrue(write.wait(120))
+        self.assertEqual(write.state, "COMPLETED", str(write))
+        if not unencrypted:
+            self.assertEqual(sorted(os.listdir(td.directory)), [str(n) for n in range(6)])  # TOC, 4 files, TOC
+        td.reads = []
+        return td, write
+
+    def _restore(self, td: FakeTape, tmp: str, passphrase: str = PASSPHRASE) -> ReadJob:
+        job: ReadJob = ReadJob(td, os.path.join(tmp, "out"), self.MOUNT, tocDir=os.path.join(tmp, "tocs"))
+        os.makedirs(job.tocDir, exist_ok=True)
+        job.open()
+        job.queue(passphrase)
+        self.assertTrue(job.wait(120))
+        self.assertFalse(os.path.exists(job.spool.path), "the spool is still there")
+        self.assertEqual(job._passphrase, "")
+        return job
+
+    def _toc(self, td: FakeTape, n: int, state: str = "", change=None) -> None:
+        """Changes the TOC in tape file n."""
+        import json
+        path: str = os.path.join(td.directory, str(n))
+        with open(path) as f:
+            toc: dict = json.load(f)
+        if state:
+            toc["header"]["state"] = state
+        if change:
+            change(toc)
+        with open(path, "w") as f:
+            json.dump(toc, f)
+
+    def test_DA_wholeWay(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.MOUNT if os.path.ismount(self.MOUNT) else None) as tmp:
+            td, write = self._written(tmp)
+            job: ReadJob = self._restore(td, tmp)
+            self.assertEqual(job.state, "COMPLETED", str(job))
+            self.assertEqual(job.messages, [])
+            for f in write.folder.files:
+                with open(f.path.path, "rb") as a, open(os.path.join(tmp, "out", f.path.relPath), "rb") as b:
+                    self.assertEqual(a.read(), b.read(), f.path.relPath)
+            self.assertEqual(td.reads, ["0", "0", "1", "2", "3", "4", "5"])     # nothing skipped, nothing behind the last TOC
+            self.assertEqual(len([n for n in os.listdir(job.tocDir) if n.endswith(".plain.json")]), 2)
+        print("DA_WHOLE_WAY")
+
+    def _refused(self, name: str, spoil) -> None:
+        with tempfile.TemporaryDirectory(dir=self.MOUNT if os.path.ismount(self.MOUNT) else None) as tmp:
+            td, _ = self._written(tmp)
+            spoil(td)
+            job: ReadJob = self._restore(td, tmp)
+            self.assertEqual(job.state, "FAILED", name)
+            self.assertIn("must not be trusted", str(job))
+            self.assertEqual(os.listdir(job.tocDir), [], name)
+
+    def test_DB_lastTocDecides(self) -> None:
+        last: int = 5
+        self._refused("missing", lambda td: os.remove(os.path.join(td.directory, str(last))))
+        self._refused("empty", lambda td: open(os.path.join(td.directory, str(last)), "w").close())
+        self._refused("damaged", lambda td: self._toc(td, last, change=lambda t: t.update(body=t["body"][:50])))
+        self._refused("FAILED", lambda td: self._toc(td, last, "FAILED"))
+        self._refused("IDLE", lambda td: self._toc(td, last, "IDLE"))
+        self._refused("other tape", lambda td: self._toc(td, last, change=lambda t: t["header"].update(fingerprint="another")))
+        print("DB_LAST_TOC")
+
+    def test_DC_missingFile(self) -> None:
+        self._refused("no file 2", lambda td: os.remove(os.path.join(td.directory, "2")))
+        print("DC_MISSING_FILE")
+
+    def test_DD_firstTocSaysFailed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.MOUNT if os.path.ismount(self.MOUNT) else None) as tmp:
+            td, _ = self._written(tmp)
+            self._toc(td, 0, "FAILED")
+            job: ReadJob = ReadJob(td, os.path.join(tmp, "out"), self.MOUNT)
+            job.open()
+            with self.assertRaisesRegex(ValueError, "not valid"):
+                job.queue(self.PASSPHRASE)
+            self.assertEqual(job.state, "OPEN")
+            self.assertFalse(os.path.exists(os.path.join(tmp, "out")))
+        print("DD_FIRST_TOC_FAILED")
+
+    def test_DF_wrongPassphraseAndBlocksize(self) -> None:
+        with tempfile.TemporaryDirectory(dir=self.MOUNT if os.path.ismount(self.MOUNT) else None) as tmp:
+            td, _ = self._written(tmp)
+            job: ReadJob = ReadJob(td, os.path.join(tmp, "out"), self.MOUNT)
+            job.open()
+            with self.assertRaises(TOC_WrongPassphrase):
+                job.queue("not the passphrase")
+            self.assertEqual(job.state, "OPEN")
+
+            self._toc(td, 0, change=lambda t: t["header"].update(blocksize="1K; touch /tmp/pwned"))    # the header is clear text
+            job = ReadJob(td, os.path.join(tmp, "out"), self.MOUNT)
+            job.open()
+            with self.assertRaisesRegex(ValueError, "Not a block size"):
+                job.queue(self.PASSPHRASE)
+            self.assertFalse(os.path.exists(os.path.join(tmp, "out")))
+        print("DF_REFUSED")
+
     # === REAL DRIVE ==========================================================
 
     def _realDrive(self):
@@ -181,9 +335,8 @@ class UT_ReadJob(unittest.TestCase):
 
             job: ReadJob = ReadJob(td, target, self.MOUNT, tocDir=tocs)
             header: dict = job.open()
-            self.assertEqual(header["first"]["state"], "IDLE")
-            self.assertEqual(header["last"]["state"], "COMPLETE")
-            self.assertEqual(header["first"]["fingerprint"], write.toc.header.fingerprint)
+            self.assertEqual(header["state"], "IDLE")
+            self.assertEqual(header["fingerprint"], write.toc.header.fingerprint)
 
             job.queue(self.PASSPHRASE)
             self.assertTrue(all(Job.Get(i).drive == td.id for i in job.entries))     # decrypt, checksum, closing step too

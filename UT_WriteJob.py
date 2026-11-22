@@ -28,10 +28,10 @@ class UT_WriteJob(unittest.TestCase):
         - H: unencrypted: plain files on the tape, plain TOC without keys, no spool
     The fake tape is truncated by every write, so only the last tape file (the last TOC) is left on it.
     Depdencies:
-    - openssl, /mnt/daten as a mount point (spool)
+    - openssl, /mnt/daten as a mount point (spool), or RUTBS_TEST_MOUNT=<mount point>
     """
 
-    MOUNT: str = "/mnt/daten"
+    MOUNT: str = os.environ.get("RUTBS_TEST_MOUNT", "/mnt/daten")
     PASSPHRASE: str = "passphrase"
 
     def setUp(self) -> None:

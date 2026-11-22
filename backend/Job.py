@@ -117,7 +117,8 @@ class Job():
     Job schedules Commands. There is ONE queue for the whole host, so the
     thread limit holds no matter how many requests are queued.
     Each Entry may depend on ONE parent Entry (`dependsOn`) and may in addition wait for a list of
-    others (`waitFor`, e.g. an Entry that starts when all checksums are done).
+    others (`waitFor`, e.g. an Entry that starts when all checksums are done). A closing step (`always`)
+    waits for its `waitFor` to end, however they ended (e.g. to remove the spool when nobody reads it any more).
     Parents must be added before their children, so the queue is always in
     dependency order and a single pass over it resolves the whole tree.
 
@@ -316,6 +317,9 @@ class Job():
 
             elif e.state is EntryState.WAITING_FOR_PARENT:
                 parents: List[EntryState] = [Job.Get(p).state for p in e.parents]
+                if e.always and e.waitFor:      # a closing step waits for its waitFor to end, however they ended
+                    ended: bool = all(Job.Get(p).state in Job.FINISHED for p in e.waitFor)
+                    parents = ([Job.Get(e.dependsOn).state] if e.dependsOn else []) + ([] if ended else [EntryState.RUNNING])
                 if EntryState.FAILED in parents or EntryState.KILLED in parents:
                     e.state = EntryState.FAILED
                 elif all(p is EntryState.COMPLETED for p in parents):
