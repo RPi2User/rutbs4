@@ -120,6 +120,24 @@ class UT_Folder(unittest.TestCase):
             self.assertEqual(folder.files[0].path.context, src)
         print("AD_RECURSIVE_ORDERED")
 
+    def test_AF_incompleteScan(self) -> None:
+        """What cannot be read would be missing on the tape without a word: the Folder refuses"""
+        with tempfile.TemporaryDirectory() as src:
+            with self.assertRaises(SystemError):
+                Folder(os.path.join(src, "missing"))
+
+            if os.geteuid() != 0:           # root reads everything
+                locked: str = os.path.join(src, "locked")
+                os.makedirs(locked)
+                os.chmod(locked, 0)
+                try:
+                    with self.assertRaises(SystemError) as caught:
+                        Folder(src)
+                    self.assertIn("locked", str(caught.exception))
+                finally:
+                    os.chmod(locked, 0o700)
+        print("AF_INCOMPLETE_SCAN")
+
     @unittest.skipUnless(os.path.ismount("/mnt/daten"), "needs /mnt/daten as a mount")
     def test_AE_spool(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

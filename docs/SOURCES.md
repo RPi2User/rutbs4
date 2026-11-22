@@ -155,6 +155,7 @@ is the TOC.
   files go there (`0001.crypt`), else next to the originals.
 
 Notes:
+- Raises `SystemError` if `find` could not read everything: the tape would be incomplete without a word.
 - The checksum is taken from the plain file, before encryption.
 - Without a spool the `.crypt` files are created next to the originals and not removed.
 

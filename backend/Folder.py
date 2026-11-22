@@ -17,6 +17,7 @@ class Folder:
     one encryption mode. The files are sorted by relative path; that order is the tape
     order, and `File.id` is the tape file number (tape file 0 is the TOC, so ids start at 1).
     The checksum defaults to SHA256 (pass `ChecksumType.NONE` to switch it off).
+    Raises `SystemError` if anything below the directory cannot be read: the list would be incomplete.
     """
 
     SCAN_DEADLINE_MS: int = 60000   # a big tree on a slow disk; not a system command in the 2 s sense
@@ -29,8 +30,9 @@ class Folder:
 
         find_files: Command = Command("find " + Command.quote(path) + " -type f")
         Job.Run(find_files, deadlineMs=self.SCAN_DEADLINE_MS)
-        if find_files.killed:   # an incomplete list would write an incomplete tape
-            raise SystemError("[ERROR] Scanning " + path + " failed: " + " ".join(find_files.status_msg))
+        # an incomplete list would write an incomplete tape: killed, or something could not be read (exit code 1)
+        if find_files.killed or find_files.exitCode != 0:
+            raise SystemError("[ERROR] Scanning " + path + " failed: " + " ".join(find_files.status_msg + find_files.stderr))
 
         # find does not promise any order, the tape order must not depend on it
         ordered: List[str] = sorted(find_files.stdout, key=lambda p: os.path.relpath(p, path))

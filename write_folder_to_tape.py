@@ -84,7 +84,7 @@ def main() -> int:
                        checksum=CHECKSUM_MAP[args.checksum], encryption=ENCRYPTION_MAP[args.encryption], eject=args.eject,
                        unencrypted=unencrypted)
         job.queue()
-    except ValueError as e:
+    except (ValueError, SystemError, OSError) as e:
         print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
