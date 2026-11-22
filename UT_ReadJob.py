@@ -117,7 +117,24 @@ class UT_ReadJob(unittest.TestCase):
         self.assertEqual((again.value, again.iv, again.length), (key.value, key.iv, key.length))
         with self.assertRaises(ValueError):
             Key(key.length, key.value[:-2], key.iv)
+        for iv in ["", "00", "$(touch /tmp/x)", "0" * 31 + ";", "0" * 32 + "\n", None]:
+            with self.assertRaises(ValueError, msg=repr(iv)):
+                Key(key.length, key.value, iv)
+        with self.assertRaises(ValueError):
+            Key(key.length, "x" * 64, key.iv)
         print(".A_KEY_FROM_TOC")
+
+    def test_AB_keyIsNoCommand(self) -> None:
+        """The key of a prepared tape must not run anything, and nothing is created in the target"""
+        with tempfile.TemporaryDirectory() as tmp:
+            marker: str = os.path.join(tmp, "marker")
+            target: str = os.path.join(tmp, "out")
+            entry: dict = {"id": 1, "size": 4, "path": {"relPath": "x"}, "cksum": {"type": "NONE", "value": ""},
+                           "encryption": {"mode": "AES256CBC", "key": {"length": "medium", "value": "0" * 64, "iv": "$(touch " + marker + ")"}}}
+            with self.assertRaises(ValueError):
+                File.Restore(entry, target)
+            self.assertFalse(os.path.exists(marker) or os.path.exists(target))
+        print("AB_KEY_IS_NO_COMMAND")
 
     def test_B_restoreFromEntry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

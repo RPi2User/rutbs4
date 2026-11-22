@@ -157,6 +157,7 @@ class File:
         root: str = os.path.realpath(targetDir)
         if not os.path.realpath(target).startswith(root + os.sep):
             raise ValueError("[ERROR] '" + relPath + "' would leave the target directory")
+        encryption: Encryption = File.encryptionOf(entry)       # refused before anything is created
 
         os.makedirs(os.path.dirname(target), exist_ok=True)
         file: File = File(entry["id"], target, targetDir, createFile=True)
@@ -166,10 +167,15 @@ class File:
         file._cksum = Checksum(target, ChecksumType[cksum["type"]], cksum["value"])
         file._cksum.cmd.filesize = file.size
 
+        file._encryption = encryption
+        return file
+
+    @staticmethod
+    def encryptionOf(entry: dict) -> Encryption:
+        """The encryption of a TOC entry. ValueError if the key or the iv is not what `Key` makes."""
         key: dict = entry["encryption"]["key"]
         mode: E_Mode = E_Mode[entry["encryption"]["mode"]]
-        file._encryption = Encryption(Key(empty=True) if mode is E_Mode.NONE else Key(KeyLength[key["length"]], key["value"], key["iv"]), mode)
-        return file
+        return Encryption(Key(empty=True) if mode is E_Mode.NONE else Key(KeyLength[key["length"]], key["value"], key["iv"]), mode)
 
     @property
     def state(self) -> FileState:

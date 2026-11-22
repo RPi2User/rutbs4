@@ -1,4 +1,5 @@
 import json
+import re
 from enum import Enum
 
 from backend.Command import Command
@@ -28,8 +29,9 @@ class Key:
             self.cmd = Command("")      # nothing was run, the pair comes from the TOC
             self.value: str = value
             self.iv: str = iv
-            if len(self.value) != self.length.value * 2 or not self.iv:
-                raise ValueError("[ERROR] Key from the TOC has the wrong length")
+            # It comes from a tape and ends up in a command: nothing but hex digits is accepted
+            if not self._isHex(self.value, self.length.value) or not self._isHex(self.iv, 16):
+                raise ValueError("[ERROR] Key or IV from the TOC is not valid")
             return
 
         # Generate Key
@@ -44,6 +46,13 @@ class Key:
         # Generate Init. Vektor
         self.cmd = Job.Run(Command("openssl rand 16", raw=True))
         self.iv = self.cmd.stdout[0] if self.cmd.stdout else "CRASHED"
+        if not self._isHex(self.iv, 16):
+            raise SystemError("[ERROR] No IV, check logs!")
+
+    @staticmethod
+    def _isHex(text: str, size: int) -> bool:
+        "`size` bytes as hex digits"
+        return isinstance(text, str) and re.fullmatch(r"[0-9a-fA-F]{" + str(size * 2) + "}", text) is not None
 
     def _asdict(self) -> dict:
         data = {
@@ -114,7 +123,7 @@ class Encryption:
         self.targetPath = target or ".".join([part for part in path.split('.')[:-1]]) # default: removes ".tail"
 
         # A new Command every time: the Job queue keeps finished Commands and refuses a second Add() of the same object
-        self.cmd = Command(self.MODE_CMD[self.mode] + "-d -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
+        self.cmd = Command(self.MODE_CMD[self.mode] + "-d -iv " + Command.quote(self.key.iv) + " -pass env:" + self.KEY_ENV +
                            " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath),
                            env={self.KEY_ENV: self.key.value})
 
@@ -126,7 +135,7 @@ class Encryption:
 
         self.targetPath = target or path + ".crypt"   # target: e.g. a file in the spool
 
-        self.cmd = Command(self.MODE_CMD[self.mode] + "-e -iv " + self.key.iv + " -pass env:" + self.KEY_ENV +
+        self.cmd = Command(self.MODE_CMD[self.mode] + "-e -iv " + Command.quote(self.key.iv) + " -pass env:" + self.KEY_ENV +
                            " -in " + Command.quote(path) + " -out " + Command.quote(self.targetPath),
                            env={self.KEY_ENV: self.key.value})
 

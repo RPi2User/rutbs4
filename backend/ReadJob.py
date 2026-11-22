@@ -128,6 +128,7 @@ class ReadJob:
     def _check(self, entries: List[dict]) -> None:
         total: int = sum(e["size"] for e in entries)
         for e in entries:
+            File.encryptionOf(e)            # ValueError: a key that is none, nothing is created in the target
             if os.path.lexists(os.path.join(self.targetDir, e["path"]["relPath"])):
                 raise ValueError("'" + e["path"]["relPath"] + "' exists already in " + self.targetDir)
 
@@ -174,6 +175,7 @@ class ReadJob:
 
         entries: List[dict] = plan["body"]["folder"]["files"]
         self._check(entries)
+        files: List[File] = [File.Restore(e, self.targetDir) for e in entries]     # ValueError: no spool yet
 
         d: TapeDrive = self.drive
         r: str = self.runlist
@@ -181,7 +183,7 @@ class ReadJob:
         self._passphrase = passphrase
         self.spool.create()
         self._lastPath: str = os.path.join(self.spool.path, "toc_end.json")
-        self.files = [File.Restore(e, self.targetDir) for e in entries]
+        self.files = files
 
         d.Rewind(runlist=r)
         d.Read(os.path.join(self.spool.path, "toc_start.json"), runlist=r, count=self.TOC_BLOCKS)      # known already, read past it

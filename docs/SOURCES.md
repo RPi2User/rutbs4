@@ -138,6 +138,7 @@ Notes:
   needs a way to build one from the TOC entry (not done).
 - `readSize()` raises `OSError` if the size cannot be read (60 s deadline): a file of unknown size must not
   become an empty one, which has no tape file.
+- `Restore()` refuses (`ValueError`) a key or iv that is not plain hex digits: it comes from the tape and ends up in a command.
 - Every `File` generates its own `Key`, which costs two `openssl` calls; `Folder` keeps it.
 
 ### Folder.py
