@@ -47,8 +47,8 @@ tape file N+1    TOC, state COMPLETE    the same content, plus the result of the
   and holds everything that is known before the first file is written. A tape is good only if a trailing TOC with state `COMPLETE` exists. On a failed job the trailing TOC is
   written with state `FAILED` if the drive still accepts it; if not, the missing trailing
   TOC is the failure marker. With a cartridge memory the failure is noted there as well.
-- A tape that already carries a fingerprint is only overwritten after it is explicitly registered anew
-  (not implemented yet; today every write starts at the begin of tape).
+- **No overwrite protection** (decided 2026-11-22): a write order starts at the begin of the tape, whatever is on it. The operator can read
+  the TOC first; an important tape gets its write protect switch set.
 - Tapes written by tbk3 are not supported.
 
 ## Fingerprint and cartridge memory
