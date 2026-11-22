@@ -19,11 +19,9 @@ path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sei
     something happened to the tape and what the chances are. It is not enough to call a restore good.
   - Best effort: if the drive does not take the write (or the host is gone), the leading TOC still says `IDLE` and only
     the missing trailing TOC shows it. That marker has to stay.
-  - `dd` must run with `LC_ALL=C` so that the reason can be recognised. `TapeDrive.Write()` does not set it: on a German
-    host `dd` says "Auf dem Gerät ist kein Speicherplatz mehr verfügbar" (checked 2026-11-22). `WriteRandom()` sets it already.
+  - The reason is in what `dd` says ("No space left on device"), `dd` runs with `LC_ALL=C` for that.
   - Decided 2026-11-22: the same steps run if a file (not only the trailing TOC) hits the end of the tape.
-  - Decided 2026-11-22: **without the trailing TOC the tape is not valid.** The fallback of `ReadJob` to the copy in the TOC
-    directory goes away. The operator does not know a TOC at all, only that the files are kept safely.
+  - Decided 2026-11-22, done: **without the trailing TOC the tape is not valid**, `ReadJob` has no fallback to a copy. The operator does not know a TOC at all, only that the files are kept safely.
 - **Job lists: look closely at the tasks the Job system works on.** The host calls `Read()` or `Write()`; the request is
   turned into a list of steps whose order is strictly defined by the context. The program, not the caller, is smart enough
   to start the right processes.
@@ -55,7 +53,7 @@ path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sei
   - The combined steps are pipes (`openssl | dd`). The exit code of a pipe is that of its last program, so a failing
     `openssl` could pass unnoticed and leave a truncated file on the tape. They need `pipefail` (bash, not `sh`) or two
     processes that are both checked.
-  - Open: `Eject()` in the lists, on request only (as today) or always?
+  - Decided 2026-11-22: `Eject()` stays on request only.
 - **Research: everything in one go.** Make the checksum while reading, encrypt, and feed the tape so fast that it never
   stops. Measured on the LTO-8 (214 GB, 2026-11-20): the write job took 44 min and the restore 53 min, the tape alone needs
   about 16 min, because checksum, encryption and tape run one after the other.

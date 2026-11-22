@@ -22,8 +22,7 @@ prepares the cartridge for rutbs: it gives the tape its identity and finds out h
 - No zeros are written over the whole tape; only as much as the benchmark needs.
 - The tape is rewound afterwards and **never ejected**.
 - It is a `Job` runlist like a write, one tape at a time, so the drive is used strictly in order.
-- Reading a tape does not depend on the block size (`Read()` uses an 8 MiB buffer and gets each block as it
-  was written), only writing does.
+- Reading needs a buffer at least as big as the block: `Read()` uses 256K or the block size of the TOC header, if that is bigger.
 
 ## Block size benchmark
 
@@ -33,17 +32,17 @@ cartridge, and probably to the drive it was measured on.
 
 - **Default: `256K`.** It is the first candidate, the reference of the table, and the value used when no
   benchmark ran or none could decide. It is a multiple of 512 (the tar block) and fills the drive buffer well.
-- Other candidates: multiples of 64K from 128K up to 512K, then 768K, 1M, 2M, 4M. **128K is the lower limit**
-  (HP asks for at least 128 KiB per transfer; on the LTO-8 test drive 64K to 4M were all within the noise of about 10 %,
-  so without a limit the pick would be arbitrary). Powers of two alone would miss
-  values like 384K. A candidate the driver or HBA refuses (`st(4)`: the driver buffer and the HBA limit the
-  block size) is left out of the table.
+- **At most five candidates, measured for a long time** (decided 2026-11-22): `256K`, `128K`, `384K`, `512K`, `1M`. 128K is the lower
+  limit (HP asks for at least 128 KiB per transfer), 1M the upper one: bigger blocks brought nothing on the LTO-3, and 4M is the limit of
+  an `aic79xx` HBA. A candidate the driver or HBA refuses is left out of the table.
 - Writing is measured, not reading: in variable block mode the block size is fixed by what is on the tape, a read
   with a smaller `bs` fails (`st(4)`), so a read cannot compare block sizes.
-- Per candidate: rewind, `dd` for about 30 to 60 s, take the speed `dd` reports. This is long enough for the
-  mechanics to reach full speed at least once. The amount is `native_rate` (table below) times the time,
-  e.g. about 2.4 GB on LTO-3 and 10.8 GB on LTO-8 for 30 s. It is much less than the tape; nothing is
-  written to the end.
+- Per candidate: rewind, `dd` for about 120 s. The amount is `native_rate` (table below) times the time,
+  e.g. about 9.6 GB on LTO-3 and 43 GB on LTO-8. It is much less than the tape; nothing is written to the end.
+- **Spin up and spin down distort a short run.** Only the middle counts: the first 20 s and the last 5 s are left out (the file
+  mark and the flush fall into them). `dd status=progress` reports once per second, the speed is the slope of these reports.
+  Measured on the LTO-3 (2026-11-22): the whole run said 75.4 MiB/s, its middle 77.5 MiB/s with every candidate from 128K to 1M;
+  the old 30 s run said 69.7 MiB/s for all of them, because about 3 s of fixed time were in it.
 - `dd` reads a pipe, so it needs `iflag=fullblock`; otherwise short reads become short tape blocks and the
   numbers mean nothing.
 - The data is incompressible (a cipher stream, not zeros): the drive compresses, and zeros would show
@@ -95,6 +94,4 @@ The CM is written once at the end, when the benchmark is done. A failed write ke
 
 - A format that fails halfway has overwritten the tape but the CM still holds the old fingerprint. Probably the
   old fingerprint must be cleared first, so a half-formatted tape is recognised as such.
-- How much data per candidate: enough to reach streaming speed (a few seconds), little enough to keep the
-  whole benchmark short. To be tried on the drive.
 - The drive state machine (see DESIGN.md, "Drives") should be in place before the format asks for the drive.

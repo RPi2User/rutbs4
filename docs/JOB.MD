@@ -19,7 +19,7 @@ in the registry at once, for example one per drive; `Entry.drive` tells them apa
 | `tape`       | Drive id if the command uses a drive, `""` for CPU and disk work                     |
 | `drive`      | Drive id (its wwid) of the request the entry belongs to, also for checksum, encryption and closing steps. A tape entry belongs to its own drive, so `tape` also sets `drive` |
 | `dependsOn`  | Id of one parent that must be `COMPLETED` first                                      |
-| `waitFor`    | Ids of further parents (a barrier, e.g. "all checksums are done")                    |
+| `waitFor`    | Ids of further parents (a barrier, e.g. "all checksums are done"). A closing step (`always`) waits for them to end, however they ended |
 | `runlist`    | Id of the request the entry belongs to (one write, one restore)                      |
 | `always`     | Closing step (final TOC, rewind): runs even if its runlist was aborted               |
 | `prepare`    | Called right before the start, e.g. to make the final TOC. If it raises, the entry is `FAILED` and the command never ran |

@@ -207,11 +207,10 @@ Notes:
 ### TapeDrive.py
 
 One tape drive. It does four things, each one a step in the Job queue that returns the entry
-id (pass it as `dependsOn`): `Rewind()` (SCSI REWIND), `Eject()` (SCSI LOAD/UNLOAD), `Write(source)`
-(`dd` to the `nst` device, one tape file) and `Read(target)` (`dd` from the `nst` device, the
-next tape file); `WriteRandom(size, blocksize)` writes test data for the block size benchmark. For reading it also seeks: `Space(files)` (SCSI SPACE over file marks, backward
-if negative) and `SpaceEnd()` (to the end of the data). Everything is SCSI through `sg_raw` and
-`dd`, there is no `mt`.
+id (pass it as `dependsOn`): `Rewind()` and `Eject()` (through the `st` driver, see `TapeIoctl.py`), `Write(source, blocksize="")`
+(`dd` to the `nst` device, one tape file) and `Read(target, blocksize="")` (`dd` from the `nst` device, the
+next tape file); `WriteRandom(size, blocksize)` writes test data for the block size benchmark. `Space(files)` and
+`SpaceEnd()` (SCSI SPACE with `sg_raw`) are optional, no job uses them. There is no `mt`.
 The long comment at the top of the file explains the SCSI commands and is worth reading.
 
 - `TapeDrive(path, generic_path, drive_override=False, blocksize="256K", paths=None, wwid="")` —
@@ -220,9 +219,12 @@ The long comment at the top of the file explains the SCSI commands and is worth 
   `wwid` is the id the kernel gives the logical unit (read from sysfs if not given), `paths` all
   `(nst, sg)` pairs of a drive with several cables, `id` the key for the Job (`wwid`, else the path).
 - All steps take `runlist`, `dependsOn`, `always` and `prepare` (see Job).
-- `state` (`TD_State`) is derived from the Job entries: `IDLE`, `QUEUED`, the running step, or
-  `ERROR` if the last finished step failed; the next good step clears it. `tape.begin_of_tape`
-  follows the steps.
+- `state` (`TD_State`) is derived from the Job entries: `IDLE`, `QUEUED`, the running step, or if the last finished step
+  failed `ERROR`, `NO_TAPE` or `BUSY` (the last two from a rewind or an eject); the next good step clears it.
+  `tape.begin_of_tape` follows the steps. A good rewind turns an `UNKNOWN` tape into `ONLINE`.
+- INQUIRY and MODE SENSE are optional. Without an `sg` device, without `sg_raw`, or if the answer says "no tape" or nothing
+  usable, the tape is `E_Tape.UNKNOWN`; only a rewind (`ENOMEDIUM`) or an eject makes it `NO_TAPE`.
+- `TapeDrive.blockBytes("256K")` validates a block size, it may come from the clear text header of a tape.
 - Without SCSI tooling or hardware: `drive_override=True`, set `rewindCommand` / `ejectCommand`
   (their command line is the template for every step) and call `tapeOverride(Tape(...))`. `path`
   may then be a regular file.
@@ -231,14 +233,18 @@ Notes:
 - **`Read()` must not use `dd iflag=fullblock`** and **nothing may read at the end of the data.**
   `fullblock` swallows the file mark after a short last block and reads on into the next tape
   file (first test: one `dd` returned the TOC and all 15 files in one piece). A read at the end
-  of the data makes the kernel driver answer every later read with an I/O error, even after
-  `Rewind()`, until the driver itself is repositioned (`mt rewind`, by the operator).
+  of the data makes the kernel driver answer every later read with an I/O error, until its own rewind (`Rewind()`)
+  runs. A rewind with `sg_raw` does not help.
 - Whether the drive can take a step is not asked before it yet (see DESIGN.md).
-- Rewind, Space and Eject run `sg_raw -t 900`: `sg_raw` waits 20 s by default and the kernel aborts a rewind
-  from the end of a full tape after that (seen 2026-11-20: the closing rewind of a 214 GB write failed, the job said FAILED
-  although the data was on the tape).
+- Space runs `sg_raw -t 900`: `sg_raw` waits 20 s by default and the kernel aborts a long step after that (seen
+  2026-11-20 with a rewind of a 214 GB write; rewind and eject now go through the driver).
 - A regular file as tape is truncated by every `Write()`.
 - `Eject()` exists and is never part of a test run on the real drive.
+
+### TapeIoctl.py
+
+Rewind and eject through the kernel driver: `python3 TapeIoctl.py rewind|eject /dev/nst0`. Exit code 0, 10 (no tape), 11 (busy)
+or 1 (everything else, the reason on stderr). Run by `Job` like any other command.
 
 ### TableOfContent.py
 
@@ -279,13 +285,13 @@ The spool directory of one job: `<mount>/rutbs-spool/<epoch>_<fingerprint>/`.
 
 ### TD_Pool.py
 
-Finds the tape drives. A drive with two SAS cables shows up as two `sg` / `nst` devices and
-is ONE drive: devices are grouped by the `wwid` the kernel publishes in
-`/sys/class/scsi_generic/sgN/device/wwid`, not by the serial number.
+Finds the tape drives, from the list of the `nst` devices (`/sys/class/scsi_tape`, else `/dev`). A drive with two SAS cables
+shows up as two `nst` devices and is ONE drive: devices are grouped by the `wwid` the kernel publishes, not by the
+serial number. The `sg` device, the `wwid`, vendor and model are optional: without an `sg` driver the drives are still found.
 
 - `TD_Pool(sysfs=..., dev="/dev", drive_override=False)`.
 - `scan()` reads sysfs only (no SCSI command) and returns one dict per drive: `wwid`,
-  `vendor`, `model`, `paths` (`[(nst, sg), ...]`, sorted by sg number).
+  `vendor`, `model`, `paths` (`[(nst, sg), ...]`, sorted by nst number, `sg` is `""` if there is none).
 - `gatherDrives()` returns one `TapeDrive` per drive (it queries the drive) and keeps them
   in `drives`.
 - A drive is never hidden: every tape with an `nst` device is listed. Paths that cannot be
@@ -322,14 +328,15 @@ For each candidate it queues rewind + `TapeDrive.WriteRandom()`, at the end one 
 Destructive on purpose.
 
 ```python
-bench = BlockSizeBenchmark(td)           # seconds=30 or size=bytes, candidates=None
+bench = BlockSizeBenchmark(td)           # seconds=120 or size=bytes, candidates=None
 bench.queue(); bench.wait()
 bench.results                            # {block size in bytes: bytes/s} of the candidates that worked
 bench.blocksize, bench.note              # "256K", and a warning if only part of the ideal bandwidth is usable
 BlockSizeBenchmark.pick(results, ideal)  # the rule alone
 ```
 
-- A candidate that fails is left out and stops nothing (every step is `always`, no `dependsOn`).
+- A candidate that fails is left out and stops nothing (every step is `always`; a write only depends on the rewind before it).
+- `rate(stderr)` takes the speed from the middle of the run, without spin up and spin down.
 - Nothing is written to the cartridge memory yet.
 
 ### WriteJob.py
@@ -368,20 +375,18 @@ seeing which tape is loaded.
 
 ```python
 job = ReadJob(td, "/data/restore", "/stornvme", tocDir="/data/tocs")
-job.open()                    # rewind, first TOC, to the end, last TOC, rewind -> the clear text headers
+job.open()                    # rewind, first TOC, rewind -> its clear text header
 job.queue("passphrase")       # TOC_WrongPassphrase: nothing was queued, ask again
 job.wait()                    # then job.state: COMPLETED only if every file is IDLE (checksum ok)
 ```
 
-- `open()` reaches the last TOC with SPACE to the end, two file marks back, one forward. It
-  never reads at the end of the data. A tape without a last TOC is not complete; the copy in
-  `tocDir` (named by the fingerprint) is used instead, with a warning in `messages`.
-- `queue()` opens both TOCs, compares them (`TableOfContent.differences()`: same tape, same files,
-  same keys; checksums and states are results and may differ) and queues
-  `skip first TOC → per file: Read → Decrypt → Validate → rewind`. The checksums come from the last TOC (the same as in the first).
-- Refused: the TOCs disagree, the writing job had failed, a file exists already in the target,
-  target or spool mount too small. `File.Restore()` keeps every file inside the target directory.
-- With `tocDir` both TOCs are also kept there in clear text, `*.first.plain.json` and
+- `queue()` opens the first TOC and queues `rewind → first TOC → per file: Read → Decrypt →
+  Validate → last TOC → rewind`. Nothing is skipped, seeked, or read at the end of the data.
+- **The last TOC decides.** It has to agree with the first one (`TableOfContent.differences()`) and to be `COMPLETE`, else the
+  job is `FAILED` ("the files in the target must not be trusted"), there is no fallback to a copy.
+- Refused up front: the first TOC says `FAILED`, a file exists already in the target, target or spool mount too small, a
+  block size in the header that is none. `File.Restore()` keeps every file inside the target directory.
+- With `tocDir` both TOCs are kept there in clear text after a good restore, `*.first.plain.json` and
   `*.last.plain.json`, mode 0600. They contain the keys of every file: delete them when done.
 - Not restored: modification time and permissions (the TOC does not record them yet).
 
@@ -408,7 +413,7 @@ file as tape `--tape`, `--rewind-cmd`, `--lto-version`.
 ### read_tape_to_folder.py
 
 Command line wrapper around one `ReadJob`, goes away together with `write_folder_to_tape.py`. Shows
-the tape (fingerprint, date, host, state of both TOCs), then asks for the passphrase (three
+the tape (fingerprint, date, host), then asks for the passphrase (three
 tries) or takes `RUTBS_PASSPHRASE`. The tape is rewound, never ejected.
 
 ```
@@ -439,10 +444,10 @@ Plain `unittest`, one file per class. Run one with `python3 UT_<name>.py`, all w
 | `UT_TD_Pool.py` | fake sysfs: two paths of one drive, natural sg order, nothing hidden | — |
 | `UT_Spool.py` | `/mnt/daten` is found as mount, spool create / remove, refusals | `findmnt`, `/mnt/daten` as mount |
 | `UT_Job.py` | dependencies, failure propagation, priorities, tape order, runlist abort, `waitFor`, scheduler thread, `prepare`, `Failed()` | — |
-| `UT_TapeDrive.py` | the commands of the steps (incl. seeking), derived state, override template, error cleared by the next good step | — |
+| `UT_TapeDrive.py` | the commands of the steps (incl. seeking), derived state, override template, error cleared by the next good step, block sizes, answers of a rewind, the ioctl helper, an unknown tape | — |
 | `UT_BlockSizeBenchmark.py` | the pick rule (incl. the warning and the default), the run list on a fake drive, a failing candidate stops nothing | `openssl`, `dd` |
-| `UT_ReadJob.py` | key and file restored from the TOC, checksum mismatch, comparison of the two TOCs, no escape from the target; **on the real drive** (`RUTBS_TEST_TAPE=1`, overwrites the tape from its begin): write, read back, wrong passphrase | `openssl`, `/mnt/daten` (or `RUTBS_TEST_MOUNT`) |
-| `UT_WriteJob.py` | the whole run list on a fake drive: order, last TOC, eject only on request, a failing file, refused requests, both TOCs equivalent, an unreadable file leaves the tape alone | `openssl`, `/mnt/daten` as mount |
+| `UT_ReadJob.py` | key and file restored from the TOC, checksum mismatch, comparison of the two TOCs, no escape from the target, the whole way on a fake tape (the last TOC decides, an empty plain file, spool gone); **on the real drive** (`RUTBS_TEST_TAPE=1`, overwrites the tape from its begin): write, read back, wrong passphrase | `openssl`, `/mnt/daten` (or `RUTBS_TEST_MOUNT`) |
+| `UT_WriteJob.py` | the whole run list on a fake drive: order, last TOC, eject only on request, a failing file, refused requests, both TOCs equivalent, an unreadable file leaves the tape alone | `openssl`, `/mnt/daten` as mount (or `RUTBS_TEST_MOUNT`) |
 | `UT_Folder.py` | file collection, recursion and order, odd file names, own key per file, write chain against a fake tape, spool, abort | `openssl`, `/mnt/daten` as mount |
 | `UT_TableOfContent.py` | header, seal / open round trip, wrong passphrase, TOC directory | `openssl` |
 

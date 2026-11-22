@@ -38,9 +38,10 @@ tape file N+1    TOC, state COMPLETE    the same content, plus the result of the
   with `TableOfContent.differences()`). If a checksum fails, the tape is not touched.
 - The second TOC gives redundancy (a damaged begin of tape does not lose the tape) and is
   the final write test: if it is on the tape, everything before it fits.
-- Reading: the first TOC is read at the begin; the last one is reached with SPACE to the end of
-  the data, two file marks back, one forward. A tape without the last TOC is incomplete (the write
-  did not finish); a restore refuses it unless the TOC directory holds a copy.
+- Reading: from the begin to the end, nothing is seeked or skipped: first TOC, the files, last TOC. The first TOC
+  says how many files follow, so nothing is read behind the last one. **The last TOC decides** whether the files were
+  restored; without it, or if it is not `COMPLETE`, the tape is not valid. There is no other source for it. The first TOC only says
+  which tape it is and whether something happened to it.
 - **Tape cannot be changed in place.** Writing at the begin of tape makes everything
   behind it unreadable. The first TOC therefore cannot be completed afterwards: it says `IDLE`
   and holds everything that is known before the first file is written. A tape is good only if a trailing TOC with state `COMPLETE` exists. On a failed job the trailing TOC is
@@ -79,7 +80,8 @@ the job; for every file it shows which step failed and why. Its size does not ma
 - Path fields of a file, all needed: `path` (absolute, used by `dd`), `relPath` (to
   restore the directory tree), `parent` (differs from `context` for files in sub
   directories), `context` (the input directory of the request).
-- `id` of a file is its tape file number.
+- `id` of a file is its tape file number (it counts every file; an empty plain file has no tape file, `dd` writes nothing and
+  no file mark, so writer and reader both leave it out).
 - The first TOC is made when all checksums are known and before the first file is written, the
   trailing one after everything ran.
 - **Unencrypted request** (`unencrypted=true`, only without a passphrase): the TOC removes all
@@ -116,12 +118,13 @@ The restore is `backend/ReadJob.py`, in two steps because the passphrase is aske
 seen:
 
 ```
-open():   rewind → read first TOC → to the end, 2 file marks back, 1 forward → read last TOC → rewind
-queue():  open and compare both TOCs → skip first TOC → per file: read → decrypt → checksum → rewind
+open():   rewind → read first TOC → rewind
+queue():  rewind → read first TOC → per file: read → decrypt → checksum → read last TOC → compare both TOCs → rewind
 ```
 
-The checksum of each file is compared with the one in the last TOC. A restore is refused up front if
-the two TOCs disagree about the plan, if the writing job failed, or if a target file exists.
+The checksum of each file is compared with the one in the TOC as soon as the file is decrypted. Whether the job is good is
+decided by the last TOC: the job is `FAILED` if it is missing, damaged, disagrees about the plan or is not `COMPLETE`. A restore is
+refused up front if the first TOC says `FAILED` or a target file exists.
 
 - The run list fixes the tape order; the final TOC is the result of the job.
 - Everything that can run in parallel does, limited by the thread limit of the host.
@@ -226,22 +229,34 @@ There is no second, blocking way to run a phase. The phases are implemented in
   Not implemented yet. Open: which query shows reliably that the drive is busy on its other path
   (TEST UNIT READY, or RESERVE / RELEASE); to be tried on the drive while a write runs. Today `TapeDrive`
   only looks at the state of its own `Command`.
+- **The OS only has to give:** the list of the `nstX` devices, rewind, eject, `dd if=/dev/nstX`, `dd of=/dev/nstX`
+  (decided 2026-11-22). Everything else is optional and must never stop a job: how many individual drives there are, the fingerprint
+  in the chip, the LTO version, the position. The LTO version and the size come from the operator if need be
+  (`tapeOverride()`). A tape the drive does not describe is `UNKNOWN`, and that is no reason to refuse a job.
 - A `TapeDrive` does four things, as steps in the Job queue: `Rewind()`, `Eject()`, `Write()` (a
-  data stream with `dd`), `Read()` (a data stream with `dd`). Reading also needs seeking, which exists as
-  `Space(files)` and `SpaceEnd()` (SCSI SPACE over file marks). Everything else is optional: reading the
-  cartridge memory, formatting. Eject is never part of a test run.
+  data stream with `dd`), `Read()` (a data stream with `dd`). Eject happens on request only and is never part of a test run. `Space(files)`
+  and `SpaceEnd()` (SCSI SPACE over file marks) exist but no job uses them.
+- **Rewind and eject go through the `st` driver** (`backend/TapeIoctl.py`, ioctl on `nstX` opened with `O_NONBLOCK`), not through
+  `sg_raw` (decided 2026-11-22, it replaces "SCSI only"). `mt` is not used. Reasons, measured on an LTO-3:
+  one read at the end of the data makes the driver (`st`) answer every later read with an I/O error; its own rewind clears that, a rewind
+  with `sg_raw` does not. And a rewind answers at once, so it is **the query of the state machine**:
+
+  | Answer of `rewind(nstX)` | Meaning |
+  |--------------------------|---------|
+  | ok | a tape is there and it is at its begin |
+  | `ENOMEDIUM` → `NO_TAPE` | no tape |
+  | `EBUSY` → `BUSY` | somebody else has the device open, e.g. a running `dd` |
+
+  Not covered: the second path of a drive with two cables has its own `nstX` device. A `dd` opens the device
+  blocking and waits 2 minutes for a tape if there is none (123 s measured), so every job rewinds first.
 - **Reading rules, learned on the real drive:** `Read()` must not use `dd iflag=fullblock` (it reads on
-  behind the file mark after a short last block and returns several tape files as one). And no `dd` may read
-  at the end of the data: the kernel driver (`st`) latches that and answers every later read with an I/O
-  error, even after a rewind with `sg_raw`, until the driver itself is repositioned (`mt rewind` by the
-  operator). Because of that the last TOC is reached by SPACE, never by reading until it fails.
-  Open: whether `Rewind()` should go through the driver so that this cannot happen at all.
-- SCSI only: the code sends SCSI commands (`sg_raw`) and uses `dd` on the `nst` device. It
-  does not use `mt`; the operator may. Horizon: a Python SCSI library instead of `sg_raw`.
+  behind the file mark after a short last block and returns several tape files as one). No `dd` may read at the end of the
+  data (see above). The buffer of `dd` must be at least as big as the block that was written and not bigger than the HBA allows: on an
+  `aic79xx` 4M works, 8M does not (`EBUSY`); a smaller buffer than the block fails with `ENOMEM`. Therefore 256K, or the block size of the TOC header if that is
+  bigger; the TOC itself is always written and read in blocks of 256K.
 - Position: the backend only knows "at begin of tape" or "not". It rewinds itself before
   it starts a job.
-- Block size belongs to the tape and is stored in the TOC header. Default `256K`. Reading does not depend on it
-  (`Read()` uses an 8 MiB buffer and gets each block as it was written), only writing does.
+- Block size belongs to the tape and is stored in the TOC header. Default `256K`, TOCs are always written with it.
 - **Block size benchmark (wanted for the release candidate):** a tape is formatted once and the format measures
   the bandwidth for several block sizes and keeps the best in the cartridge memory. The block size depends on
   the cartridge, not only on the drive. See [TapeFormat.md](TapeFormat.md).
