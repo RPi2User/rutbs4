@@ -36,7 +36,7 @@ class E_LTO_Cap(Enum):
     LTO_9 = 18 * 10**12
     LTO_10 = 30 * 10**12
     
-    LTO_7_M8 = 9 * 10**12    # Not supported in Autodetect!
+    LTO_7_M8 = 9 * 10**12    # Not supported in Autodetect! TODO check for density flag to support it!
 
 class E_LTO_Rate(Enum):
     "Ideal (native, uncompressed) transfer rate in bytes per second, from the LTO specification."
@@ -51,6 +51,19 @@ class E_LTO_Rate(Enum):
     LTO_8 = 360 * 10**6
     LTO_9 = 400 * 10**6
     LTO_10 = 400 * 10**6
+
+class E_LTO_Density(Enum):
+    UNKOWN = 0x00
+    LTO_1 = 0x40
+    LTO_2 = 0x42
+    LTO_3 = 0x44
+    LTO_4 = 0x46
+    LTO_5 = 0x58
+    LTO_6 = 0x5A
+    LTO_7 = 0x5C
+    LTO_7 = 0x5D    # todo add LTO7_M8
+    LTO_8 = 0x5E
+    LTO_9 = 0x60
 
 class E_Tape(Enum):
     NO_TAPE = 0
@@ -106,7 +119,7 @@ class Tape():
 
     """
 
-    def __init__(self, hardware_id: str, generic_path: str, blocksize: str = "128K")-> None:
+    def __init__(self, hardware_id: str, generic_path: str, blocksize: str = "128K", density: E_LTO_Density = E_LTO_Density.UNKOWN)-> None:
 
         self.lto_version: E_LTOv = E_LTOv.NONE
         self.native_capacity: int = 0
@@ -133,6 +146,8 @@ class Tape():
                 self.state = E_Tape.ONLINE
 
         self.lto_version = E_LTOv(_lto_version)
+        if density != E_LTO_Density.UNKOWN:
+            self.lto_version = E_LTOv[density.name]
         if self.lto_version.name in E_LTO_Cap.__members__:   # unknown capacity stays 0
             self.native_capacity = E_LTO_Cap[self.lto_version.name].value
         if self.lto_version.name in E_LTO_Rate.__members__:
