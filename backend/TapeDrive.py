@@ -43,9 +43,9 @@ from backend.Tape import Tape, E_Tape
     """
 
 class TD_State(Enum):
-    IDLE = 0
+    IDLE = 0        # Desired State
     QUEUED = 1      # orders wait in the Job queue
-    REWIND = 2
+    REWIND = 2 
     EJECT = 3
     WRITE = 4
     READ = 5

@@ -122,7 +122,7 @@ class TableOfContent:
         a file needs) and before the first seal().
         """
         if self.sealed:
-            raise RuntimeError("The TOC is sealed already")
+            raise RuntimeError("The TOC is sealed already") # NOTE Only API will call this function, only if context is right
         self.header.bodyCipher = E_Mode.NONE
         self.folder.removeEncryption()
 
