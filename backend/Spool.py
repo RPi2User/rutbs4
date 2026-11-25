@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import time
@@ -22,12 +23,13 @@ class Spool:
     DIR: str = "rutbs-spool"
 
     def __init__(self, mountpoint: str, fingerprint: str, epoch: int = 0):
-        mount: Mount | None = Mount.of(mountpoint)
+        mount: Mount | None = Mount.of(mountpoint) # TODO We are the backend, under which scenario is typeOf(mount) == None?
         if mount is None or os.path.realpath(mountpoint) != mount.mountpoint:
             raise ValueError("'" + mountpoint + "' is not a mount point")
 
+        self.fingerprint = fingerprint
         self.mount: Mount = mount
-        self.path: str = os.path.join(mountpoint, self.DIR, str(epoch or int(time.time())) + "_" + fingerprint)
+        self.path: str = os.path.join(mountpoint, self.DIR, str(epoch or int(time.time())) + "_" + self.fingerprint)
 
     def create(self) -> str:
         os.makedirs(self.path, mode=0o700)      # exists already -> FileExistsError, a spool is never shared
@@ -44,3 +46,13 @@ class Spool:
             os.rmdir(os.path.dirname(self.path))    # the rutbs-spool directory, if no other job uses it
         except OSError:
             pass
+
+    def _asdict(self) -> dict:
+        return {
+            "spool" : self.fingerprint,
+            "path" : self.path,
+            "mount" : self.mount
+        }
+
+    def __str__(self) -> str:
+        return json.dumps(self._asdict(), indent = 2)
