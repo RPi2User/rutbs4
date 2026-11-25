@@ -20,13 +20,52 @@ One version for backend, tape format and cartridge memory, stored as 16 bit
 (`backend/Version.py`): 4 bit major, 4 bit minor, 8 bit bugfix. `4.0.0` = `0x4000` =
 `0b0100 0000 0000 0000`.
 
+## File Handling
+
+Tbkd supports any file stored by a filesystem. In normal operation each file gets its checksum
+calculated, encrypted and stored on tape. The table of content contains all data required to restore 
+a File properly.
+
+Important file parameters with default settings:
+
+```json
+"id": "1",
+"size": 8388608,
+"path": "/tmp/example.bin"
+"cksum": {
+  "type": "SHA256",
+  "value": ""
+},
+"encryption": {
+  "mode": "AES256CBC",
+  "key": {
+    "length": "medium",
+    "value": "0b63684fc89cecb9938ea72d73a60cd0b6999df35c5eea96be2d284249294763",
+    "iv": "61ffb477ceb05e0c2cac7fa4c854813f"
+  }
+}
+```
+
+Each File has its own Checksum- and Encryption-Object and a unique ID.
+Note that each file has a unique pair of Key-IV and Key-Value. If a Key/IV-Pair gets compromised every other File on that Tape is still safe.
+
+Each File is held in a Folder Object, to support subdirectories properly. Metadata for each Folder is stored in a singular TableOfContent. The TOC Body is encrypted by Default via AES-256. The Passphrase is crucial to keep the crypto-data secure on the Tape. Note: TOC Header is not encrypted. This is by design. 
+
 ## Tape layout
 
+
 ```
-tape file 0      TOC, state IDLE        order, sizes, keys, checksums
-tape file 1..N   the files, in exactly the order of the TOC
-tape file N+1    TOC, state COMPLETE    the same content, plus the result of the writing
++------------+---------+--- / ---+---------+------------+ 
++  Leading   +         +    /    +         +  Trailing  +
++  Table of  +  fileA  +    /    +  fileX  +  Table of  +
++  Content   +         +    /    +         +  Content   +
++ -----------+---------+--- / ---+---------+------------+
 ```
+
+Every Tape begins and ends with a Table of Content (TOC).
+The Design aims to keep leading and trailing TOC identical. They differ by one crucial aspect:
+> Only the trailing TOC contains the Checksums of all Files
+
 
 - The **tape file number** is the position of a file. It is stored in the TOC, and a SCSI
   SPACE command (file marks) jumps to it.

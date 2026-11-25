@@ -1,12 +1,10 @@
-# RUTBS-UI
+# Main TODO Scratchpad
 
-- UI:           gtk4, tabs mit den Servern, XML-Viewer
-- Backend:      network-daemon, checksumming, parallel
-- Transport:    JSON-like API-Calls, Port 5533
-- CLI:          
-
-path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sein!)
-
+- Rename project from "rutbs" back to tbk
+  - rutbs contains tape-backup (tbk) in Version 4.0.0
+  - "the backend" is "tbkd" with it's first Version 4.0.0
+  - "the CLI" is "tbk" as successor to tbk-v3 with its init. Version 4.0.0
+  - "the GUI" will be "Manager for tbk / tbk-manager" with init. Version 4.0.0
 - Drive state machine: ask the drive for its state before every action except trivial ones (CM read, status). Find the SCSI query that shows "busy" while a write runs. See DESIGN.md, "Drives".
 - **At the drive, as soon as somebody can load a tape** (as of 2026-11-22):
   - LTO-8: is the fingerprint still in the chip after an eject and a new load?
@@ -100,3 +98,5 @@ path, optimal-blocksize, ltoV (es könnten mehr als 1 drive/pc angeschlossen sei
   - **Test plan (read only):** a large live VM disk on the big share (about 1 TiB). The checksum of a disk that a VM is
     writing to changes while it is read, so only `write()` and `encrypt() + write()` can be measured, not the integrity.
     Measure how long the tape is busy over the whole job.
+
+
