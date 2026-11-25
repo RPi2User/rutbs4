@@ -1,6 +1,6 @@
 """
 Everything that is asked of a tape drive except `dd`: ioctls on the non-rewinding device (`/dev/nstX`) of the kernel driver (`st`).
-No `mt`, no sg3_utils, no `/dev/sgX` (its number changes with every new disk, seen 2026-11-22).
+No `mt`, no sg3_utils, no `/dev/sgX`.
 
     python3 TapeIoctl.py rewind    /dev/nst0
     python3 TapeIoctl.py eject     /dev/nst0
@@ -10,11 +10,10 @@ No `mt`, no sg3_utils, no `/dev/sgX` (its number changes with every new disk, se
 The four are steps of the Job queue, like `dd`: the drive works on one thing at a time. `status()`, `serial()` are asked
 in the process itself, they do not move the tape and never wait for long, see `TapeDrive`.
 
-Rewind and eject go through the driver, because a rewind with `sg_raw` goes behind its back: once a read met the end of the
-data the driver answers every later read with an I/O error, and only its own rewind clears that (measured on an LTO-3, 2026-11-22).
-
 The device is opened with O_NONBLOCK: a normal open waits 2 minutes for a tape if there is none (`dd` does, too).
 So a rewind answers at once and is the way to ask the drive whether it can take an order.
+
+TOOD: mt-st does block until ejecting / rewinding is complete. Why does mt-st "know" that rewind/eject is complete?
 
 A rewind also switches the drive to variable block mode (MTSETBLK 0): then every write of `dd` is one block on the tape
 and the last block of a file may be shorter. In a fixed mode (`mt setblk 512`, `/etc/stinit.def`, another program) the
@@ -199,6 +198,8 @@ def main(args: list) -> int:
         print(operation + " " + device + ": " + str(e), file=sys.stderr)
         return 1
     return 0
+
+# TODO rename this to "TD_Ioctl.py",  It should be a static class not a seperate programm
 
 
 if __name__ == "__main__":

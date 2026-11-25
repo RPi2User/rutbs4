@@ -47,7 +47,7 @@ class CartridgeMemory:
     ID_NAME: int = 0x0801
     ID_VERSION: int = 0x0802
     ID_LABEL: int = 0x0803
-    APP_NAME: str = "rutbs"
+    APP_NAME: str = "tbkd"
 
     def __init__(self, device: str = "", drive: str = "", tool: str = "") -> None:
         self.device: str = device               # non-rewinding device of the drive, e.g. /dev/nst0
@@ -56,7 +56,7 @@ class CartridgeMemory:
         self.cmd: Command | None = None
         self.entry: str = ""
         self._appName: str = ""
-        self._version: str = ""
+        self._version: str = Version.text()
         self._fingerprint: str = ""
         self._error: str = ""
         self._pending: Dict[str, str] | None = None     # what a running write will make of the fields, {} for a read
@@ -105,7 +105,7 @@ class CartridgeMemory:
                          " " + pending["fingerprint"], pending)
 
     @staticmethod
-    def parse(lines: List[str]) -> Dict[int, str]:
+    def parse(lines: List[str]) -> Dict[int, str]:  # TODO when TD_Ioctl is static, use it properly
         """
         The hex dump of `TapeIoctl.py readattr`: an offset, then the bytes of the answer. The answer is
         4 bytes with the length of the rest, then per attribute id (2), format (1), length (2), value.
