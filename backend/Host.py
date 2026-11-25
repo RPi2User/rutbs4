@@ -11,9 +11,9 @@ from backend.Command import Command
 
 from backend.Mount import Mount
 from backend.TapeDrive import TapeDrive
+from backend.Version import Version
 
 DEBUG: bool = False
-VERSION: str = "4.0.0"
 
 # !!! WARNING !!!
 # Each response MUST HAVE an timestamp
@@ -145,7 +145,7 @@ class Host():
 
     def Version(self) -> Response:
         data = {
-            "version": VERSION
+            "version": Version.text()
         }
         self.response = Response(
             response=json.dumps(data),
